@@ -1,0 +1,42 @@
+import math
+
+import pytest
+import SimpleITK as sitk
+
+INNER_RADIUS = 10.0
+OUTER_RADIUS = 20.0
+HEIGHT = 8.0
+SWEEP_DEGREES = 270.0
+
+
+@pytest.fixture
+def meniscus_label() -> sitk.Image:
+    """Approximate knee meniscus as a sitkUInt8 LabelMap with label 1.
+
+    A triangular (r, z) cross section, with vertices (INNER_RADIUS, -HEIGHT / 2),
+    (OUTER_RADIUS, -HEIGHT / 2), and (OUTER_RADIUS, HEIGHT / 2), swept
+    SWEEP_DEGREES about the z axis through the image center. The sweep is
+    centered on +x, leaving the gap facing -x. Physical units are mm.
+    """
+    source = sitk.PhysicalPointImageSource()
+    source.SetOutputPixelType(sitk.sitkVectorFloat64)
+    source.SetSize((101, 101, 17))
+    source.SetSpacing((0.5, 0.5, 1.0))
+    source.SetOrigin((-25.0, -25.0, -8.0))
+    points = source.Execute()
+
+    x = sitk.VectorIndexSelectionCast(points, 0)
+    y = sitk.VectorIndexSelectionCast(points, 1)
+    z = sitk.VectorIndexSelectionCast(points, 2)
+
+    radius = sitk.Sqrt(x * x + y * y)
+    angle = sitk.Abs(sitk.Atan2(y, x))
+    height_above_base = z + HEIGHT / 2
+    rim_fraction = (radius - INNER_RADIUS) / (OUTER_RADIUS - INNER_RADIUS)
+
+    cross_section = (
+        (radius <= OUTER_RADIUS)
+        & (height_above_base >= 0.0)
+        & (height_above_base <= HEIGHT * rim_fraction)
+    )
+    return cross_section & (angle <= math.radians(SWEEP_DEGREES / 2))
