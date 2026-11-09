@@ -2,6 +2,9 @@ import math
 
 import pytest
 import SimpleITK as sitk
+from scipy.interpolate import BSpline
+
+from meniscus2brep.vol import centerline
 
 INNER_RADIUS = 10.0
 OUTER_RADIUS = 20.0
@@ -9,7 +12,7 @@ HEIGHT = 8.0
 SWEEP_DEGREES = 270.0
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def meniscus_label() -> sitk.Image:
     """Approximate knee meniscus as a sitkUInt8 LabelMap with label 1.
 
@@ -34,9 +37,11 @@ def meniscus_label() -> sitk.Image:
     height_above_base = z + HEIGHT / 2
     rim_fraction = (radius - INNER_RADIUS) / (OUTER_RADIUS - INNER_RADIUS)
 
-    cross_section = (
-        (radius <= OUTER_RADIUS)
-        & (height_above_base >= 0.0)
-        & (height_above_base <= HEIGHT * rim_fraction)
-    )
+    cross_section = (radius <= OUTER_RADIUS) & (height_above_base >= 0.0) & (height_above_base <= HEIGHT * rim_fraction)
     return cross_section & (angle <= math.radians(SWEEP_DEGREES / 2))
+
+
+@pytest.fixture(scope="session")
+def meniscus_centerline(meniscus_label: sitk.Image) -> BSpline:
+    """Centerline of meniscus_label."""
+    return centerline(meniscus_label)
