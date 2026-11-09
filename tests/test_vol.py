@@ -26,7 +26,6 @@ def test_centerline_is_cubic_spline_of_physical_points(meniscus_centerline):
     assert isinstance(meniscus_centerline, BSpline)
     assert meniscus_centerline.k == 3
     assert sample(meniscus_centerline, 11).shape == (11, 3)
-    np.savetxt("spline.csv", sample(meniscus_centerline, 30), delimiter=",")
 
 
 def test_centerline_passes_through_cross_section_centers(meniscus_centerline):

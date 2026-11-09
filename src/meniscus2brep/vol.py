@@ -137,7 +137,7 @@ def _cumulative_lengths(curve: np.ndarray) -> np.ndarray:
 def _fit(samples: np.ndarray, rms_tolerance: float) -> BSpline:
     if len(samples) < 4:
         raise ValueError("Label is too small to fit a curve")
-    spline, _ = make_splprep(list(samples.T), k=3, s=round(len(samples) * rms_tolerance**2))
+    spline, _ = make_splprep(list(samples.T), k=3, s=len(samples) * rms_tolerance**2)  # pyright: ignore[reportArgumentType]
     # make_splprep evaluates to shape (3, N); rebuild so points are (N, 3) rows.
     return BSpline(spline.t, spline.c, spline.k)
 
