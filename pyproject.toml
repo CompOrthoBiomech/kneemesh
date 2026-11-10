@@ -18,6 +18,10 @@ dependencies = [
     "vtk>=9.7.2",
 ]
 
+[project.scripts]
+meniscus2brep-brep = "meniscus2brep.pipeline:brep_main"
+meniscus2brep-mesh = "meniscus2brep.pipeline:mesh_main"
+
 [build-system]
 requires = ["uv_build>=0.8.13,<0.9.0"]
 build-backend = "uv_build"

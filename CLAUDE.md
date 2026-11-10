@@ -14,6 +14,8 @@ uv run pytest tests/test_vol.py::test_name     # run one test
 uv add <package>                               # add a runtime dependency
 uv add --dev <package>                         # add a dev dependency
 uv build                                       # build sdist and wheel
+uv run meniscus2brep-brep --help               # LabelMap to B-rep pipeline
+uv run meniscus2brep-mesh --help               # B-rep to mesh pipeline
 ```
 
 ## Architecture
@@ -24,7 +26,8 @@ The package converts a segmented meniscus image into B-rep geometry, as a pipeli
 - `vol.py` operates on LabelMaps. It produces the centerline spline and the ordered cross-section contours.
 - `geo.py` lofts contour slices into a B-rep with gmsh's Open Cascade kernel, builds the three-block solid that hexahedral meshing needs, and can assemble slices into one `vtkPolyData` of closed polylines.
 - `mesh.py` meshes solid B-reps with gmsh into tetrahedra or block-structured hexahedra, returning a `Mesh` of node coordinates, per-type connectivity in gmsh's node ordering, and gmsh element type numbers. `write_mesh` rebuilds a `Mesh` as a discrete gmsh volume to write it.
-- `config.py` provides `BaseConfig`, the pydantic base class for configuration models parsed from JSON. It rejects unknown keys. No concrete configuration models exist yet.
+- `config.py` provides `BaseConfig`, the pydantic base class for configuration models parsed from JSON, which rejects unknown keys. `BrepConfig` and `MeshConfig` hold every pipeline argument with its default. Enum fields are saved by member name and read from a name or value, and optional numbers read "none" as None.
+- `pipeline.py` runs the two console scripts. `configure` builds an option for every config field, layers command-line values over `--config`, and saves the result: `settings<timestamp>.json` in the working directory without `--config`, or `<stem>_modified.json` beside it when options change it. Command-line values arrive as strings and rely on pydantic's lax coercion.
 
 ### LabelMap convention
 

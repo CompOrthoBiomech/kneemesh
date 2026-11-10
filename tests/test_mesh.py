@@ -16,9 +16,11 @@ def tetrahedron_volumes(nodes, corners):
     return np.einsum("ij,ij->i", b - a, np.cross(c - a, d - a)) / 6
 
 
-def hexahedron_volumes(mesh, name) -> int:
+def hexahedron_volumes(mesh, name) -> np.ndarray:
     corners = mesh.elements[name][:, :8]
-    return sum(tetrahedron_volumes(mesh.nodes, corners[:, list(tetrahedron)]) for tetrahedron in HEXAHEDRON_TETRAHEDRA)
+    volumes = sum(tetrahedron_volumes(mesh.nodes, corners[:, list(tetrahedron)]) for tetrahedron in HEXAHEDRON_TETRAHEDRA)
+
+    return np.array([volumes]).ravel()
 
 
 def scaled_corner_jacobians(mesh, name):
@@ -159,7 +161,7 @@ def test_hexahedral_mesh_has_no_inverted_elements(meniscus_hexahedra):
 def test_hexahedral_mesh_fills_the_solid(meniscus_hexahedra, meniscus_hex_blocks, tmp_path):
     volumes = hexahedron_volumes(meniscus_hexahedra, "Hexahedron 8")
 
-    assert volumes == pytest.approx(brep_volume(meniscus_hex_blocks, tmp_path), rel=0.03)
+    assert volumes.sum() == pytest.approx(brep_volume(meniscus_hex_blocks, tmp_path), rel=0.03)
 
 
 @pytest.mark.parametrize(("per_edge", "along"), [(2, 15), (8, 60)])
@@ -184,7 +186,9 @@ def test_hexahedral_mesh_second_order_incomplete_has_20_node_hexahedra(meniscus_
     assert mesh.elements["Hexahedron 20"].shape == (3 * 2 * 2 * 10, 20)
 
 
-@pytest.mark.parametrize(("order", "incomplete", "name"), [(2, True, "Tetrahedron 10"), (3, False, "Tetrahedron 20"), (3, True, "Tetrahedron 16")])
+@pytest.mark.parametrize(
+    ("order", "incomplete", "name"), [(2, True, "Tetrahedron 10"), (3, False, "Tetrahedron 20"), (3, True, "Tetrahedron 16")]
+)
 def test_tetrahedral_mesh_second_order_incomplete_drops_interior_nodes(meniscus_solid, order, incomplete, name):
     mesh = tetrahedral_mesh(meniscus_solid, max_size=4.0, element_order=order, second_order_incomplete=incomplete)
 
