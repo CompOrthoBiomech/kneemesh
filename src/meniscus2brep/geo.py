@@ -92,7 +92,12 @@ def contours_to_brep(
         splines = [_periodic_spline(_project_onto_plane(contour), spline_order) for contour in slices]
         wires = [_add_contour_wire(spline, len(contour.points)) for spline, contour in zip(splines, slices)]
         # Open Cascade only honors a loft degree of 1 for a ruled surface.
-        loft = gmsh.model.occ.addThruSections(wires, makeSolid=False, makeRuled=spline_order == 1, maxDegree=spline_order)
+        # Open Cascade's default C2 continuity makes the loft overshoot in its end
+        # spans where real sections taper quickly toward the horns, folding the
+        # surface so gmsh cannot mesh it. C1 lets it follow the sections.
+        loft = gmsh.model.occ.addThruSections(
+            wires, makeSolid=False, makeRuled=spline_order == 1, maxDegree=spline_order, continuity="C1"
+        )
         ends = [(slices[0], splines[0], wires[0], -1.0), (slices[-1], splines[-1], wires[-1], 1.0)]
         caps = None
         if cap == "planar":
@@ -252,7 +257,9 @@ def _y_split_indices(slices: list[ContourSlice]) -> np.ndarray:
     """
     turns = np.mean([_turning_angles(contour.points) for contour in slices], axis=0)
     count = len(turns)
-    separation = max(count // 8, 1)
+    # Corners closer than a sixth of the contour would leave a block with a
+    # nearly zero-length side, whose cells invert.
+    separation = -(-count // 6)
     corners: list[int] = []
     for index in np.argsort(turns)[::-1]:
         if all(min(abs(index - corner), count - abs(index - corner)) >= separation for corner in corners):

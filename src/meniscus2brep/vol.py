@@ -378,8 +378,12 @@ def _skeleton_path(image: sitk.Image, mask: np.ndarray, points: np.ndarray) -> t
     """
     depth_axis = _thinnest_array_axis(image, points)
     projection = mask.any(axis=depth_axis)
-    skeleton = sitk.GetArrayFromImage(sitk.BinaryThinning(sitk.GetImageFromArray(projection.astype(np.uint8))))
-    pixels = np.argwhere(skeleton)
+    # Thinning treats the image edge as an open end, so a label cut off by the
+    # edge would skeletonize into separate branches running off it. A border of
+    # background keeps the skeleton inside the label and connected.
+    padded = np.pad(projection, 1).astype(np.uint8)
+    skeleton = sitk.GetArrayFromImage(sitk.BinaryThinning(sitk.GetImageFromArray(padded)))
+    pixels = np.argwhere(skeleton) - 1
 
     coordinates = np.arange(mask.shape[depth_axis]).reshape([-1 if axis == depth_axis else 1 for axis in range(3)])
     pixel_key = tuple(pixels.T)

@@ -309,3 +309,32 @@ def test_hex_blocks_reject_too_few_points():
 def test_hex_blocks_reject_too_few_slices(meniscus_hex_slices):
     with pytest.raises(ValueError, match="at least 2"):
         contours_to_hex_blocks(meniscus_hex_slices[:1])
+
+
+def surface_folds(brep, tmp_path):
+    """Count sign flips of the surface normal between neighboring samples of each non-planar face."""
+    folds = 0
+    with gmsh_session():
+        import_brep(brep, tmp_path)
+        for _, face in gmsh.model.getEntities(2):
+            if gmsh.model.getType(2, face) == "Plane":
+                continue
+            (u_low, v_low), (u_high, v_high) = gmsh.model.getParametrizationBounds(2, face)
+            u, v = np.linspace(u_low, u_high, 161), np.linspace(v_low, v_high, 151)
+            parameters = np.array([[a, b] for b in v for a in u])
+            derivatives = np.array(gmsh.model.getDerivative(2, face, parameters.ravel().tolist())).reshape(len(v), len(u), 2, 3)
+            normals = np.cross(derivatives[..., 0, :], derivatives[..., 1, :])
+            normals /= np.maximum(np.linalg.norm(normals, axis=-1, keepdims=True), 1e-30)
+            folds += int(((normals[1:] * normals[:-1]).sum(-1) < 0).sum() + ((normals[:, 1:] * normals[:, :-1]).sum(-1) < 0).sum())
+    return folds
+
+
+@pytest.mark.parametrize("order", [2, 3])
+def test_loft_of_real_meniscus_does_not_fold(real_label, tmp_path, order):
+    from meniscus2brep.vol import centerline, extract_isocontour, signed_distance_field, slice_isocontour
+
+    slices = slice_isocontour(extract_isocontour(signed_distance_field(real_label)), centerline(real_label), spacing=5.0)
+
+    # The real sections taper quickly toward the horns. A C2 loft overshoots
+    # there and folds, which stalls gmsh's surface meshing indefinitely.
+    assert surface_folds(contours_to_brep(slices, spline_order=order, cap="planar"), tmp_path) == 0

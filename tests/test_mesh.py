@@ -218,3 +218,17 @@ def test_hexahedral_mesh_rejects_single_block_solid(meniscus_solid):
 def test_hexahedral_mesh_rejects_invalid_arguments(meniscus_hex_blocks, arguments, message):
     with pytest.raises(ValueError, match=message):
         hexahedral_mesh(meniscus_hex_blocks, **arguments)
+
+
+def test_tetrahedral_mesh_of_real_meniscus(real_label, tmp_path):
+    from meniscus2brep.geo import contours_to_brep
+    from meniscus2brep.vol import centerline, extract_isocontour, signed_distance_field, slice_isocontour
+
+    slices = slice_isocontour(extract_isocontour(signed_distance_field(real_label)), centerline(real_label), spacing=5.0)
+    brep = contours_to_brep(slices, cap="planar")
+
+    mesh = tetrahedral_mesh(brep, max_size=1.0)
+
+    volumes = tetrahedron_volumes(mesh.nodes, mesh.elements["Tetrahedron 4"])
+    assert np.all(volumes > 0)
+    assert volumes.sum() == pytest.approx(brep_volume(brep, tmp_path), rel=0.03)

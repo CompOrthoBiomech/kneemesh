@@ -1,10 +1,12 @@
 import math
+from pathlib import Path
 
 import pytest
 import SimpleITK as sitk
 from scipy.interpolate import BSpline
 from vtkmodules.vtkCommonDataModel import vtkPolyData
 
+from meniscus2brep.disk import read_label_map
 from meniscus2brep.geo import BRep, contours_to_brep, contours_to_hex_blocks, contours_to_polydata
 from meniscus2brep.vol import ContourSlice, centerline, extract_isocontour, signed_distance_field, slice_isocontour
 
@@ -101,3 +103,9 @@ def meniscus_hex_slices(meniscus_mesh: vtkPolyData, meniscus_centerline: BSpline
 def meniscus_hex_blocks(meniscus_hex_slices: list[ContourSlice]) -> BRep:
     """Three-block solid for hexahedral meshing, built from meniscus_hex_slices."""
     return contours_to_hex_blocks(meniscus_hex_slices)
+
+
+@pytest.fixture(scope="session")
+def real_label() -> sitk.Image:
+    """A real meniscus LabelMap (label 1) whose arc touches the edge of the image."""
+    return read_label_map(Path(__file__).parent / "dat" / "mns_l.nii")

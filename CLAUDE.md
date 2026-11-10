@@ -38,7 +38,7 @@ A LabelMap is a scalar `sitk.Image` with pixel type `sitkUInt8`, `sitkUInt16`, o
 
 `sitk.BinaryThinning` only thins in 2D. Given a 3D image it thins slice by slice and returns a sheet, so it cannot produce the curve directly. It only provides the initial estimate:
 
-1. Project the label along the image axis closest to its thinnest principal direction, then thin the 2D projection.
+1. Project the label along the image axis closest to its thinnest principal direction, then thin the 2D projection. The projection is padded with background first: thinning treats the image edge as an open end, so a label cut off by the edge would otherwise skeletonize into disconnected branches and the longest path would cover only part of the arc.
 2. Take the longest path through the skeleton and trim one mean half-width from each end, because the skeleton forks into the label's corners there.
 3. Fit a spline, then repeatedly replace it with a fit through centroids of cross-section slabs normal to the curve. Stations extend past both ends so the curve can grow back toward the tips, and partial sections at the tips are discarded.
 
@@ -66,6 +66,7 @@ gmsh holds its models in global state, so a `BRep` is a plain value holding the 
 - A smooth cap reuses the end contour's poles and knots so its rim matches the loft's edge. Its quadratic meridians collapse to one apex by repeating the apex point tag for the last row of poles.
 - Planar caps need contours projected exactly onto their planes, because VTK's single-precision points fall outside Open Cascade's tolerance.
 - The loft's degree along the curve is capped at 3 regardless of `spline_order`, and only a ruled loft achieves degree 1.
+- The loft uses `continuity="C1"`. Open Cascade's default C2 overshoots in the end spans where real sections taper toward the horns, folding the surface, and gmsh's 2D meshing then never finishes. `smoothing=True` in `addThruSections` hangs outright.
 - `gmsh.write` exports only the highest-dimension shapes, so the input wires do not need removing.
 - `occ.getMass` is unreliable on ruled surfaces (`spline_order=1`). Mesh the shape to check its volume.
 

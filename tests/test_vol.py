@@ -410,3 +410,23 @@ def test_slice_rejects_curve_that_misses_the_mesh(meniscus_mesh):
 def test_slice_rejects_invalid_arguments(meniscus_mesh, meniscus_centerline, arguments, message):
     with pytest.raises(ValueError, match=message):
         slice_isocontour(meniscus_mesh, meniscus_centerline, **arguments)
+
+
+def test_centerline_follows_a_label_cut_off_by_the_image_edge(meniscus_label, meniscus_centerline):
+    # Cropping at x = 17.5 mm cuts through the middle of the arc.
+    cropped = meniscus_label[:86, :, :]
+
+    lengths = np.linalg.norm(np.diff(sample(centerline(cropped)), axis=0), axis=1).sum()
+
+    full_length = np.linalg.norm(np.diff(sample(meniscus_centerline), axis=0), axis=1).sum()
+    assert lengths == pytest.approx(full_length, rel=0.1)
+
+
+def test_centerline_of_real_label_follows_the_whole_arc(real_label):
+    points = sample(centerline(real_label))
+    label_points = np.argwhere(sitk.GetArrayViewFromImage(real_label) == 1)[:, ::-1]
+    physical = np.array([real_label.TransformIndexToPhysicalPoint(index.tolist()) for index in label_points])
+
+    distances, _ = KDTree(physical).query(points)
+    assert np.linalg.norm(np.diff(points, axis=0), axis=1).sum() > 70.0
+    assert distances.max() < 1.0
