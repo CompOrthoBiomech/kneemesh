@@ -129,8 +129,10 @@ def in_plane(contour_slice):
     return offsets @ contour_slice.u_axis, offsets @ contour_slice.v_axis
 
 
-def test_distance_field_is_negative_exactly_inside_label(meniscus_label, meniscus_distance_field):
-    assert np.array_equal(as_array(meniscus_distance_field) < 0, as_array(meniscus_label) == 1)
+def test_unsmoothed_distance_field_is_negative_exactly_inside_label(meniscus_label):
+    field = signed_distance_field(meniscus_label, sigma=0.0)
+
+    assert np.array_equal(as_array(field) < 0, as_array(meniscus_label) == 1)
 
 
 def test_distance_field_zero_lies_on_voxel_edge():
@@ -141,10 +143,43 @@ def test_distance_field_zero_lies_on_voxel_edge():
             for z in range(6):
                 image[x, y, z] = 1
 
-    field = signed_distance_field(image)
+    field = signed_distance_field(image, sigma=0.0)
 
     assert field[4, 3, 3] == pytest.approx(0.25)
     assert field[5, 3, 3] == pytest.approx(-0.25)
+
+
+def test_distance_field_default_sigma_spans_three_voxels_per_axis(meniscus_label, meniscus_distance_field):
+    unsmoothed = signed_distance_field(meniscus_label, sigma=0.0)
+    sigmas = [3.0 / 3.92 * size for size in meniscus_label.GetSpacing()]
+
+    assert sitk.Hash(meniscus_distance_field) == sitk.Hash(sitk.SmoothingRecursiveGaussian(unsmoothed, sigmas))
+
+
+def test_distance_field_uses_explicit_sigma_on_every_axis(meniscus_label):
+    unsmoothed = signed_distance_field(meniscus_label, sigma=0.0)
+
+    result = signed_distance_field(meniscus_label, sigma=1.5)
+
+    assert sitk.Hash(result) == sitk.Hash(sitk.SmoothingRecursiveGaussian(unsmoothed, [1.5, 1.5, 1.5]))
+
+
+def test_distance_field_rejects_negative_sigma(meniscus_label):
+    with pytest.raises(ValueError, match="sigma"):
+        signed_distance_field(meniscus_label, sigma=-1.0)
+
+
+def test_smoothing_removes_the_staircase_from_contours(meniscus_label, meniscus_centerline):
+    def roughness(sigma):
+        field = signed_distance_field(meniscus_label, sigma=sigma)
+        slices = slice_isocontour(extract_isocontour(field), meniscus_centerline, spacing=5.0, points_per_slice=64)
+        # A contour's bending is highest at its real corners, so the median measures the steps between them.
+        second_differences = [
+            np.linalg.norm(np.roll(s.points, -1, axis=0) - 2 * s.points + np.roll(s.points, 1, axis=0), axis=1) for s in slices
+        ]
+        return np.median(np.concatenate(second_differences))
+
+    assert roughness(None) < 0.5 * roughness(0.0)
 
 
 def test_distance_field_selects_requested_label(meniscus_label, meniscus_distance_field):
@@ -165,9 +200,13 @@ def test_distance_field_rejects_non_uint8_image(meniscus_label):
 
 def test_isocontour_is_closed_mesh_with_label_volume(meniscus_label, meniscus_mesh):
     voxel_volume = np.prod(meniscus_label.GetSpacing()) * as_array(meniscus_label).sum()
+    unsmoothed = extract_isocontour(signed_distance_field(meniscus_label, sigma=0.0))
 
     assert open_edge_count(meniscus_mesh) == 0
-    assert mesh_volume(meniscus_mesh) == pytest.approx(voxel_volume, rel=0.03)
+    assert mesh_volume(unsmoothed) == pytest.approx(voxel_volume, rel=0.03)
+    # Smoothing rounds the fixture's sharp rim, removing a few percent of its volume.
+    assert mesh_volume(meniscus_mesh) == pytest.approx(voxel_volume, rel=0.12)
+    assert mesh_volume(meniscus_mesh) < mesh_volume(unsmoothed)
 
 
 def test_isocontour_level_offsets_the_surface(meniscus_distance_field, meniscus_mesh):
@@ -200,6 +239,10 @@ def test_isocontour_closes_where_label_touches_image_edge():
 def test_isocontour_rejects_level_outside_field(meniscus_distance_field, level):
     with pytest.raises(ValueError, match="no surface"):
         extract_isocontour(meniscus_distance_field, level=level)
+
+
+def test_slices_default_to_32_points(meniscus_slices):
+    assert all(len(contour_slice.points) == 32 for contour_slice in meniscus_slices)
 
 
 @pytest.mark.parametrize("count", [16, 64])
@@ -249,8 +292,8 @@ def test_slices_take_the_contour_around_the_curve(meniscus_slices):
 
 def test_slice_areas_match_cross_section(meniscus_slices):
     for contour_slice in meniscus_slices:
-        # The voxelized cross-section is larger than the ideal triangle's 40 mm^2.
-        assert contour_slice.area == pytest.approx(44.0, abs=3.0)
+        # About 45 mm^2 when voxelized, less the rim corners that smoothing rounds.
+        assert contour_slice.area == pytest.approx(42.0, abs=2.0)
         u, v = in_plane(contour_slice)
         assert 0.5 * np.sum(u * np.roll(v, -1) - np.roll(u, -1) * v) == pytest.approx(contour_slice.area, rel=0.05)
 

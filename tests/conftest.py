@@ -64,7 +64,7 @@ def meniscus_mesh(meniscus_distance_field: sitk.Image) -> vtkPolyData:
 @pytest.fixture(scope="session")
 def meniscus_slices(meniscus_mesh: vtkPolyData, meniscus_centerline: BSpline) -> list[ContourSlice]:
     """Slices of meniscus_mesh every 5 mm along meniscus_centerline."""
-    return slice_isocontour(meniscus_mesh, meniscus_centerline, spacing=5.0, points_per_slice=64)
+    return slice_isocontour(meniscus_mesh, meniscus_centerline, spacing=5.0)
 
 
 @pytest.fixture(scope="session")
@@ -81,5 +81,11 @@ def meniscus_surface(meniscus_slices: list[ContourSlice]) -> BRep:
 
 @pytest.fixture(scope="session")
 def meniscus_solid(meniscus_slices: list[ContourSlice]) -> BRep:
-    """Capped cubic solid lofted through meniscus_slices."""
-    return contours_to_brep(meniscus_slices, solid=True)
+    """Cubic solid lofted through meniscus_slices with planar caps."""
+    return contours_to_brep(meniscus_slices, cap="planar")
+
+
+@pytest.fixture(scope="session")
+def meniscus_domed_solid(meniscus_slices: list[ContourSlice]) -> BRep:
+    """Cubic solid lofted through meniscus_slices with smooth caps."""
+    return contours_to_brep(meniscus_slices, cap="smooth")

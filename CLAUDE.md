@@ -46,6 +46,7 @@ The result is a cubic `scipy.interpolate.BSpline` over u in [0, 1], in physical 
 `signed_distance_field` feeds `extract_isocontour`, which returns a closed VTK triangle mesh from `vtkFlyingEdges3D`. `slice_isocontour` cuts that mesh along the centerline and returns `ContourSlice` objects holding ordered points from a closed Kochanek spline. Keep these points when changing this code:
 
 - `sitk.SignedMaurerDistanceMap` alone is zero on boundary voxel centers, half a voxel inside the label. `signed_distance_field` averages it with the inverted mask's map so zero lies on the voxel edges.
+- `signed_distance_field` then smooths with a recursive Gaussian to remove the voxel staircase. The default sigma, per axis, puts 3 voxel edges in the central 95%. It rounds sharp edges, costing the test fixture about 5% of its volume. Pass `sigma=0` for the exact field.
 - `extract_isocontour` pads the field so the mesh stays closed where a label touches the image edge.
 - A cutting plane is infinite and can also cut the far limb of the C-shaped structure, so each slice takes the loop nearest the centerline.
 - Contours run counterclockwise about the slice normal. Each one's point order is rotated to match the previous slice, because a loft joins contours by parameter and a drifting start point makes the surface bulge at sharp corners.
@@ -56,7 +57,8 @@ The result is a cubic `scipy.interpolate.BSpline` over u in [0, 1], in physical 
 gmsh holds its models in global state, so a `BRep` is a plain value holding the `.brep` file's text, and all gmsh work happens inside `gmsh_session()`. Keep these points when changing `contours_to_brep`:
 
 - gmsh treats a B-spline whose first and last point tags match as periodic, so contours are built with periodic knots.
-- `addThruSections(makeSolid=True)` returns a volume with no end faces and no error. Solids are instead built from the lofted surface, planar caps, and a sewn surface loop.
+- `addThruSections(makeSolid=True)` returns a volume with no end faces and no error. Solids are instead built from the lofted surface, the two caps, and a sewn surface loop.
+- A smooth cap reuses the end contour's poles and knots so its rim matches the loft's edge. Its quadratic meridians collapse to one apex by repeating the apex point tag for the last row of poles.
 - Planar caps need contours projected exactly onto their planes, because VTK's single-precision points fall outside Open Cascade's tolerance.
 - The loft's degree along the curve is capped at 3 regardless of `spline_order`, and only a ruled loft achieves degree 1.
 - `gmsh.write` exports only the highest-dimension shapes, so the input wires do not need removing.
@@ -68,6 +70,6 @@ gmsh holds its models in global state, so a `BRep` is a plain value holding the 
 
 - `meniscus_label` is a synthetic meniscus: a triangular cross-section swept 270° about the z axis, with the gap facing -x.
 - `meniscus_centerline` is `centerline(meniscus_label)`. Use it instead of calling `centerline` on the same image again.
-- `meniscus_distance_field`, `meniscus_mesh`, `meniscus_slices`, `meniscus_contours`, `meniscus_surface`, and `meniscus_solid` are the later pipeline stages for the same label.
+- `meniscus_distance_field`, `meniscus_mesh`, `meniscus_slices`, `meniscus_contours`, `meniscus_surface`, `meniscus_solid`, and `meniscus_domed_solid` are the later pipeline stages for the same label.
 
 The fixture's voxelized cross-section centroid is r = 16.43, z = -1.67, not the ideal triangle's r = 16.67, z = -1.33. Its bottom slice lies exactly on the triangle's base and counts as a whole voxel layer, which also makes its voxel volume about 12% above the analytic value. Compare against the voxelized values or use a suitable tolerance.

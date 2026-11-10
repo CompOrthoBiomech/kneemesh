@@ -26,6 +26,8 @@ _SKELETON_TOLERANCE_VOXELS = 0.5
 _CENTROID_TOLERANCE_VOXELS = 0.25
 _CENTROID_TOLERANCE_HALF_WIDTHS = 0.05
 _MIN_END_AREA_RATIO = 0.2
+# A Gaussian's central 95% spans 2 * 1.96 sigma. Setting that to 3 voxel edges gives this sigma in voxels.
+_DEFAULT_SIGMA_VOXELS = 3 / (2 * 1.96)
 _MAX_CONTOUR_SEGMENTS = 1_000_000
 
 
@@ -101,21 +103,29 @@ class ContourSlice:
     area: float
 
 
-def signed_distance_field(label_map: sitk.Image, label: int = 1) -> sitk.Image:
-    """Compute the signed distance to a label's boundary, in physical units.
+def signed_distance_field(label_map: sitk.Image, label: int = 1, sigma: float | None = None) -> sitk.Image:
+    """Compute a smoothed signed distance to a label's boundary, in physical units.
+
+    A recursive Gaussian removes the voxel staircase from the field's level sets.
 
     Args:
         label_map: 3D sitkUInt8 LabelMap.
         label: Value of the structure.
+        sigma: Gaussian standard deviation in physical units, applied equally
+            to every axis. By default each axis uses the sigma whose central
+            95% spans 3 of that axis's voxel edges. 0 disables smoothing.
 
     Returns:
         A float image that is negative inside the label and positive outside.
-        Its zero level set lies on the voxel edges of the label's boundary.
+        Without smoothing, its zero level set lies on the voxel edges of the
+        label's boundary.
 
     Raises:
-        ValueError: If the image is not a 3D sitkUInt8 LabelMap or the label
-            is absent.
+        ValueError: If the image is not a 3D sitkUInt8 LabelMap, the label is
+            absent, or sigma is negative.
     """
+    if sigma is not None and sigma < 0:
+        raise ValueError(f"sigma must not be negative, got {sigma}")
     _require_3d_label_map(label_map)
     mask = sitk.BinaryThreshold(label_map, label, label, 1, 0)
     if not sitk.GetArrayViewFromImage(mask).any():
@@ -125,7 +135,11 @@ def signed_distance_field(label_map: sitk.Image, label: int = 1) -> sitk.Image:
     # inside the label's edge. Averaging with the inverse's map centers it.
     inside = _maurer_distance(mask)
     outside = _maurer_distance(sitk.BinaryNot(mask))
-    return (inside - outside) * 0.5
+    field = (inside - outside) * 0.5
+    if sigma == 0:
+        return field
+    sigmas = [_DEFAULT_SIGMA_VOXELS * size for size in label_map.GetSpacing()] if sigma is None else [sigma] * 3
+    return sitk.SmoothingRecursiveGaussian(field, sigmas)
 
 
 def extract_isocontour(distance_field: sitk.Image, level: float = 0.0) -> vtkPolyData:
@@ -162,7 +176,7 @@ def extract_isocontour(distance_field: sitk.Image, level: float = 0.0) -> vtkPol
     return flying_edges.GetOutput()
 
 
-def slice_isocontour(mesh: vtkPolyData, curve: BSpline, spacing: float, points_per_slice: int = 64) -> list[ContourSlice]:
+def slice_isocontour(mesh: vtkPolyData, curve: BSpline, spacing: float, points_per_slice: int = 32) -> list[ContourSlice]:
     """Slice a mesh with planes normal to a curve at uniform arc-length spacing.
 
     Slices are spaced exactly spacing apart along the curve, with any remainder
