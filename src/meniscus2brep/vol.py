@@ -30,6 +30,9 @@ _MIN_END_AREA_RATIO = 0.2
 _DEFAULT_SIGMA_VOXELS = 3 / (2 * 1.96)
 _MAX_CONTOUR_SEGMENTS = 1_000_000
 
+# Integer pixel types accepted for LabelMaps; 16-bit types allow more labels.
+LABEL_MAP_PIXEL_IDS = (sitk.sitkUInt8, sitk.sitkUInt16, sitk.sitkInt16)
+
 
 def centerline(label_map: sitk.Image, label: int = 1) -> BSpline:
     """Fit a smooth curve through the centers of a label's cross-sections.
@@ -40,7 +43,7 @@ def centerline(label_map: sitk.Image, label: int = 1) -> BSpline:
     moved onto the centroids of the label's cross-sections normal to it.
 
     Args:
-        label_map: 3D sitkUInt8 LabelMap.
+        label_map: 3D LabelMap of sitkUInt8, sitkUInt16, or sitkInt16 pixels.
         label: Value of the structure to fit.
 
     Returns:
@@ -49,8 +52,8 @@ def centerline(label_map: sitk.Image, label: int = 1) -> BSpline:
         u = 0 is unspecified.
 
     Raises:
-        ValueError: If the image is not a 3D sitkUInt8 LabelMap, or the label
-            is absent or too small to fit.
+        ValueError: If the image is not a 3D LabelMap of an accepted pixel
+            type, or the label is absent or too small to fit.
     """
     _require_3d_label_map(label_map)
 
@@ -109,7 +112,7 @@ def signed_distance_field(label_map: sitk.Image, label: int = 1, sigma: float | 
     A recursive Gaussian removes the voxel staircase from the field's level sets.
 
     Args:
-        label_map: 3D sitkUInt8 LabelMap.
+        label_map: 3D LabelMap of sitkUInt8, sitkUInt16, or sitkInt16 pixels.
         label: Value of the structure.
         sigma: Gaussian standard deviation in physical units, applied equally
             to every axis. By default each axis uses the sigma whose central
@@ -121,7 +124,7 @@ def signed_distance_field(label_map: sitk.Image, label: int = 1, sigma: float | 
         label's boundary.
 
     Raises:
-        ValueError: If the image is not a 3D sitkUInt8 LabelMap, the label is
+        ValueError: If the image is not a 3D LabelMap of an accepted pixel type, the label is
             absent, or sigma is negative.
     """
     if sigma is not None and sigma < 0:
@@ -234,8 +237,10 @@ def slice_isocontour(mesh: vtkPolyData, curve: BSpline, spacing: float, points_p
 
 
 def _require_3d_label_map(label_map: sitk.Image) -> None:
-    if label_map.GetDimension() != 3 or label_map.GetPixelID() != sitk.sitkUInt8:
-        raise ValueError(f"LabelMap must be 3D sitkUInt8, got {label_map.GetDimension()}D {label_map.GetPixelIDTypeAsString()}")
+    if label_map.GetDimension() != 3 or label_map.GetPixelID() not in LABEL_MAP_PIXEL_IDS:
+        raise ValueError(
+            f"LabelMap must be 3D sitkUInt8, sitkUInt16, or sitkInt16, got {label_map.GetDimension()}D {label_map.GetPixelIDTypeAsString()}"
+        )
 
 
 def _maurer_distance(mask: sitk.Image) -> sitk.Image:

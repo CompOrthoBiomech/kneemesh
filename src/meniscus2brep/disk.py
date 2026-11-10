@@ -11,6 +11,7 @@ from vtkmodules.vtkIOXML import vtkXMLPolyDataReader, vtkXMLPolyDataWriter
 
 from meniscus2brep.geo import BRep, gmsh_session
 from meniscus2brep.mesh import Mesh
+from meniscus2brep.vol import LABEL_MAP_PIXEL_IDS
 
 SUPPORTED_SUFFIXES = frozenset({".nii", ".nrrd", ".mhd"})
 POLY_DATA_SUFFIXES = frozenset({".vtp"})
@@ -24,7 +25,7 @@ def read_label_map(path: str | PathLike[str]) -> sitk.Image:
 
     Raises:
         ValueError: If the file format is unsupported or the image is not
-            sitkUInt8.
+            sitkUInt8, sitkUInt16, or sitkInt16.
     """
     path = _validated_path(path)
     image = sitk.ReadImage(str(path))
@@ -39,7 +40,7 @@ def write_label_map(image: sitk.Image, path: str | PathLike[str]) -> None:
 
     Raises:
         ValueError: If the file format is unsupported or the image is not
-            sitkUInt8.
+            sitkUInt8, sitkUInt16, or sitkInt16.
     """
     path = _validated_path(path)
     _require_label_map(image)
@@ -151,5 +152,5 @@ def _validated_path(path: str | PathLike[str], suffixes: frozenset[str] = SUPPOR
 
 
 def _require_label_map(image: sitk.Image) -> None:
-    if image.GetPixelID() != sitk.sitkUInt8:
-        raise ValueError(f"LabelMap must be sitkUInt8, got {image.GetPixelIDTypeAsString()}")
+    if image.GetPixelID() not in LABEL_MAP_PIXEL_IDS:
+        raise ValueError(f"LabelMap must be sitkUInt8, sitkUInt16, or sitkInt16, got {image.GetPixelIDTypeAsString()}")

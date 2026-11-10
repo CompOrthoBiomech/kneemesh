@@ -82,9 +82,20 @@ def test_centerline_rejects_absent_label(meniscus_label):
         centerline(meniscus_label, label=2)
 
 
-def test_centerline_rejects_non_uint8_image(meniscus_label):
-    with pytest.raises(ValueError, match="3D sitkUInt8"):
-        centerline(sitk.Cast(meniscus_label, sitk.sitkUInt16))
+@pytest.mark.parametrize(("pixel_id", "label"), [(sitk.sitkUInt16, 1000), (sitk.sitkInt16, -300)])
+def test_centerline_accepts_16_bit_label_maps(meniscus_label, meniscus_centerline, pixel_id, label):
+    # Labels outside the 8-bit range show the full pixel type is used.
+    relabeled = sitk.Cast(meniscus_label, pixel_id) * label
+
+    distances, _ = KDTree(sample(meniscus_centerline)).query(sample(centerline(relabeled, label=label)))
+
+    assert distances.max() < 0.1
+
+
+@pytest.mark.parametrize("pixel_id", [sitk.sitkInt8, sitk.sitkUInt32, sitk.sitkInt32, sitk.sitkFloat32])
+def test_centerline_rejects_other_pixel_types(meniscus_label, pixel_id):
+    with pytest.raises(ValueError, match="3D sitkUInt8, sitkUInt16, or sitkInt16"):
+        centerline(sitk.Cast(meniscus_label, pixel_id))
 
 
 def test_centerline_rejects_2d_image():
@@ -195,9 +206,17 @@ def test_distance_field_rejects_absent_label(meniscus_label):
         signed_distance_field(meniscus_label, label=2)
 
 
-def test_distance_field_rejects_non_uint8_image(meniscus_label):
-    with pytest.raises(ValueError, match="3D sitkUInt8"):
-        signed_distance_field(sitk.Cast(meniscus_label, sitk.sitkUInt16))
+@pytest.mark.parametrize(("pixel_id", "label"), [(sitk.sitkUInt16, 1000), (sitk.sitkInt16, -300)])
+def test_distance_field_accepts_16_bit_label_maps(meniscus_label, meniscus_distance_field, pixel_id, label):
+    relabeled = sitk.Cast(meniscus_label, pixel_id) * label
+
+    assert sitk.Hash(signed_distance_field(relabeled, label=label)) == sitk.Hash(meniscus_distance_field)
+
+
+@pytest.mark.parametrize("pixel_id", [sitk.sitkInt8, sitk.sitkUInt32, sitk.sitkFloat32])
+def test_distance_field_rejects_other_pixel_types(meniscus_label, pixel_id):
+    with pytest.raises(ValueError, match="3D sitkUInt8, sitkUInt16, or sitkInt16"):
+        signed_distance_field(sitk.Cast(meniscus_label, pixel_id))
 
 
 def test_isocontour_is_closed_mesh_with_label_volume(meniscus_label, meniscus_mesh):

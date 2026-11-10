@@ -31,7 +31,7 @@ The package converts a segmented meniscus image into B-rep geometry, as a pipeli
 
 ### LabelMap convention
 
-A LabelMap is a scalar `sitk.Image` with pixel type `sitk.sitkUInt8`, not SimpleITK's run-length `sitkLabel*` pixel types. `disk.py` enforces this on both read and write and does not cast other pixel types. It accepts only `.nii`, `.nrrd`, and `.mhd` + `.raw`, so `.nii.gz` is rejected. `vol.centerline` additionally requires a 3D image.
+A LabelMap is a scalar `sitk.Image` with pixel type `sitkUInt8`, `sitkUInt16`, or `sitkInt16` (`vol.LABEL_MAP_PIXEL_IDS`), not SimpleITK's run-length `sitkLabel*` pixel types. `disk.py` enforces this on both read and write and keeps the pixel type rather than casting. It accepts only `.nii`, `.nrrd`, and `.mhd` + `.raw`, so `.nii.gz` is rejected. `vol.centerline` additionally requires a 3D image.
 
 ### How `vol.centerline` works
 

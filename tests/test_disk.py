@@ -9,14 +9,16 @@ from meniscus2brep.geo import BRep, gmsh_session
 from meniscus2brep.mesh import hexahedral_mesh, tetrahedral_mesh
 
 
+@pytest.mark.parametrize("pixel_id", [sitk.sitkUInt8, sitk.sitkUInt16, sitk.sitkInt16])
 @pytest.mark.parametrize("filename", ["seg.nii", "seg.nrrd", "seg.mhd"])
-def test_round_trip_preserves_labels_and_geometry(tmp_path, meniscus_label, filename):
+def test_round_trip_preserves_labels_and_geometry(tmp_path, meniscus_label, filename, pixel_id):
+    meniscus_label = sitk.Cast(meniscus_label, pixel_id)
     path = tmp_path / filename
 
     write_label_map(meniscus_label, path)
     result = read_label_map(path)
 
-    assert result.GetPixelID() == sitk.sitkUInt8
+    assert result.GetPixelID() == pixel_id
     assert result.GetSize() == meniscus_label.GetSize()
     assert sitk.Hash(result) == sitk.Hash(meniscus_label)
     assert result.GetSpacing() == pytest.approx(meniscus_label.GetSpacing())
@@ -41,16 +43,16 @@ def test_read_rejects_unsupported_format(tmp_path):
         read_label_map(tmp_path / "seg.png")
 
 
-@pytest.mark.parametrize("pixel_id", [sitk.sitkInt8, sitk.sitkUInt16, sitk.sitkFloat32])
-def test_write_rejects_non_uint8_image(tmp_path, meniscus_label, pixel_id):
+@pytest.mark.parametrize("pixel_id", [sitk.sitkInt8, sitk.sitkUInt32, sitk.sitkInt32, sitk.sitkFloat32])
+def test_write_rejects_other_pixel_types(tmp_path, meniscus_label, pixel_id):
     image = sitk.Cast(meniscus_label, pixel_id)
 
     with pytest.raises(ValueError, match="must be sitkUInt8"):
         write_label_map(image, tmp_path / "seg.nrrd")
 
 
-@pytest.mark.parametrize("pixel_id", [sitk.sitkInt8, sitk.sitkUInt16, sitk.sitkFloat32])
-def test_read_rejects_non_uint8_image(tmp_path, meniscus_label, pixel_id):
+@pytest.mark.parametrize("pixel_id", [sitk.sitkInt8, sitk.sitkUInt32, sitk.sitkInt32, sitk.sitkFloat32])
+def test_read_rejects_other_pixel_types(tmp_path, meniscus_label, pixel_id):
     path = tmp_path / "seg.nrrd"
     sitk.WriteImage(sitk.Cast(meniscus_label, pixel_id), str(path))
 
