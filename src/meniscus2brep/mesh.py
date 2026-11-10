@@ -48,10 +48,12 @@ class Mesh:
         elements: Connectivity keyed by gmsh element name, such as
             "Tetrahedron 4" or "Hexahedron 27". Each array is (M, nodes per
             element) of 0-based indices into nodes, in gmsh's node ordering.
+        element_types: gmsh's element type number for each key of elements.
     """
 
     nodes: np.ndarray
     elements: dict[str, np.ndarray]
+    element_types: dict[str, int]
 
 
 def tetrahedral_mesh(
@@ -62,6 +64,7 @@ def tetrahedral_mesh(
     algorithm_2d: Algorithm2D = Algorithm2D.FRONTAL_DELAUNAY,
     algorithm_3d: Algorithm3D = Algorithm3D.DELAUNAY,
     element_order: int = 1,
+    second_order_incomplete: bool = False,
 ) -> Mesh:
     """Mesh a solid B-rep with tetrahedra.
 
@@ -75,6 +78,9 @@ def tetrahedral_mesh(
         algorithm_2d: Algorithm for the boundary triangles.
         algorithm_3d: Algorithm for the tetrahedra.
         element_order: Polynomial order of the elements. 2 gives 10-node tetrahedra.
+        second_order_incomplete: Omit interior nodes from high-order elements.
+            Second-order tetrahedra have none, so this only changes orders 3
+            and up, such as 16-node instead of 20-node third-order tetrahedra.
 
     Returns:
         The tetrahedral mesh.
@@ -96,6 +102,7 @@ def tetrahedral_mesh(
         "Mesh.Algorithm": Algorithm2D(algorithm_2d),
         "Mesh.Algorithm3D": Algorithm3D(algorithm_3d),
         "Mesh.ElementOrder": element_order,
+        "Mesh.SecondOrderIncomplete": second_order_incomplete,
     }
     if max_size is not None:
         options["Mesh.MeshSizeMax"] = max_size
@@ -106,7 +113,13 @@ def tetrahedral_mesh(
         return _volume_mesh()
 
 
-def hexahedral_mesh(brep: BRep, elements_per_edge: int = 4, elements_along: int = 20, element_order: int = 1) -> Mesh:
+def hexahedral_mesh(
+    brep: BRep,
+    elements_per_edge: int = 4,
+    elements_along: int = 20,
+    element_order: int = 1,
+    second_order_incomplete: bool = False,
+) -> Mesh:
     """Mesh a solid of six-sided blocks with hexahedra, using transfinite surfaces and volumes.
 
     Every block must have six faces, such as the three blocks from
@@ -120,6 +133,8 @@ def hexahedral_mesh(brep: BRep, elements_per_edge: int = 4, elements_along: int 
         elements_per_edge: Elements along each edge of a cap.
         elements_along: Elements along the solid between the caps.
         element_order: Polynomial order of the elements. 2 gives 27-node hexahedra.
+        second_order_incomplete: Omit face and interior nodes from high-order
+            elements, giving 20-node instead of 27-node second-order hexahedra.
 
     Returns:
         The hexahedral mesh.
@@ -132,7 +147,8 @@ def hexahedral_mesh(brep: BRep, elements_per_edge: int = 4, elements_along: int 
         raise ValueError(f"Element counts must be at least 1, got {elements_per_edge} and {elements_along}")
     _require_element_order(element_order)
 
-    with gmsh_session(), _gmsh_options({"Mesh.ElementOrder": element_order}):
+    options = {"Mesh.ElementOrder": element_order, "Mesh.SecondOrderIncomplete": second_order_incomplete}
+    with gmsh_session(), _gmsh_options(options):
         _import_solid(brep)
         volumes = [tag for _, tag in gmsh.model.getEntities(3)]
         caps = [tag for _, tag in gmsh.model.getEntities(2) if gmsh.model.getType(2, tag) == "Plane"]
@@ -158,7 +174,7 @@ def _require_element_order(element_order: int) -> None:
 
 
 @contextmanager
-def _gmsh_options(options: dict[str, float]) -> Iterator[None]:
+def _gmsh_options(options: dict[str, float | bool]) -> Iterator[None]:
     """Set gmsh numeric options for a block, restoring them afterward.
 
     gmsh options are global, so they would otherwise outlive the session when
@@ -192,9 +208,10 @@ def _volume_mesh() -> Mesh:
     index = np.zeros(int(node_tags.max()) + 1, dtype=np.int64)
     index[node_tags] = np.arange(len(node_tags))
 
-    elements = {}
+    elements, element_types = {}, {}
     for element_type in gmsh.model.mesh.getElementTypes(3):
         name, _, _, nodes_per_element, *_ = gmsh.model.mesh.getElementProperties(element_type)
         _, element_nodes = gmsh.model.mesh.getElementsByType(element_type)
         elements[name] = index[element_nodes].reshape(-1, nodes_per_element)
-    return Mesh(coordinates.reshape(-1, 3), elements)
+        element_types[name] = int(element_type)
+    return Mesh(coordinates.reshape(-1, 3), elements, element_types)

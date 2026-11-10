@@ -1,10 +1,12 @@
+import gmsh
 import numpy as np
 import pytest
 import SimpleITK as sitk
 from vtkmodules.util.numpy_support import vtk_to_numpy
 
-from meniscus2brep.disk import read_brep, read_label_map, read_poly_data, write_brep, write_label_map, write_poly_data
-from meniscus2brep.geo import BRep
+from meniscus2brep.disk import read_brep, read_label_map, read_poly_data, write_brep, write_label_map, write_mesh, write_poly_data
+from meniscus2brep.geo import BRep, gmsh_session
+from meniscus2brep.mesh import hexahedral_mesh, tetrahedral_mesh
 
 
 @pytest.mark.parametrize("filename", ["seg.nii", "seg.nrrd", "seg.mhd"])
@@ -145,3 +147,59 @@ def test_read_brep_rejects_invalid_contents(tmp_path):
 def test_write_brep_raises_when_it_cannot_write(tmp_path):
     with pytest.raises(OSError):
         write_brep(BRep("text"), tmp_path / "missing_directory" / "surface.brep")
+
+
+@pytest.fixture(scope="module")
+def small_tetrahedra(meniscus_solid):
+    return tetrahedral_mesh(meniscus_solid, max_size=4.0)
+
+
+def read_gmsh_mesh(path):
+    with gmsh_session():
+        gmsh.merge(str(path))
+        _, coordinates, _ = gmsh.model.mesh.getNodes()
+        coordinates = np.array(coordinates)
+        counts = {
+            gmsh.model.mesh.getElementProperties(element_type)[0]: len(gmsh.model.mesh.getElementsByType(element_type)[0])
+            for element_type in gmsh.model.mesh.getElementTypes(3)
+        }
+    return coordinates.reshape(-1, 3), counts
+
+
+def test_write_mesh_msh_round_trips_nodes_and_elements(tmp_path, small_tetrahedra):
+    path = tmp_path / "mesh.msh"
+
+    write_mesh(small_tetrahedra, path)
+    nodes, counts = read_gmsh_mesh(path)
+
+    assert np.allclose(nodes, small_tetrahedra.nodes)
+    assert counts == {"Tetrahedron 4": len(small_tetrahedra.elements["Tetrahedron 4"])}
+
+
+def test_write_mesh_keeps_high_order_elements(tmp_path, meniscus_hex_blocks):
+    mesh = hexahedral_mesh(meniscus_hex_blocks, elements_per_edge=2, elements_along=6, element_order=2, second_order_incomplete=True)
+    path = tmp_path / "mesh.msh"
+
+    write_mesh(mesh, path)
+
+    assert read_gmsh_mesh(path)[1] == {"Hexahedron 20": len(mesh.elements["Hexahedron 20"])}
+
+
+@pytest.mark.parametrize("extension", [".vtk", ".inp", ".unv", ".bdf", ".mesh", ".su2"])
+def test_write_mesh_infers_format_from_extension(tmp_path, small_tetrahedra, extension):
+    path = tmp_path / f"mesh{extension}"
+
+    write_mesh(small_tetrahedra, path)
+
+    assert path.stat().st_size > 0
+
+
+@pytest.mark.parametrize("filename", ["mesh.bogus", "mesh"])
+def test_write_mesh_rejects_unknown_format(tmp_path, small_tetrahedra, filename):
+    with pytest.raises(ValueError, match="cannot write meshes"):
+        write_mesh(small_tetrahedra, tmp_path / filename)
+
+
+def test_write_mesh_raises_when_it_cannot_write(tmp_path, small_tetrahedra):
+    with pytest.raises(OSError, match="Could not write mesh"):
+        write_mesh(small_tetrahedra, tmp_path / "missing_directory" / "mesh.msh")

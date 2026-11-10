@@ -20,10 +20,10 @@ uv build                                       # build sdist and wheel
 
 The package converts a segmented meniscus image into B-rep geometry, as a pipeline across `src/meniscus2brep/`:
 
-- `disk.py` reads and writes LabelMaps, `.vtp` poly data, and `.brep` files.
+- `disk.py` reads and writes LabelMaps, `.vtp` poly data, and `.brep` files, and writes meshes in any volume format gmsh infers from the extension.
 - `vol.py` operates on LabelMaps. It produces the centerline spline and the ordered cross-section contours.
 - `geo.py` lofts contour slices into a B-rep with gmsh's Open Cascade kernel, builds the three-block solid that hexahedral meshing needs, and can assemble slices into one `vtkPolyData` of closed polylines.
-- `mesh.py` meshes solid B-reps with gmsh into tetrahedra or block-structured hexahedra, returning a `Mesh` of node coordinates and per-type connectivity in gmsh's node ordering.
+- `mesh.py` meshes solid B-reps with gmsh into tetrahedra or block-structured hexahedra, returning a `Mesh` of node coordinates, per-type connectivity in gmsh's node ordering, and gmsh element type numbers. `write_mesh` rebuilds a `Mesh` as a discrete gmsh volume to write it.
 - `config.py` provides `BaseConfig`, the pydantic base class for configuration models parsed from JSON. It rejects unknown keys. No concrete configuration models exist yet.
 
 ### LabelMap convention

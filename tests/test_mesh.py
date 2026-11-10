@@ -177,6 +177,25 @@ def test_hexahedral_mesh_second_order_has_27_node_hexahedra(meniscus_hex_blocks)
     assert mesh.elements["Hexahedron 27"].shape == (3 * 2 * 2 * 10, 27)
 
 
+def test_hexahedral_mesh_second_order_incomplete_has_20_node_hexahedra(meniscus_hex_blocks):
+    mesh = hexahedral_mesh(meniscus_hex_blocks, elements_per_edge=2, elements_along=10, element_order=2, second_order_incomplete=True)
+
+    assert list(mesh.elements) == ["Hexahedron 20"]
+    assert mesh.elements["Hexahedron 20"].shape == (3 * 2 * 2 * 10, 20)
+
+
+@pytest.mark.parametrize(("order", "incomplete", "name"), [(2, True, "Tetrahedron 10"), (3, False, "Tetrahedron 20"), (3, True, "Tetrahedron 16")])
+def test_tetrahedral_mesh_second_order_incomplete_drops_interior_nodes(meniscus_solid, order, incomplete, name):
+    mesh = tetrahedral_mesh(meniscus_solid, max_size=4.0, element_order=order, second_order_incomplete=incomplete)
+
+    assert list(mesh.elements) == [name]
+
+
+def test_mesh_records_gmsh_element_types(meniscus_tetrahedra, meniscus_hexahedra):
+    assert meniscus_tetrahedra.element_types == {"Tetrahedron 4": 4}
+    assert meniscus_hexahedra.element_types == {"Hexahedron 8": 5}
+
+
 def test_hexahedral_mesh_rejects_single_block_solid(meniscus_solid):
     with pytest.raises(ValueError, match="six-sided blocks"):
         hexahedral_mesh(meniscus_solid)

@@ -1,14 +1,16 @@
-"""Reading and writing LabelMaps as .nii, .nrrd, or .mhd + .raw, poly data as .vtp, and B-reps as .brep."""
+"""Reading and writing LabelMaps as .nii, .nrrd, or .mhd + .raw, poly data as .vtp, and B-reps as .brep, and writing meshes."""
 
 from os import PathLike
 from pathlib import Path
 
 import gmsh
+import numpy as np
 import SimpleITK as sitk
 from vtkmodules.vtkCommonDataModel import vtkPolyData
 from vtkmodules.vtkIOXML import vtkXMLPolyDataReader, vtkXMLPolyDataWriter
 
 from meniscus2brep.geo import BRep, gmsh_session
+from meniscus2brep.mesh import Mesh
 
 SUPPORTED_SUFFIXES = frozenset({".nii", ".nrrd", ".mhd"})
 POLY_DATA_SUFFIXES = frozenset({".vtp"})
@@ -110,6 +112,34 @@ def write_brep(brep: BRep, path: str | PathLike[str]) -> None:
     """
     path = _validated_path(path, BREP_SUFFIXES)
     path.write_text(brep.text, encoding="utf-8")
+
+
+def write_mesh(mesh: Mesh, path: str | PathLike[str]) -> None:
+    """Write a mesh in the format gmsh infers from the extension, overwriting any existing file.
+
+    Volume formats include .msh, .vtk, .inp, .unv, .bdf, .med, .mesh, and
+    .su2. The mesh has only volume elements, so surface formats such as .stl
+    hold no elements.
+
+    Raises:
+        ValueError: If gmsh does not recognize the extension.
+        OSError: If the file cannot be written.
+    """
+    path = Path(path)
+    with gmsh_session():
+        volume = gmsh.model.addDiscreteEntity(3)
+        gmsh.model.mesh.addNodes(3, volume, np.arange(1, len(mesh.nodes) + 1).tolist(), mesh.nodes.ravel().tolist())
+        first_tag = 1
+        for name, connectivity in mesh.elements.items():
+            element_tags = np.arange(first_tag, first_tag + len(connectivity))
+            gmsh.model.mesh.addElementsByType(volume, mesh.element_types[name], element_tags.tolist(), (connectivity + 1).ravel().tolist())
+            first_tag += len(connectivity)
+        try:
+            gmsh.write(str(path))
+        except Exception as error:  # gmsh raises only the bare Exception type.
+            if "Unknown output file format" in str(error):
+                raise ValueError(f"gmsh cannot write meshes in the format of {path.name!r}") from error
+            raise OSError(f"Could not write mesh to {path}") from error
 
 
 def _validated_path(path: str | PathLike[str], suffixes: frozenset[str] = SUPPORTED_SUFFIXES) -> Path:
