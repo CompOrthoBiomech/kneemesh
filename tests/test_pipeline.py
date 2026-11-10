@@ -26,12 +26,18 @@ def test_configs_have_defaults_for_every_field():
     assert MeshConfig().algorithm_2d is Algorithm2D.FRONTAL_DELAUNAY
 
 
-def test_mesh_config_saves_algorithms_by_name_and_reads_names_or_values():
+def test_mesh_config_saves_algorithms_by_name_and_reads_them_in_any_case():
     saved = json.loads(MeshConfig(algorithm_3d=Algorithm3D.HXT).model_dump_json())
 
-    assert saved["algorithm_3d"] == "HXT"
+    assert saved["algorithm_3d"] == "hxt"
     assert MeshConfig.model_validate({"algorithm_3d": "hxt"}).algorithm_3d is Algorithm3D.HXT
-    assert MeshConfig.model_validate({"algorithm_3d": 10}).algorithm_3d is Algorithm3D.HXT
+    assert MeshConfig.model_validate({"algorithm_3d": "HXT"}).algorithm_3d is Algorithm3D.HXT
+
+
+def test_mesh_config_rejects_gmsh_numbers_and_unknown_algorithms():
+    for value in (10, "rtree"):
+        with pytest.raises(ValueError):
+            MeshConfig.model_validate({"algorithm_3d": value})
 
 
 @pytest.mark.parametrize("config_type", [BrepConfig, MeshConfig])
@@ -47,6 +53,7 @@ def test_configure_without_config_saves_timestamped_settings(in_tmp_path):
 
     assert config.points_per_slice == 10
     assert config.cap == "planar"
+    assert saved is not None
     assert saved.parent == type(saved)(".")
     assert saved.name.startswith("settings") and saved.suffix == ".json"
     assert BrepConfig.from_json(in_tmp_path / saved.name) == config
@@ -65,6 +72,7 @@ def test_configure_overrides_config_file_and_saves_modified_copy(tmp_path):
     config, saved = configure(BrepConfig, "test", ["--config", str(path), "--spline-order", "4", "--sigma", "0.5"])
 
     assert (config.spacing, config.spline_order, config.sigma) == (2.5, 4, 0.5)
+    assert saved is not None
     assert saved == tmp_path / "run_modified.json"
     assert BrepConfig.from_json(saved) == config
     assert json.loads(path.read_text()) == {"spacing": 2.5, "spline_order": 2}
@@ -130,7 +138,9 @@ def test_pipelines_build_and_mesh_a_capped_solid(in_tmp_path, meniscus_label, ca
 
 def test_pipelines_build_and_mesh_hexahedral_blocks(in_tmp_path, meniscus_label):
     write_label_map(meniscus_label, in_tmp_path / "label.nii")
-    brep_config = write_config(in_tmp_path / "brep.json", {"label_map": "label.nii", "output": "blocks.brep", "points_per_slice": 10, "hex_blocks": True})
+    brep_config = write_config(
+        in_tmp_path / "brep.json", {"label_map": "label.nii", "output": "blocks.brep", "points_per_slice": 10, "hex_blocks": True}
+    )
     mesh_config = write_config(in_tmp_path / "mesh.json", {"brep": "blocks.brep", "output": "blocks.vtk", "element": "hexahedral"})
 
     assert brep_main(["--config", str(brep_config)]) == 0

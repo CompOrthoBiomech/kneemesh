@@ -4,8 +4,9 @@ import tempfile
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
-from enum import IntEnum
+from enum import StrEnum
 from pathlib import Path
+from typing import Self
 
 import gmsh
 import numpy as np
@@ -13,30 +14,51 @@ import numpy as np
 from meniscus2brep.geo import BRep, gmsh_session
 
 
-class Algorithm2D(IntEnum):
+class _GmshAlgorithm(StrEnum):
+    """A gmsh meshing algorithm, valued by a readable name and carrying gmsh's option number.
+
+    Lookup by value ignores case, so "HXT" and "hxt" both name the same member.
+    """
+
+    number: int
+
+    def __new__(cls, name: str, number: int) -> Self:
+        member = str.__new__(cls, name)
+        member._value_ = name
+        member.number = number
+        return member
+
+    @classmethod
+    def _missing_(cls, value: object) -> Self | None:
+        if isinstance(value, str):
+            return next((member for member in cls if member.value == value.lower()), None)
+        return None
+
+
+class Algorithm2D(_GmshAlgorithm):
     """gmsh surface meshing algorithms that produce triangles (option Mesh.Algorithm).
 
     gmsh's "initial mesh only" algorithm crashes the process and BAMG fails on
     these shapes, so both are omitted.
     """
 
-    MESH_ADAPT = 1
-    AUTOMATIC = 2
-    DELAUNAY = 5
-    FRONTAL_DELAUNAY = 6
+    MESH_ADAPT = "mesh_adapt", 1
+    AUTOMATIC = "automatic", 2
+    DELAUNAY = "delaunay", 5
+    FRONTAL_DELAUNAY = "frontal_delaunay", 6
 
 
-class Algorithm3D(IntEnum):
+class Algorithm3D(_GmshAlgorithm):
     """gmsh volume meshing algorithms that produce tetrahedra (option Mesh.Algorithm3D).
 
     gmsh's R-tree algorithm is omitted because it writes a debug file into the
     working directory.
     """
 
-    DELAUNAY = 1
-    FRONTAL = 4
-    MMG3D = 7
-    HXT = 10
+    DELAUNAY = "delaunay", 1
+    FRONTAL = "frontal", 4
+    MMG3D = "mmg3d", 7
+    HXT = "hxt", 10
 
 
 @dataclass(frozen=True, eq=False)
@@ -99,8 +121,8 @@ def tetrahedral_mesh(
     options = {
         "Mesh.MeshSizeMin": min_size,
         "Mesh.MeshSizeFromCurvature": elements_per_circle,
-        "Mesh.Algorithm": Algorithm2D(algorithm_2d),
-        "Mesh.Algorithm3D": Algorithm3D(algorithm_3d),
+        "Mesh.Algorithm": Algorithm2D(algorithm_2d).number,
+        "Mesh.Algorithm3D": Algorithm3D(algorithm_3d).number,
         "Mesh.ElementOrder": element_order,
         "Mesh.SecondOrderIncomplete": second_order_incomplete,
     }

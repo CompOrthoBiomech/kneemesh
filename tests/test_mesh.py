@@ -103,6 +103,12 @@ def test_tetrahedral_mesh_second_order_has_10_node_tetrahedra(meniscus_solid):
     assert mesh.elements["Tetrahedron 10"].shape[1] == 10
 
 
+def test_algorithms_carry_gmsh_option_numbers():
+    assert [algorithm.number for algorithm in Algorithm2D] == [1, 2, 5, 6]
+    assert [algorithm.number for algorithm in Algorithm3D] == [1, 4, 7, 10]
+    assert Algorithm3D("MMG3D") is Algorithm3D.MMG3D
+
+
 @pytest.mark.parametrize("algorithm_2d", list(Algorithm2D))
 def test_every_2d_algorithm_meshes_the_solid(meniscus_solid, algorithm_2d):
     mesh = tetrahedral_mesh(meniscus_solid, max_size=3.0, algorithm_2d=algorithm_2d)
