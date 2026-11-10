@@ -3,8 +3,9 @@ import pytest
 import SimpleITK as sitk
 from scipy.interpolate import BSpline
 from scipy.spatial import KDTree
+from vtkmodules.vtkFiltersCore import vtkFeatureEdges, vtkMassProperties
 
-from meniscus2brep.vol import centerline
+from meniscus2brep.vol import centerline, extract_isocontour, signed_distance_field, slice_isocontour
 
 # Area centroid of the voxelized fixture's cross-section. It differs slightly
 # from the ideal triangle (16.67, -1.33) because the fixture's bottom slice lies
@@ -95,3 +96,243 @@ def test_centerline_rejects_tiny_label():
 
     with pytest.raises(ValueError, match="too small"):
         centerline(image)
+
+
+def as_array(image):
+    return sitk.GetArrayFromImage(image)
+
+
+def mesh_volume(mesh):
+    properties = vtkMassProperties()
+    properties.SetInputData(mesh)
+    properties.Update()
+    return properties.GetVolume()
+
+
+def open_edge_count(mesh):
+    edges = vtkFeatureEdges()
+    edges.SetInputData(mesh)
+    edges.BoundaryEdgesOn()
+    edges.NonManifoldEdgesOn()
+    edges.FeatureEdgesOff()
+    edges.ManifoldEdgesOff()
+    edges.Update()
+    return edges.GetOutput().GetNumberOfCells()
+
+
+def straight_line(start, end):
+    return BSpline([0.0, 0.0, 1.0, 1.0], np.array([start, end], dtype=float), 1)
+
+
+def in_plane(contour_slice):
+    offsets = contour_slice.points - contour_slice.points.mean(axis=0)
+    return offsets @ contour_slice.u_axis, offsets @ contour_slice.v_axis
+
+
+def test_distance_field_is_negative_exactly_inside_label(meniscus_label, meniscus_distance_field):
+    assert np.array_equal(as_array(meniscus_distance_field) < 0, as_array(meniscus_label) == 1)
+
+
+def test_distance_field_zero_lies_on_voxel_edge():
+    image = sitk.Image(20, 6, 6, sitk.sitkUInt8)
+    image.SetSpacing((0.5, 1.0, 1.0))
+    for x in range(5, 15):
+        for y in range(6):
+            for z in range(6):
+                image[x, y, z] = 1
+
+    field = signed_distance_field(image)
+
+    assert field[4, 3, 3] == pytest.approx(0.25)
+    assert field[5, 3, 3] == pytest.approx(-0.25)
+
+
+def test_distance_field_selects_requested_label(meniscus_label, meniscus_distance_field):
+    relabeled = meniscus_label * 7
+
+    assert sitk.Hash(signed_distance_field(relabeled, label=7)) == sitk.Hash(meniscus_distance_field)
+
+
+def test_distance_field_rejects_absent_label(meniscus_label):
+    with pytest.raises(ValueError, match="not present"):
+        signed_distance_field(meniscus_label, label=2)
+
+
+def test_distance_field_rejects_non_uint8_image(meniscus_label):
+    with pytest.raises(ValueError, match="3D sitkUInt8"):
+        signed_distance_field(sitk.Cast(meniscus_label, sitk.sitkUInt16))
+
+
+def test_isocontour_is_closed_mesh_with_label_volume(meniscus_label, meniscus_mesh):
+    voxel_volume = np.prod(meniscus_label.GetSpacing()) * as_array(meniscus_label).sum()
+
+    assert open_edge_count(meniscus_mesh) == 0
+    assert mesh_volume(meniscus_mesh) == pytest.approx(voxel_volume, rel=0.03)
+
+
+def test_isocontour_level_offsets_the_surface(meniscus_distance_field, meniscus_mesh):
+    outer = extract_isocontour(meniscus_distance_field, level=1.0)
+    inner = extract_isocontour(meniscus_distance_field, level=-1.0)
+
+    assert outer.GetBounds()[1] == pytest.approx(meniscus_mesh.GetBounds()[1] + 1.0, abs=0.3)
+    assert mesh_volume(inner) < mesh_volume(meniscus_mesh) < mesh_volume(outer)
+
+
+def test_isocontour_is_in_physical_coordinates_for_oriented_image(meniscus_label, meniscus_mesh):
+    permuted = sitk.PermuteAxes(meniscus_label, (2, 0, 1))
+
+    mesh = extract_isocontour(signed_distance_field(permuted))
+
+    assert mesh.GetBounds() == pytest.approx(meniscus_mesh.GetBounds(), abs=1e-3)
+
+
+def test_isocontour_closes_where_label_touches_image_edge():
+    image = sitk.Image(8, 8, 8, sitk.sitkUInt8)
+    for x in range(4):
+        for y in range(2, 6):
+            for z in range(2, 6):
+                image[x, y, z] = 1
+
+    assert open_edge_count(extract_isocontour(signed_distance_field(image))) == 0
+
+
+@pytest.mark.parametrize("level", [1000.0, -1000.0])
+def test_isocontour_rejects_level_outside_field(meniscus_distance_field, level):
+    with pytest.raises(ValueError, match="no surface"):
+        extract_isocontour(meniscus_distance_field, level=level)
+
+
+@pytest.mark.parametrize("count", [16, 64])
+def test_slice_points_are_evenly_spaced_around_a_closed_contour(meniscus_mesh, meniscus_centerline, count):
+    slices = slice_isocontour(meniscus_mesh, meniscus_centerline, spacing=20.0, points_per_slice=count)
+
+    for contour_slice in slices:
+        assert contour_slice.points.shape == (count, 3)
+        gaps = np.linalg.norm(contour_slice.points - np.roll(contour_slice.points, -1, axis=0), axis=1)
+        assert gaps.max() < 1.5 * np.median(gaps)
+
+
+def test_slice_points_lie_in_their_plane(meniscus_slices):
+    for contour_slice in meniscus_slices:
+        assert np.abs((contour_slice.points - contour_slice.center) @ contour_slice.normal).max() < 1e-4
+
+
+def test_slice_points_wind_counterclockwise_from_positive_u(meniscus_slices):
+    for contour_slice in meniscus_slices:
+        u, v = in_plane(contour_slice)
+        assert np.sum(u * np.roll(v, -1) - np.roll(u, -1) * v) > 0
+        assert abs(np.degrees(np.arctan2(v[0], u[0]))) < 15.0
+
+
+def test_slice_contours_lie_on_the_label_boundary(meniscus_slices, meniscus_distance_field):
+    voxel = max(meniscus_distance_field.GetSpacing())
+    for contour_slice in meniscus_slices:
+        for point in contour_slice.points:
+            index = meniscus_distance_field.TransformPhysicalPointToIndex(point.tolist())
+            assert abs(meniscus_distance_field[index]) <= voxel
+
+
+def test_slices_take_the_contour_around_the_curve(meniscus_slices):
+    for contour_slice in meniscus_slices:
+        assert np.linalg.norm(contour_slice.points - contour_slice.center, axis=1).max() < 9.0
+
+
+def test_slice_areas_match_cross_section(meniscus_slices):
+    for contour_slice in meniscus_slices:
+        # The voxelized cross-section is larger than the ideal triangle's 40 mm^2.
+        assert contour_slice.area == pytest.approx(44.0, abs=3.0)
+        u, v = in_plane(contour_slice)
+        assert 0.5 * np.sum(u * np.roll(v, -1) - np.roll(u, -1) * v) == pytest.approx(contour_slice.area, rel=0.05)
+
+
+@pytest.mark.parametrize("spacing", [3.0, 7.0])
+def test_slices_are_uniformly_spaced_on_the_curve(meniscus_mesh, meniscus_centerline, spacing):
+    slices = slice_isocontour(meniscus_mesh, meniscus_centerline, spacing)
+    centers = np.array([contour_slice.center for contour_slice in slices])
+
+    distances, _ = KDTree(sample(meniscus_centerline, 5001)).query(centers)
+    assert distances.max() < 0.05
+    # Chords of a circle of radius 16.4 are under 1% shorter than these arcs.
+    assert np.linalg.norm(np.diff(centers, axis=0), axis=1) == pytest.approx(np.full(len(centers) - 1, spacing), rel=0.02)
+
+
+def test_slice_frames_are_right_handed_and_normal_to_curve(meniscus_slices, meniscus_centerline):
+    u = np.linspace(0.0, 1.0, 5001)
+    points = meniscus_centerline(u)
+    tangents = meniscus_centerline(u, nu=1)
+    tangents /= np.linalg.norm(tangents, axis=1, keepdims=True)
+    tree = KDTree(points)
+
+    for contour_slice in meniscus_slices:
+        frame = np.column_stack((contour_slice.u_axis, contour_slice.v_axis, contour_slice.normal))
+        assert frame.T @ frame == pytest.approx(np.eye(3), abs=1e-9)
+        assert np.linalg.det(frame) == pytest.approx(1.0)
+        _, nearest = tree.query(contour_slice.center)
+        assert contour_slice.normal @ tangents[nearest] == pytest.approx(1.0, abs=1e-3)
+
+
+def test_slices_do_not_twist_along_the_curve(meniscus_slices):
+    v_axes = np.array([contour_slice.v_axis for contour_slice in meniscus_slices])
+
+    assert (v_axes[1:] * v_axes[:-1]).sum(axis=1).min() > 0.99
+
+
+def make_label(mask):
+    return sitk.GetImageFromArray(mask.astype(np.uint8))
+
+
+def test_slices_clip_ends_below_a_fifth_of_average_area():
+    # A cone along z with base radius 15 at z = 5 and its apex at z = 75. Mean
+    # area is a third of the base area, so slices stop where r / 15 = sqrt(0.2 / 3).
+    z, y, x = np.indices((81, 41, 41))
+    radius = 15.0 * (75 - z) / 70
+    mask = (z >= 5) & (z <= 75) & (np.hypot(x - 20, y - 20) <= radius)
+    mesh = extract_isocontour(signed_distance_field(make_label(mask)))
+
+    slices = slice_isocontour(mesh, straight_line((20, 20, 5.5), (20, 20, 74.5)), spacing=2.0)
+
+    heights = [contour_slice.center[2] for contour_slice in slices]
+    expected_tip = 75 - 70 * np.sqrt(0.2 / 3)
+    assert min(heights) < 8.0
+    assert max(heights) == pytest.approx(expected_tip, abs=4.0)
+
+
+def test_slices_keep_small_sections_between_the_ends():
+    z, y, x = np.indices((61, 41, 41))
+    radius = np.where((z >= 25) & (z <= 35), 3.0, 15.0)
+    mask = (z >= 5) & (z <= 55) & (np.hypot(x - 20, y - 20) <= radius)
+    mesh = extract_isocontour(signed_distance_field(make_label(mask)))
+
+    slices = slice_isocontour(mesh, straight_line((20, 20, 6), (20, 20, 54)), spacing=2.0)
+
+    areas = np.array([contour_slice.area for contour_slice in slices])
+    assert len(slices) == 25
+    assert areas.min() < 0.2 * areas.mean()
+
+
+def test_slice_rejects_gap_in_the_mesh_along_the_curve():
+    z, y, x = np.indices((71, 41, 41))
+    in_blocks = ((z >= 5) & (z <= 25)) | ((z >= 45) & (z <= 65))
+    mask = in_blocks & (np.hypot(x - 20, y - 20) <= 10)
+    mesh = extract_isocontour(signed_distance_field(make_label(mask)))
+
+    with pytest.raises(ValueError, match="does not cut the mesh"):
+        slice_isocontour(mesh, straight_line((20, 20, 6), (20, 20, 64)), spacing=2.0)
+
+
+def test_slice_rejects_curve_that_misses_the_mesh(meniscus_mesh):
+    with pytest.raises(ValueError, match="do not cut the mesh"):
+        slice_isocontour(meniscus_mesh, straight_line((100, 100, 100), (100, 100, 120)), spacing=2.0)
+
+
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        ({"spacing": 0.0}, "must be positive"),
+        ({"spacing": -1.0}, "must be positive"),
+        ({"spacing": 5.0, "points_per_slice": 2}, "at least 3"),
+    ],
+)
+def test_slice_rejects_invalid_arguments(meniscus_mesh, meniscus_centerline, arguments, message):
+    with pytest.raises(ValueError, match=message):
+        slice_isocontour(meniscus_mesh, meniscus_centerline, **arguments)

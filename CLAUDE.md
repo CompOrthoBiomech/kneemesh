@@ -20,9 +20,9 @@ uv build                                       # build sdist and wheel
 
 The package converts a segmented meniscus image into B-rep geometry, as a pipeline across `src/meniscus2brep/`:
 
-- `disk.py` reads and writes LabelMaps.
-- `vol.py` operates on LabelMaps. Its current output is the centerline spline.
-- `geo.py` will generate the B-rep. It is an empty placeholder and no B-rep library has been chosen.
+- `disk.py` reads and writes LabelMaps and `.vtp` poly data.
+- `vol.py` operates on LabelMaps. It produces the centerline spline and the ordered cross-section contours.
+- `geo.py` will generate the B-rep, and no B-rep library has been chosen. It currently assembles contour slices into one `vtkPolyData` of closed polylines.
 - `config.py` provides `BaseConfig`, the pydantic base class for configuration models parsed from JSON. It rejects unknown keys. No concrete configuration models exist yet.
 
 ### LabelMap convention
@@ -41,11 +41,22 @@ Section spacing and smoothing tolerance scale with the structure's half-width as
 
 The result is a cubic `scipy.interpolate.BSpline` over u in [0, 1], in physical coordinates, and evaluating it at N parameters gives an `(N, 3)` array. `make_splprep` natively evaluates to `(3, N)`, so `_fit` rebuilds the spline to normalize this. Which end of the structure is u = 0 is unspecified, so compare curves by nearest-point distance rather than parameter by parameter.
 
+### Cross-section contours
+
+`signed_distance_field` feeds `extract_isocontour`, which returns a closed VTK triangle mesh from `vtkFlyingEdges3D`. `slice_isocontour` cuts that mesh along the centerline and returns `ContourSlice` objects holding ordered points from a closed Kochanek spline. Keep these points when changing this code:
+
+- `sitk.SignedMaurerDistanceMap` alone is zero on boundary voxel centers, half a voxel inside the label. `signed_distance_field` averages it with the inverted mask's map so zero lies on the voxel edges.
+- `extract_isocontour` pads the field so the mesh stays closed where a label touches the image edge.
+- A cutting plane is infinite and can also cut the far limb of the C-shaped structure, so each slice takes the loop nearest the centerline.
+- Contours run counterclockwise about the slice normal and start in the +u direction, so points correspond from slice to slice.
+- Slices are clipped only from the two ends, until one reaches 20% of the mean area. A narrow section between the ends is kept.
+
 ## Tests
 
-`tests/conftest.py` defines two session-scoped fixtures that every test shares, so tests must not modify them in place:
+`tests/conftest.py` defines session-scoped fixtures that every test shares, so tests must not modify them in place:
 
 - `meniscus_label` is a synthetic meniscus: a triangular cross-section swept 270° about the z axis, with the gap facing -x.
 - `meniscus_centerline` is `centerline(meniscus_label)`. Use it instead of calling `centerline` on the same image again.
+- `meniscus_distance_field`, `meniscus_mesh`, `meniscus_slices`, and `meniscus_contours` are the later pipeline stages for the same label.
 
 The fixture's voxelized cross-section centroid is r = 16.43, z = -1.67, not the ideal triangle's r = 16.67, z = -1.33. Its bottom slice lies exactly on the triangle's base and counts as a whole voxel layer, which also makes its voxel volume about 12% above the analytic value. Compare against the voxelized values or use a suitable tolerance.

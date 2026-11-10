@@ -3,8 +3,10 @@ import math
 import pytest
 import SimpleITK as sitk
 from scipy.interpolate import BSpline
+from vtkmodules.vtkCommonDataModel import vtkPolyData
 
-from meniscus2brep.vol import centerline
+from meniscus2brep.geo import contours_to_polydata
+from meniscus2brep.vol import ContourSlice, centerline, extract_isocontour, signed_distance_field, slice_isocontour
 
 INNER_RADIUS = 10.0
 OUTER_RADIUS = 20.0
@@ -45,3 +47,27 @@ def meniscus_label() -> sitk.Image:
 def meniscus_centerline(meniscus_label: sitk.Image) -> BSpline:
     """Centerline of meniscus_label."""
     return centerline(meniscus_label)
+
+
+@pytest.fixture(scope="session")
+def meniscus_distance_field(meniscus_label: sitk.Image) -> sitk.Image:
+    """Signed distance field of meniscus_label."""
+    return signed_distance_field(meniscus_label)
+
+
+@pytest.fixture(scope="session")
+def meniscus_mesh(meniscus_distance_field: sitk.Image) -> vtkPolyData:
+    """Surface mesh on the boundary of meniscus_label."""
+    return extract_isocontour(meniscus_distance_field)
+
+
+@pytest.fixture(scope="session")
+def meniscus_slices(meniscus_mesh: vtkPolyData, meniscus_centerline: BSpline) -> list[ContourSlice]:
+    """Slices of meniscus_mesh every 5 mm along meniscus_centerline."""
+    return slice_isocontour(meniscus_mesh, meniscus_centerline, spacing=5.0, points_per_slice=64)
+
+
+@pytest.fixture(scope="session")
+def meniscus_contours(meniscus_slices: list[ContourSlice]) -> vtkPolyData:
+    """Slices of meniscus_mesh every 5 mm along meniscus_centerline."""
+    return contours_to_polydata(meniscus_slices)
