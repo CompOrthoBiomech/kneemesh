@@ -2,12 +2,14 @@ import json
 
 import gmsh
 import pytest
+from loguru import logger
 
 from meniscus2brep.config import BrepConfig, MeshConfig
 from meniscus2brep.disk import read_brep, write_label_map
 from meniscus2brep.geo import gmsh_session
 from meniscus2brep.mesh import Algorithm2D, Algorithm3D
 from meniscus2brep.pipeline import brep_main, configure, mesh_main
+from meniscus2brep.vol import signed_distance_field
 
 
 @pytest.fixture
@@ -49,7 +51,7 @@ def test_configs_round_trip_through_json(tmp_path, config_type):
 
 
 def test_configure_without_config_saves_timestamped_settings(in_tmp_path):
-    config, saved = configure(BrepConfig, "test", ["--points-per-slice", "10", "--cap", "planar"])
+    config, _, saved = configure(BrepConfig, "test", ["--points-per-slice", "10", "--cap", "planar"])
 
     assert config.points_per_slice == 10
     assert config.cap == "planar"
@@ -60,7 +62,7 @@ def test_configure_without_config_saves_timestamped_settings(in_tmp_path):
 
 
 def test_configure_without_arguments_saves_defaults(in_tmp_path):
-    config, saved = configure(MeshConfig, "test", [])
+    config, _, saved = configure(MeshConfig, "test", [])
 
     assert config == MeshConfig()
     assert MeshConfig.from_json(in_tmp_path / saved.name) == MeshConfig()
@@ -69,7 +71,7 @@ def test_configure_without_arguments_saves_defaults(in_tmp_path):
 def test_configure_overrides_config_file_and_saves_modified_copy(tmp_path):
     path = write_config(tmp_path / "run.json", {"spacing": 2.5, "spline_order": 2})
 
-    config, saved = configure(BrepConfig, "test", ["--config", str(path), "--spline-order", "4", "--sigma", "0.5"])
+    config, _, saved = configure(BrepConfig, "test", ["--config", str(path), "--spline-order", "4", "--sigma", "0.5"])
 
     assert (config.spacing, config.spline_order, config.sigma) == (2.5, 4, 0.5)
     assert saved is not None
@@ -81,7 +83,7 @@ def test_configure_overrides_config_file_and_saves_modified_copy(tmp_path):
 def test_configure_with_config_and_no_overrides_saves_nothing(tmp_path):
     path = write_config(tmp_path / "run.json", {"element": "hexahedral"})
 
-    config, saved = configure(MeshConfig, "test", ["--config", str(path)])
+    config, _, saved = configure(MeshConfig, "test", ["--config", str(path)])
 
     assert config.element == "hexahedral"
     assert saved is None
@@ -91,7 +93,7 @@ def test_configure_with_config_and_no_overrides_saves_nothing(tmp_path):
 def test_configure_reads_none_to_clear_optional_values(tmp_path):
     path = write_config(tmp_path / "run.json", {"max_size": 2.0})
 
-    config, _ = configure(MeshConfig, "test", ["--config", str(path), "--max-size", "none"])
+    config, _, _ = configure(MeshConfig, "test", ["--config", str(path), "--max-size", "none"])
 
     assert config.max_size is None
 
@@ -132,7 +134,7 @@ def test_pipelines_build_and_mesh_a_capped_solid(in_tmp_path, meniscus_label, ca
     assert mesh_main(["--brep", "solid.brep", "--output", "solid.msh", "--max-size", "4", "--element-order", "2"]) == 0
 
     assert list(mesh_entity_counts(in_tmp_path / "solid.msh")) == ["Tetrahedron 10"]
-    assert "Wrote solid.msh" in capsys.readouterr().out
+    assert "Wrote solid.msh" in capsys.readouterr().err
     assert len(list(in_tmp_path.glob("settings*.json"))) >= 1
 
 
@@ -153,3 +155,72 @@ def test_pipelines_build_and_mesh_hexahedral_blocks(in_tmp_path, meniscus_label)
 def test_pipeline_reports_errors_without_traceback(in_tmp_path, capsys):
     assert mesh_main(["--brep", "missing.brep"]) == 1
     assert "No such file" in capsys.readouterr().err
+
+
+def test_configure_returns_the_config_file(tmp_path):
+    path = write_config(tmp_path / "run.json", {})
+
+    assert configure(MeshConfig, "test", ["--config", str(path)]).source == path
+
+
+def test_configure_names_settings_with_the_given_timestamp(in_tmp_path):
+    assert configure(MeshConfig, "test", [], timestamp="20260102_030405").saved.name == "settings20260102_030405.json"
+
+
+def test_package_logging_is_disabled_by_default(meniscus_label):
+    messages = []
+    handler = logger.add(messages.append, level="DEBUG")
+    try:
+        signed_distance_field(meniscus_label)
+    finally:
+        logger.remove(handler)
+
+    assert messages == []
+
+
+def test_pipeline_without_config_logs_to_timestamped_file_and_stderr(in_tmp_path, meniscus_label, capsys):
+    write_label_map(meniscus_label, in_tmp_path / "label.nii")
+
+    assert brep_main(["--label-map", "label.nii"]) == 0
+
+    logs = list(in_tmp_path.glob("brep*.log"))
+    settings = list(in_tmp_path.glob("settings*.json"))
+    assert len(logs) == 1 and len(settings) == 1
+    assert logs[0].stem.removeprefix("brep") == settings[0].stem.removeprefix("settings")
+    log = logs[0].read_text()
+    assert "INFO" in log and "Wrote meniscus.brep" in log
+    assert "DEBUG" in log and "Centerline has" in log
+    stderr = capsys.readouterr().err
+    assert "Wrote meniscus.brep" in stderr
+    assert "DEBUG" not in stderr
+
+
+def test_pipeline_with_config_logs_to_file_named_for_it(in_tmp_path, meniscus_solid):
+    from meniscus2brep.disk import write_brep
+
+    write_brep(meniscus_solid, in_tmp_path / "solid.brep")
+    config = write_config(in_tmp_path / "coarse.json", {"brep": "solid.brep", "max_size": 4.0})
+
+    assert mesh_main(["--config", str(config)]) == 0
+
+    assert "Meshed" in (in_tmp_path / "coarse.log").read_text()
+    assert list(in_tmp_path.glob("mesh*.log")) == []
+
+
+def test_pipeline_logs_errors_to_file(in_tmp_path, capsys):
+    assert mesh_main(["--brep", "missing.brep"]) == 1
+
+    assert "ERROR" in next(in_tmp_path.glob("mesh*.log")).read_text()
+    assert "No such file" in capsys.readouterr().err
+
+
+def test_pipeline_disables_package_logging_when_done(in_tmp_path, meniscus_label):
+    mesh_main(["--brep", "missing.brep"])
+    messages = []
+    handler = logger.add(messages.append, level="DEBUG")
+    try:
+        signed_distance_field(meniscus_label)
+    finally:
+        logger.remove(handler)
+
+    assert messages == []

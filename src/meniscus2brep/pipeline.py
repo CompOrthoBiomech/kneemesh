@@ -3,10 +3,12 @@
 import argparse
 import json
 import sys
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from datetime import datetime
 from pathlib import Path
+from typing import NamedTuple
 
+from loguru import logger
 from pydantic import ValidationError
 
 from meniscus2brep.config import BaseConfig, BrepConfig, MeshConfig
@@ -18,13 +20,21 @@ from meniscus2brep.vol import centerline, extract_isocontour, signed_distance_fi
 
 def run_brep(config: BrepConfig) -> BRep:
     """Build a B-rep from a LabelMap as config describes and write it to config.output."""
+    logger.info("Reading LabelMap {}", config.label_map)
     label_map = read_label_map(config.label_map)
+    logger.info("Fitting the centerline of label {}", config.label)
     curve = centerline(label_map, config.label)
+    logger.info("Computing the signed distance field")
     distance_field = signed_distance_field(label_map, config.label, config.sigma)
-    slices = slice_isocontour(extract_isocontour(distance_field, config.level), curve, config.spacing, config.points_per_slice)
+    logger.info("Extracting the surface at level {}", config.level)
+    surface = extract_isocontour(distance_field, config.level)
+    logger.info("Slicing every {} along the centerline", config.spacing)
+    slices = slice_isocontour(surface, curve, config.spacing, config.points_per_slice)
     if config.hex_blocks:
+        logger.info("Building hexahedral blocks through {} slices", len(slices))
         brep = contours_to_hex_blocks(slices, config.spline_order)
     else:
+        logger.info("Lofting through {} slices with {} caps", len(slices), config.cap)
         brep = contours_to_brep(slices, config.spline_order, config.cap, config.cap_offset)
     write_brep(brep, config.output)
     return brep
@@ -32,7 +42,9 @@ def run_brep(config: BrepConfig) -> BRep:
 
 def run_mesh(config: MeshConfig) -> Mesh:
     """Mesh a B-rep as config describes and write it to config.output."""
+    logger.info("Reading B-rep {}", config.brep)
     brep = read_brep(config.brep)
+    logger.info("Meshing with {} elements of order {}", config.element, config.element_order)
     if config.element == "hexahedral":
         mesh = hexahedral_mesh(brep, config.elements_per_edge, config.elements_along, config.element_order, config.second_order_incomplete)
     else:
@@ -46,13 +58,23 @@ def run_mesh(config: MeshConfig) -> Mesh:
             config.element_order,
             config.second_order_incomplete,
         )
+    counts = ", ".join(f"{len(connectivity)} {name}" for name, connectivity in mesh.elements.items())
+    logger.info("Meshed {} nodes and {}", len(mesh.nodes), counts)
     write_mesh(mesh, config.output)
     return mesh
 
 
+class Configuration[ConfigType: BaseConfig](NamedTuple):
+    """A pipeline's configuration and the files it came from and was saved to."""
+
+    config: ConfigType
+    source: Path | None
+    saved: Path | None
+
+
 def configure[ConfigType: BaseConfig](
-    config_type: type[ConfigType], description: str, argv: Sequence[str] | None = None
-) -> tuple[ConfigType, Path | None]:
+    config_type: type[ConfigType], description: str, argv: Sequence[str] | None = None, timestamp: str | None = None
+) -> Configuration[ConfigType]:
     """Build a configuration from an optional JSON file and command-line overrides.
 
     Every field of config_type is an option, such as --points-per-slice 10.
@@ -62,8 +84,15 @@ def configure[ConfigType: BaseConfig](
     --config, or as <config stem>_modified.json beside the file when
     overrides change it. A config file used without overrides is not copied.
 
+    Args:
+        config_type: The configuration model.
+        description: Description for the command's help.
+        argv: Command-line arguments, by default sys.argv[1:].
+        timestamp: Timestamp for the settings file name, by default the current time.
+
     Returns:
-        The configuration and the path it was saved to, or None if not saved.
+        The configuration, the --config file if any, and the path the
+        configuration was saved to, or None if it was not saved.
     """
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument("--config", type=Path, help="JSON configuration; options given here override its values")
@@ -80,35 +109,65 @@ def configure[ConfigType: BaseConfig](
         parser.error(str(error))
 
     if config_path is None:
-        saved = Path(f"settings{datetime.now():%Y%m%d_%H%M%S}.json")
+        saved = Path(f"settings{timestamp or _timestamp()}.json")
     elif arguments:
         saved = config_path.with_name(f"{config_path.stem}_modified.json")
     else:
         saved = None
     if saved is not None:
         saved.write_text(config.model_dump_json(indent=2) + "\n", encoding="utf-8")
-    return config, saved
+    return Configuration(config, config_path, saved)
 
 
 def brep_main(argv: Sequence[str] | None = None) -> int:
     """Run the B-rep pipeline from the command line."""
-    config, saved = configure(BrepConfig, "Build a B-rep of a meniscus from a segmented LabelMap.", argv)
-    return _run(lambda: run_brep(config), config.output, saved)
+    timestamp = _timestamp()
+    setup = configure(BrepConfig, "Build a B-rep of a meniscus from a segmented LabelMap.", argv, timestamp)
+    return _run(lambda: run_brep(setup.config), setup, Path(f"brep{timestamp}.log"))
 
 
 def mesh_main(argv: Sequence[str] | None = None) -> int:
     """Run the meshing pipeline from the command line."""
-    config, saved = configure(MeshConfig, "Mesh a meniscus B-rep with tetrahedra or hexahedra.", argv)
-    return _run(lambda: run_mesh(config), config.output, saved)
+    timestamp = _timestamp()
+    setup = configure(MeshConfig, "Mesh a meniscus B-rep with tetrahedra or hexahedra.", argv, timestamp)
+    return _run(lambda: run_mesh(setup.config), setup, Path(f"mesh{timestamp}.log"))
 
 
-def _run(step, output: Path, saved: Path | None) -> int:
-    if saved is not None:
-        print(f"Saved configuration to {saved}")
+def _timestamp() -> str:
+    return f"{datetime.now():%Y%m%d_%H%M%S}"
+
+
+def _run(step: Callable[[], object], setup: Configuration, default_log: Path) -> int:
+    """Run a pipeline step, logging to stderr and to a file named for its configuration.
+
+    The log file is <config stem>.log beside the --config file, or default_log
+    in the working directory without one.
+    """
+    log_path = setup.source.with_suffix(".log") if setup.source is not None else default_log
+    logger.remove()
+    handlers = [
+        logger.add(sys.stderr, level="INFO", format="<level>{level: <8}</level> {message}"),
+        logger.add(log_path, level="DEBUG", format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {name}:{function}:{line} | {message}"),
+    ]
+    logger.enable("meniscus2brep")
     try:
-        step()
-    except (ValueError, OSError) as error:
-        print(f"error: {error}", file=sys.stderr)
-        return 1
-    print(f"Wrote {output}")
-    return 0
+        logger.info("Logging to {}", log_path)
+        if setup.source is not None:
+            logger.info("Read configuration from {}", setup.source)
+        if setup.saved is not None:
+            logger.info("Saved configuration to {}", setup.saved)
+        logger.debug("Configuration: {}", setup.config.model_dump_json())
+        try:
+            step()
+        except (ValueError, OSError) as error:
+            logger.error("{}", error)
+            return 1
+        except Exception:
+            logger.exception("Pipeline failed unexpectedly")
+            raise
+        logger.info("Wrote {}", setup.config.output)
+        return 0
+    finally:
+        logger.disable("meniscus2brep")
+        for handler in handlers:
+            logger.remove(handler)

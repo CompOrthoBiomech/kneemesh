@@ -6,6 +6,7 @@ from pathlib import Path
 import gmsh
 import numpy as np
 import SimpleITK as sitk
+from loguru import logger
 from vtkmodules.vtkCommonDataModel import vtkPolyData
 from vtkmodules.vtkIOXML import vtkXMLPolyDataReader, vtkXMLPolyDataWriter
 
@@ -30,6 +31,7 @@ def read_label_map(path: str | PathLike[str]) -> sitk.Image:
     path = _validated_path(path)
     image = sitk.ReadImage(str(path))
     _require_label_map(image)
+    logger.debug("Read {} LabelMap of size {} and spacing {} from {}", image.GetPixelIDTypeAsString(), image.GetSize(), image.GetSpacing(), path)
     return image
 
 
@@ -113,6 +115,7 @@ def write_brep(brep: BRep, path: str | PathLike[str]) -> None:
     """
     path = _validated_path(path, BREP_SUFFIXES)
     path.write_text(brep.text, encoding="utf-8")
+    logger.debug("Wrote B-rep to {}", path)
 
 
 def write_mesh(mesh: Mesh, path: str | PathLike[str]) -> None:
@@ -141,6 +144,7 @@ def write_mesh(mesh: Mesh, path: str | PathLike[str]) -> None:
             if "Unknown output file format" in str(error):
                 raise ValueError(f"gmsh cannot write meshes in the format of {path.name!r}") from error
             raise OSError(f"Could not write mesh to {path}") from error
+    logger.debug("Wrote mesh to {}", path)
 
 
 def _validated_path(path: str | PathLike[str], suffixes: frozenset[str] = SUPPORTED_SUFFIXES) -> Path:

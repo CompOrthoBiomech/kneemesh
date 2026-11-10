@@ -11,6 +11,7 @@ from typing import Literal
 
 import gmsh
 import numpy as np
+from loguru import logger
 from scipy.interpolate import BSpline, make_interp_spline
 from vtkmodules.util.numpy_support import numpy_to_vtk
 from vtkmodules.vtkCommonCore import vtkPoints
@@ -203,7 +204,10 @@ def _export_brep() -> BRep:
     with tempfile.TemporaryDirectory() as directory:
         path = Path(directory) / "shape.brep"
         gmsh.write(str(path))
-        return BRep(path.read_text(encoding="utf-8"))
+        text = path.read_text(encoding="utf-8")
+    counts = [len(gmsh.model.getEntities(dim)) for dim in range(4)]
+    logger.debug("B-rep has {} vertices, {} edges, {} faces, and {} volumes ({} kB)", *counts, len(text) // 1024)
+    return BRep(text)
 
 
 def _block_sides(pieces: list[int], spokes: list[int], block: int) -> list[int]:

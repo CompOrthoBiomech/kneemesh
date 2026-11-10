@@ -10,6 +10,7 @@ from typing import Self
 
 import gmsh
 import numpy as np
+from loguru import logger
 
 from meniscus2brep.geo import BRep, gmsh_session
 
@@ -236,4 +237,5 @@ def _volume_mesh() -> Mesh:
         _, element_nodes = gmsh.model.mesh.getElementsByType(element_type)
         elements[name] = index[element_nodes].reshape(-1, nodes_per_element)
         element_types[name] = int(element_type)
+    logger.debug("gmsh mesh has {} nodes and {}", len(node_tags), {name: len(connectivity) for name, connectivity in elements.items()})
     return Mesh(coordinates.reshape(-1, 3), elements, element_types)

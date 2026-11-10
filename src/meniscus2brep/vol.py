@@ -6,6 +6,7 @@ from itertools import pairwise
 
 import numpy as np
 import SimpleITK as sitk
+from loguru import logger
 from scipy.interpolate import BSpline, make_splprep
 from scipy.sparse import coo_matrix
 from scipy.sparse.csgraph import connected_components, dijkstra
@@ -78,6 +79,7 @@ def centerline(label_map: sitk.Image, label: int = 1) -> BSpline:
     for _ in range(_REFINEMENT_ITERATIONS):
         centroids = _section_centroids(spline, points, step)
         spline = _fit(centroids, centroid_tolerance)
+    logger.debug("Centerline has {} control points; sections every {:.3g} with half-width {:.3g}", len(spline.c), step, half_width)
     return spline
 
 
@@ -142,6 +144,7 @@ def signed_distance_field(label_map: sitk.Image, label: int = 1, sigma: float | 
     if sigma == 0:
         return field
     sigmas = [_DEFAULT_SIGMA_VOXELS * size for size in label_map.GetSpacing()] if sigma is None else [sigma] * 3
+    logger.debug("Smoothing the distance field with sigmas {}", [round(value, 4) for value in sigmas])
     return sitk.SmoothingRecursiveGaussian(field, sigmas)
 
 
@@ -176,7 +179,9 @@ def extract_isocontour(distance_field: sitk.Image, level: float = 0.0) -> vtkPol
     flying_edges.ComputeScalarsOff()
     flying_edges.Update()
 
-    return flying_edges.GetOutput()
+    surface = flying_edges.GetOutput()
+    logger.debug("Surface at level {} has {} points and {} triangles", level, surface.GetNumberOfPoints(), surface.GetNumberOfCells())
+    return surface
 
 
 def slice_isocontour(mesh: vtkPolyData, curve: BSpline, spacing: float, points_per_slice: int = 32) -> list[ContourSlice]:
@@ -233,6 +238,7 @@ def slice_isocontour(mesh: vtkPolyData, curve: BSpline, spacing: float, points_p
     retained = slices[keep[0] : keep[-1] + 1]
     if any(contour is None for contour in retained):
         raise ValueError("A plane along the curve does not cut the mesh in a closed contour")
+    logger.debug("Kept {} of {} slices after clipping ends below {:.0%} of the mean area", len(retained), len(slices), _MIN_END_AREA_RATIO)
     return _align_with_previous(retained)  # pyright: ignore[reportArgumentType]
 
 
