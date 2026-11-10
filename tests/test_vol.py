@@ -1,3 +1,5 @@
+from itertools import pairwise
+
 import numpy as np
 import pytest
 import SimpleITK as sitk
@@ -268,7 +270,7 @@ def test_slice_points_wind_counterclockwise_from_positive_u(meniscus_slices):
 
 
 def test_slice_points_line_up_with_the_previous_slice(meniscus_slices):
-    for previous, contour_slice in zip(meniscus_slices, meniscus_slices[1:]):
+    for previous, contour_slice in pairwise(meniscus_slices):
         target = np.column_stack(in_plane(previous))
         current = np.column_stack(in_plane(contour_slice))
         costs = [np.sum((target - np.roll(current, -shift, axis=0)) ** 2) for shift in range(len(current))]

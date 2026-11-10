@@ -96,14 +96,12 @@ def contours_to_brep(
         # Open Cascade only honors a loft degree of 1 for a ruled surface.
         loft = gmsh.model.occ.addThruSections(wires, makeSolid=False, makeRuled=spline_order == 1, maxDegree=spline_order)
         ends = [(slices[0], splines[0], wires[0], -1.0), (slices[-1], splines[-1], wires[-1], 1.0)]
+        caps = None
         if cap == "planar":
             caps = [gmsh.model.occ.addPlaneSurface([wire]) for _, _, wire, _ in ends]
         elif cap == "smooth":
-            caps = [
-                _add_smooth_cap(*spline, spline_order, contour, sign * contour.normal, cap_offset)
-                for contour, spline, _, sign in ends
-            ]
-        if cap != "none":
+            caps = [_add_smooth_cap(*spline, spline_order, contour, sign * contour.normal, cap_offset) for contour, spline, _, sign in ends]
+        if cap != "none" and caps is not None:
             # addThruSections' makeSolid returns a volume with no end faces.
             shell = gmsh.model.occ.addSurfaceLoop([*(tag for _, tag in loft), *caps], sewing=True)
             gmsh.model.occ.addVolume([shell])

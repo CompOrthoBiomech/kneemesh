@@ -205,7 +205,7 @@ def test_smooth_caps_work_at_other_spline_orders(meniscus_slices, tmp_path, orde
 
 def test_brep_rejects_unknown_cap(meniscus_slices):
     with pytest.raises(ValueError, match="cap must be"):
-        contours_to_brep(meniscus_slices, cap="round")
+        contours_to_brep(meniscus_slices, cap="round")  # pyright: ignore[reportArgumentType]
 
 
 @pytest.mark.parametrize("offset", [0.0, -1.0])
