@@ -5,7 +5,7 @@ import SimpleITK as sitk
 from scipy.interpolate import BSpline
 from vtkmodules.vtkCommonDataModel import vtkPolyData
 
-from meniscus2brep.geo import contours_to_polydata
+from meniscus2brep.geo import BRep, contours_to_brep, contours_to_polydata
 from meniscus2brep.vol import ContourSlice, centerline, extract_isocontour, signed_distance_field, slice_isocontour
 
 INNER_RADIUS = 10.0
@@ -71,3 +71,15 @@ def meniscus_slices(meniscus_mesh: vtkPolyData, meniscus_centerline: BSpline) ->
 def meniscus_contours(meniscus_slices: list[ContourSlice]) -> vtkPolyData:
     """Slices of meniscus_mesh every 5 mm along meniscus_centerline."""
     return contours_to_polydata(meniscus_slices)
+
+
+@pytest.fixture(scope="session")
+def meniscus_surface(meniscus_slices: list[ContourSlice]) -> BRep:
+    """Open cubic surface lofted through meniscus_slices."""
+    return contours_to_brep(meniscus_slices)
+
+
+@pytest.fixture(scope="session")
+def meniscus_solid(meniscus_slices: list[ContourSlice]) -> BRep:
+    """Capped cubic solid lofted through meniscus_slices."""
+    return contours_to_brep(meniscus_slices, solid=True)

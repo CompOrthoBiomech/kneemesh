@@ -1,7 +1,7 @@
 """Operations on segmented LabelMaps."""
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from itertools import pairwise
 
 import numpy as np
@@ -83,8 +83,9 @@ class ContourSlice:
     Attributes:
         points: (N, 3) physical points, evenly spaced around the contour and
             counterclockwise about normal. The closing point is not repeated.
-            The first point lies in the +u_axis direction from the contour's
-            center, so corresponding points line up from slice to slice.
+            The first slice starts in the +u_axis direction from the contour's
+            center. Each later slice starts wherever best lines its points up
+            with the previous slice's, so corresponding points match along the curve.
         center: Point on the curve where the plane is centered.
         u_axis: Unit vector in the plane.
         v_axis: Unit vector in the plane. (u_axis, v_axis, normal) is right-handed.
@@ -215,7 +216,7 @@ def slice_isocontour(mesh: vtkPolyData, curve: BSpline, spacing: float, points_p
     retained = slices[keep[0] : keep[-1] + 1]
     if any(contour is None for contour in retained):
         raise ValueError("A plane along the curve does not cut the mesh in a closed contour")
-    return retained  # pyright: ignore[reportReturnType]
+    return _align_with_previous(retained)  # pyright: ignore[reportArgumentType]
 
 
 def _require_3d_label_map(label_map: sitk.Image) -> None:
@@ -262,6 +263,26 @@ def _slice_at(
     loop = np.roll(loop, -int(np.argmin(np.abs(np.arctan2(v, u)))), axis=0)
 
     return ContourSlice(_resample_closed(loop, point_count), center, u_axis, v_axis, normal, abs(signed_area))
+
+
+def _align_with_previous(slices: list[ContourSlice]) -> list[ContourSlice]:
+    """Rotate each contour's point order to best match the slice before it.
+
+    A loft joins contours by parameter, so a start point that drifts between
+    slices mismatches their corners and makes the surface bulge between them.
+    """
+    aligned = [slices[0]]
+    for contour in slices[1:]:
+        target = _plane_coordinates(aligned[-1])
+        current = _plane_coordinates(contour)
+        costs = [np.sum((target - np.roll(current, -shift, axis=0)) ** 2) for shift in range(len(current))]
+        aligned.append(replace(contour, points=np.roll(contour.points, -int(np.argmin(costs)), axis=0)))
+    return aligned
+
+
+def _plane_coordinates(contour: ContourSlice) -> np.ndarray:
+    offsets = contour.points - contour.center
+    return np.column_stack((offsets @ contour.u_axis, offsets @ contour.v_axis))
 
 
 def _closed_loops(mesh: vtkPolyData, origin: np.ndarray, normal: np.ndarray) -> list[np.ndarray]:

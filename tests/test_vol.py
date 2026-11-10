@@ -221,7 +221,17 @@ def test_slice_points_wind_counterclockwise_from_positive_u(meniscus_slices):
     for contour_slice in meniscus_slices:
         u, v = in_plane(contour_slice)
         assert np.sum(u * np.roll(v, -1) - np.roll(u, -1) * v) > 0
-        assert abs(np.degrees(np.arctan2(v[0], u[0]))) < 15.0
+        assert abs(np.degrees(np.arctan2(v[0], u[0]))) < 30.0
+
+
+def test_slice_points_line_up_with_the_previous_slice(meniscus_slices):
+    for previous, contour_slice in zip(meniscus_slices, meniscus_slices[1:]):
+        target = np.column_stack(in_plane(previous))
+        current = np.column_stack(in_plane(contour_slice))
+        costs = [np.sum((target - np.roll(current, -shift, axis=0)) ** 2) for shift in range(len(current))]
+        # The centroids subtracted here differ slightly from the slice centers
+        # used for alignment, so allow the optimum to land on a neighbor.
+        assert min(np.argmin(costs), len(costs) - np.argmin(costs)) <= 1
 
 
 def test_slice_contours_lie_on_the_label_boundary(meniscus_slices, meniscus_distance_field):

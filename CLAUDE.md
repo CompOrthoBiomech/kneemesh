@@ -20,9 +20,9 @@ uv build                                       # build sdist and wheel
 
 The package converts a segmented meniscus image into B-rep geometry, as a pipeline across `src/meniscus2brep/`:
 
-- `disk.py` reads and writes LabelMaps and `.vtp` poly data.
+- `disk.py` reads and writes LabelMaps, `.vtp` poly data, and `.brep` files.
 - `vol.py` operates on LabelMaps. It produces the centerline spline and the ordered cross-section contours.
-- `geo.py` will generate the B-rep, and no B-rep library has been chosen. It currently assembles contour slices into one `vtkPolyData` of closed polylines.
+- `geo.py` lofts contour slices into a B-rep with gmsh's Open Cascade kernel, and can assemble them into one `vtkPolyData` of closed polylines.
 - `config.py` provides `BaseConfig`, the pydantic base class for configuration models parsed from JSON. It rejects unknown keys. No concrete configuration models exist yet.
 
 ### LabelMap convention
@@ -48,8 +48,19 @@ The result is a cubic `scipy.interpolate.BSpline` over u in [0, 1], in physical 
 - `sitk.SignedMaurerDistanceMap` alone is zero on boundary voxel centers, half a voxel inside the label. `signed_distance_field` averages it with the inverted mask's map so zero lies on the voxel edges.
 - `extract_isocontour` pads the field so the mesh stays closed where a label touches the image edge.
 - A cutting plane is infinite and can also cut the far limb of the C-shaped structure, so each slice takes the loop nearest the centerline.
-- Contours run counterclockwise about the slice normal and start in the +u direction, so points correspond from slice to slice.
+- Contours run counterclockwise about the slice normal. Each one's point order is rotated to match the previous slice, because a loft joins contours by parameter and a drifting start point makes the surface bulge at sharp corners.
 - Slices are clipped only from the two ends, until one reaches 20% of the mean area. A narrow section between the ends is kept.
+
+### B-reps through gmsh
+
+gmsh holds its models in global state, so a `BRep` is a plain value holding the `.brep` file's text, and all gmsh work happens inside `gmsh_session()`. Keep these points when changing `contours_to_brep`:
+
+- gmsh treats a B-spline whose first and last point tags match as periodic, so contours are built with periodic knots.
+- `addThruSections(makeSolid=True)` returns a volume with no end faces and no error. Solids are instead built from the lofted surface, planar caps, and a sewn surface loop.
+- Planar caps need contours projected exactly onto their planes, because VTK's single-precision points fall outside Open Cascade's tolerance.
+- The loft's degree along the curve is capped at 3 regardless of `spline_order`, and only a ruled loft achieves degree 1.
+- `gmsh.write` exports only the highest-dimension shapes, so the input wires do not need removing.
+- `occ.getMass` is unreliable on ruled surfaces (`spline_order=1`). Mesh the shape to check its volume.
 
 ## Tests
 
@@ -57,6 +68,6 @@ The result is a cubic `scipy.interpolate.BSpline` over u in [0, 1], in physical 
 
 - `meniscus_label` is a synthetic meniscus: a triangular cross-section swept 270° about the z axis, with the gap facing -x.
 - `meniscus_centerline` is `centerline(meniscus_label)`. Use it instead of calling `centerline` on the same image again.
-- `meniscus_distance_field`, `meniscus_mesh`, `meniscus_slices`, and `meniscus_contours` are the later pipeline stages for the same label.
+- `meniscus_distance_field`, `meniscus_mesh`, `meniscus_slices`, `meniscus_contours`, `meniscus_surface`, and `meniscus_solid` are the later pipeline stages for the same label.
 
 The fixture's voxelized cross-section centroid is r = 16.43, z = -1.67, not the ideal triangle's r = 16.67, z = -1.33. Its bottom slice lies exactly on the triangle's base and counts as a whole voxel layer, which also makes its voxel volume about 12% above the analytic value. Compare against the voxelized values or use a suitable tolerance.

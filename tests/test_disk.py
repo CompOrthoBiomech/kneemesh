@@ -3,7 +3,8 @@ import pytest
 import SimpleITK as sitk
 from vtkmodules.util.numpy_support import vtk_to_numpy
 
-from meniscus2brep.disk import read_label_map, read_poly_data, write_label_map, write_poly_data
+from meniscus2brep.disk import read_brep, read_label_map, read_poly_data, write_brep, write_label_map, write_poly_data
+from meniscus2brep.geo import BRep
 
 
 @pytest.mark.parametrize("filename", ["seg.nii", "seg.nrrd", "seg.mhd"])
@@ -110,3 +111,37 @@ def test_read_poly_data_rejects_other_file_contents(tmp_path, contents):
 def test_write_poly_data_raises_when_it_cannot_write(tmp_path, meniscus_contours):
     with pytest.raises(OSError, match="Could not write"):
         write_poly_data(meniscus_contours, tmp_path / "missing_directory" / "contours.vtp")
+
+
+def test_brep_round_trip_preserves_text(tmp_path, meniscus_surface):
+    path = tmp_path / "surface.brep"
+
+    write_brep(meniscus_surface, path)
+
+    assert read_brep(path) == meniscus_surface
+
+
+@pytest.mark.parametrize("filename", ["surface.step", "surface.brp", "surface"])
+def test_brep_rejects_unsupported_format(tmp_path, meniscus_surface, filename):
+    with pytest.raises(ValueError, match="Unsupported file format"):
+        write_brep(meniscus_surface, tmp_path / filename)
+    with pytest.raises(ValueError, match="Unsupported file format"):
+        read_brep(tmp_path / filename)
+
+
+def test_read_brep_rejects_missing_file(tmp_path):
+    with pytest.raises(FileNotFoundError, match="No such file"):
+        read_brep(tmp_path / "missing.brep")
+
+
+def test_read_brep_rejects_invalid_contents(tmp_path):
+    path = tmp_path / "surface.brep"
+    path.write_text("not a b-rep")
+
+    with pytest.raises(ValueError, match="Not a valid B-rep"):
+        read_brep(path)
+
+
+def test_write_brep_raises_when_it_cannot_write(tmp_path):
+    with pytest.raises(OSError):
+        write_brep(BRep("text"), tmp_path / "missing_directory" / "surface.brep")

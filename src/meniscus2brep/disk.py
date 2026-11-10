@@ -1,14 +1,18 @@
-"""Reading and writing LabelMaps as .nii, .nrrd, or .mhd + .raw, and poly data as .vtp."""
+"""Reading and writing LabelMaps as .nii, .nrrd, or .mhd + .raw, poly data as .vtp, and B-reps as .brep."""
 
 from os import PathLike
 from pathlib import Path
 
+import gmsh
 import SimpleITK as sitk
 from vtkmodules.vtkCommonDataModel import vtkPolyData
 from vtkmodules.vtkIOXML import vtkXMLPolyDataReader, vtkXMLPolyDataWriter
 
+from meniscus2brep.geo import BRep, gmsh_session
+
 SUPPORTED_SUFFIXES = frozenset({".nii", ".nrrd", ".mhd"})
 POLY_DATA_SUFFIXES = frozenset({".vtp"})
+BREP_SUFFIXES = frozenset({".brep"})
 
 
 def read_label_map(path: str | PathLike[str]) -> sitk.Image:
@@ -74,6 +78,38 @@ def write_poly_data(poly_data: vtkPolyData, path: str | PathLike[str]) -> None:
     writer.SetInputData(poly_data)
     if not writer.Write():
         raise OSError(f"Could not write poly data to {path}")
+
+
+def read_brep(path: str | PathLike[str]) -> BRep:
+    """Read a B-rep from an Open Cascade .brep file.
+
+    Raises:
+        ValueError: If the suffix is not .brep or the file holds no valid shape.
+        FileNotFoundError: If the file does not exist.
+    """
+    path = _validated_path(path, BREP_SUFFIXES)
+    if not path.is_file():
+        raise FileNotFoundError(f"No such file: {path}")
+
+    with gmsh_session():
+        try:
+            shapes = gmsh.model.occ.importShapes(str(path))
+        except Exception as error:  # gmsh raises only the bare Exception type.
+            raise ValueError(f"Not a valid B-rep file: {path}") from error
+    if not shapes:
+        raise ValueError(f"Not a valid B-rep file: {path}")
+    return BRep(path.read_text(encoding="utf-8"))
+
+
+def write_brep(brep: BRep, path: str | PathLike[str]) -> None:
+    """Write a B-rep to an Open Cascade .brep file, overwriting any existing file.
+
+    Raises:
+        ValueError: If the suffix is not .brep.
+        OSError: If the file cannot be written.
+    """
+    path = _validated_path(path, BREP_SUFFIXES)
+    path.write_text(brep.text, encoding="utf-8")
 
 
 def _validated_path(path: str | PathLike[str], suffixes: frozenset[str] = SUPPORTED_SUFFIXES) -> Path:
