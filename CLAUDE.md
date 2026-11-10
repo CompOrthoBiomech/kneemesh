@@ -22,7 +22,8 @@ The package converts a segmented meniscus image into B-rep geometry, as a pipeli
 
 - `disk.py` reads and writes LabelMaps, `.vtp` poly data, and `.brep` files.
 - `vol.py` operates on LabelMaps. It produces the centerline spline and the ordered cross-section contours.
-- `geo.py` lofts contour slices into a B-rep with gmsh's Open Cascade kernel, and can assemble them into one `vtkPolyData` of closed polylines.
+- `geo.py` lofts contour slices into a B-rep with gmsh's Open Cascade kernel, builds the three-block solid that hexahedral meshing needs, and can assemble slices into one `vtkPolyData` of closed polylines.
+- `mesh.py` meshes solid B-reps with gmsh into tetrahedra or block-structured hexahedra, returning a `Mesh` of node coordinates and per-type connectivity in gmsh's node ordering.
 - `config.py` provides `BaseConfig`, the pydantic base class for configuration models parsed from JSON. It rejects unknown keys. No concrete configuration models exist yet.
 
 ### LabelMap convention
@@ -64,12 +65,22 @@ gmsh holds its models in global state, so a `BRep` is a plain value holding the 
 - `gmsh.write` exports only the highest-dimension shapes, so the input wires do not need removing.
 - `occ.getMass` is unreliable on ruled surfaces (`spline_order=1`). Mesh the shape to check its volume.
 
+### Hexahedral blocks
+
+A single four-sided block can't map the roughly triangular meniscus section: one block corner lands on a smooth side at about 180°, and the cells there invert. `contours_to_hex_blocks` therefore splits each section into three blocks, at its three sharpest corners (turning angle averaged over all slices) and the midpoints between them, with straight spokes to the section centroid. Keep these points when changing it:
+
+- It does not use `addThruSections`. Separate lofts choose their own parameterization along the curve, so adjacent lofts cross between slices and fragment shatters them. Instead every face is a B-spline surface interpolating section curves fitted with a shared knot vector, with each column of poles interpolated along the curve at shared parameters. A face's edges then depend only on their own points, so neighboring faces match exactly.
+- Each block is sewn separately, then the blocks are fragmented, which merges the identical copies of shared spoke faces. Trimming faces with existing curves (`wireTags`) does not share edges, because gmsh projects new ones.
+- `hexahedral_mesh` makes every curve, surface, and volume transfinite. Curves on the planar caps get `elements_per_edge` and all others `elements_along`.
+- Hexahedral tests use 10-point contours, which give valid elements and small B-reps.
+- gmsh's "initial mesh only" 2D algorithm crashes the process with a segmentation fault, and BAMG fails on these shapes, so `Algorithm2D` omits them. `Algorithm3D` omits R-tree, which writes `new_points.pos` into the working directory.
+
 ## Tests
 
 `tests/conftest.py` defines session-scoped fixtures that every test shares, so tests must not modify them in place:
 
 - `meniscus_label` is a synthetic meniscus: a triangular cross-section swept 270° about the z axis, with the gap facing -x.
 - `meniscus_centerline` is `centerline(meniscus_label)`. Use it instead of calling `centerline` on the same image again.
-- `meniscus_distance_field`, `meniscus_mesh`, `meniscus_slices`, `meniscus_contours`, `meniscus_surface`, `meniscus_solid`, and `meniscus_domed_solid` are the later pipeline stages for the same label.
+- `meniscus_distance_field`, `meniscus_mesh`, `meniscus_slices`, `meniscus_contours`, `meniscus_surface`, `meniscus_solid`, `meniscus_domed_solid`, `meniscus_hex_slices`, and `meniscus_hex_blocks` are the later pipeline stages for the same label.
 
 The fixture's voxelized cross-section centroid is r = 16.43, z = -1.67, not the ideal triangle's r = 16.67, z = -1.33. Its bottom slice lies exactly on the triangle's base and counts as a whole voxel layer, which also makes its voxel volume about 12% above the analytic value. Compare against the voxelized values or use a suitable tolerance.

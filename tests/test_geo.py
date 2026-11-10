@@ -7,7 +7,7 @@ from vtkmodules.util.numpy_support import vtk_to_numpy
 from vtkmodules.vtkCommonDataModel import VTK_POLY_LINE
 
 from meniscus2brep.disk import write_brep
-from meniscus2brep.geo import contours_to_brep, contours_to_polydata, gmsh_session
+from meniscus2brep.geo import contours_to_brep, contours_to_hex_blocks, contours_to_polydata, gmsh_session
 from meniscus2brep.vol import ContourSlice
 
 
@@ -249,3 +249,63 @@ def test_brep_rejects_contours_too_short_for_order():
 
     with pytest.raises(ValueError, match="more than 3 points"):
         contours_to_brep(slices, spline_order=3)
+
+
+def test_hex_blocks_are_three_six_sided_blocks_sharing_faces(meniscus_hex_blocks, tmp_path):
+    with gmsh_session():
+        import_brep(meniscus_hex_blocks, tmp_path)
+
+        # Two caps of 7 vertices and 9 edges each, joined by 7 edges along the
+        # curve; 6 outer and 3 shared spoke faces between the 6 cap faces.
+        assert entity_counts() == [14, 25, 15, 3]
+        for _, volume in gmsh.model.getEntities(3):
+            assert len(gmsh.model.getBoundary([(3, volume)], oriented=False)) == 6
+        assert sum(gmsh.model.getType(2, face) == "Plane" for _, face in gmsh.model.getEntities(2)) == 6
+
+
+def test_hex_blocks_fill_the_planar_capped_solid(meniscus_hex_blocks, meniscus_hex_slices, tmp_path):
+    def total_volume(brep):
+        with gmsh_session():
+            import_brep(brep, tmp_path)
+            return sum(gmsh.model.occ.getMass(3, volume) for _, volume in gmsh.model.getEntities(3))
+
+    assert total_volume(meniscus_hex_blocks) == pytest.approx(total_volume(contours_to_brep(meniscus_hex_slices, cap="planar")), rel=0.02)
+
+
+def test_hex_blocks_pass_through_contour_points(meniscus_hex_blocks, meniscus_hex_slices, tmp_path):
+    points = np.vstack([contour.points for contour in meniscus_hex_slices])
+
+    with gmsh_session():
+        import_brep(meniscus_hex_blocks, tmp_path)
+        outer = [tag for _, tag in gmsh.model.getEntities(2) if gmsh.model.getType(2, tag) != "Plane"]
+        distances = np.full(len(points), np.inf)
+        for face in outer:
+            closest = np.array(gmsh.model.getClosestPoint(2, face, points.ravel().tolist())[0]).reshape(-1, 3)
+            distances = np.minimum(distances, np.linalg.norm(closest - points, axis=1))
+
+    assert distances.max() < 1e-3
+
+
+@pytest.mark.parametrize("order", [1, 2, 5])
+def test_hex_blocks_build_at_other_spline_orders(meniscus_hex_slices, tmp_path, order):
+    with gmsh_session():
+        import_brep(contours_to_hex_blocks(meniscus_hex_slices, spline_order=order), tmp_path)
+
+        assert entity_counts() == [14, 25, 15, 3]
+
+
+def test_hex_blocks_reject_unequal_point_counts(meniscus_hex_slices, meniscus_slices):
+    with pytest.raises(ValueError, match="same number of points"):
+        contours_to_hex_blocks([meniscus_hex_slices[0], meniscus_slices[1]])
+
+
+def test_hex_blocks_reject_too_few_points():
+    slices = [make_slice([[0, 0, z], [1, 0, z], [1, 1, z], [0, 1, z], [-1, 1, z]]) for z in (0.0, 1.0)]
+
+    with pytest.raises(ValueError, match="at least 6 points"):
+        contours_to_hex_blocks(slices, spline_order=2)
+
+
+def test_hex_blocks_reject_too_few_slices(meniscus_hex_slices):
+    with pytest.raises(ValueError, match="at least 2"):
+        contours_to_hex_blocks(meniscus_hex_slices[:1])
