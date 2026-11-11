@@ -48,11 +48,12 @@ The result is a cubic `scipy.interpolate.BSpline` over u in [0, 1], in physical 
 
 ### Cross-section contours
 
-`signed_distance_field` feeds `extract_isocontour`, which returns a closed VTK triangle mesh from `vtkFlyingEdges3D`. `slice_isocontour` cuts that mesh along the centerline and returns `ContourSlice` objects holding ordered points from a closed Kochanek spline. Keep these points when changing this code:
+`signed_distance_field` feeds `extract_isocontour`, which returns a closed VTK triangle mesh from `vtkFlyingEdges3D`. `smooth_isocontour` smooths it with `vtkWindowedSincPolyDataFilter`, and `slice_isocontour` cuts the result along the centerline and returns `ContourSlice` objects holding ordered points from a closed Kochanek spline. Keep these points when changing this code:
 
 - `sitk.SignedMaurerDistanceMap` alone is zero on boundary voxel centers, half a voxel inside the label. `signed_distance_field` averages it with the inverted mask's map so zero lies on the voxel edges.
 - `signed_distance_field` then smooths with a recursive Gaussian to remove the voxel staircase. The default sigma, per axis, puts 3 voxel edges in the central 95%. It rounds sharp edges, costing the test fixture about 5% of its volume. Pass `sigma=0` for the exact field.
 - `extract_isocontour` pads the field so the mesh stays closed where a label touches the image edge.
+- `smooth_isocontour` turns boundary and feature-edge smoothing off and non-manifold smoothing on, and normalizes coordinates so its parameters don't depend on physical scale. The Gaussian leaves ripples in the mesh that make slice contours wiggle. The defaults, 50 iterations at pass band 0.001, cut the contours' excess turning by about 70% on the real test label and cost about 3% of the volume. A pass band of 0.001 at 100 iterations shrinks the fixture by 11%. `iterations=0` disables smoothing.
 - A cutting plane is infinite and can also cut the far limb of the C-shaped structure, so each slice takes the loop nearest the centerline.
 - Contours run counterclockwise about the slice normal. Each one's point order is rotated to match the previous slice, because a loft joins contours by parameter and a drifting start point makes the surface bulge at sharp corners.
 - Slices are clipped only from the two ends, until one reaches 20% of the mean area. A narrow section between the ends is kept.
@@ -72,12 +73,15 @@ gmsh holds its models in global state, so a `BRep` is a plain value holding the 
 
 ### Hexahedral blocks
 
-A single four-sided block can't map the roughly triangular meniscus section: one block corner lands on a smooth side at about 180°, and the cells there invert. `contours_to_hex_blocks` therefore splits each section into three blocks, at its three sharpest corners (turning angle averaged over all slices) and the midpoints between them, with straight spokes to the section centroid. Keep these points when changing it:
+`contours_to_hex_blocks` splits each section with a butterfly (O-grid) partition: an inner quadrilateral block plus four outer blocks, one on each of four boundary arcs, joined by straight spokes. Every boundary point meets an inward spoke, so boundary cells stay near square even at the meniscus's sharp, smoothing-rounded corners. The Y split it replaced put block corners at those corners, which gave cells nearly 180° angles there and inverted elements on the real test label. Keep these points when changing it:
 
+- The four splits divide the contour into equal-length arcs. `_butterfly_split_indices` rotates them to minimize the turning angle near them, averaged over all slices, so corners fall mid-arc. The first split is a point index because each contour is rolled to start there.
+- Inner block corners lie halfway (`_INNER_BLOCK_SCALE`) from the section centroid to the split points. Mesh quality barely changes between 0.35 and 0.7.
+- Each arc is sampled at `_PIECE_SAMPLES` points for its face's section curves. Fewer than 20 move the faces more than 1e-3 off the contour points.
 - It does not use `addThruSections`. Separate lofts choose their own parameterization along the curve, so adjacent lofts cross between slices and fragment shatters them. Instead every face is a B-spline surface interpolating section curves fitted with a shared knot vector, with each column of poles interpolated along the curve at shared parameters. A face's edges then depend only on their own points, so neighboring faces match exactly.
 - Each block is sewn separately, then the blocks are fragmented, which merges the identical copies of shared spoke faces. Trimming faces with existing curves (`wireTags`) does not share edges, because gmsh projects new ones.
 - `hexahedral_mesh` makes every curve, surface, and volume transfinite. Curves on the planar caps get `elements_per_edge` and all others `elements_along`.
-- Hexahedral tests use 10-point contours, which give valid elements and small B-reps.
+- Hexahedral tests use 10-point contours, which give valid elements and small B-reps. Contours need at least 8 points.
 - gmsh's "initial mesh only" 2D algorithm crashes the process with a segmentation fault, and BAMG fails on these shapes, so `Algorithm2D` omits them. `Algorithm3D` omits R-tree, which writes `new_points.pos` into the working directory.
 
 ## Tests

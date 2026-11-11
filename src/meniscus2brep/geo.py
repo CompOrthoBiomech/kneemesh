@@ -21,7 +21,12 @@ from meniscus2brep.vol import ContourSlice
 
 _MAX_SPLINE_ORDER = 25  # Open Cascade's limit on B-spline degree.
 _DEFAULT_CAP_OFFSET_RADII = 0.25
-_PIECE_SAMPLES = 12
+_PIECE_SAMPLES = 20
+_MIN_HEX_POINTS = 8
+# Inner block corners lie this fraction of the way from the section's centroid to the split points.
+_INNER_BLOCK_SCALE = 0.5
+# Width, as a fraction of the contour's length, of the Gaussian weighting turns near butterfly splits.
+_SPLIT_TURN_WIDTH = 1 / 16
 
 
 @dataclass(frozen=True)
@@ -113,15 +118,19 @@ def contours_to_brep(
 
 
 def contours_to_hex_blocks(slices: list[ContourSlice], spline_order: int = 3) -> BRep:
-    """Build a planar-capped solid from contour slices as three blocks for hexahedral meshing.
+    """Build a planar-capped solid from contour slices as five blocks for hexahedral meshing.
 
-    A single four-sided block cannot map a roughly triangular section without
-    inverting elements, because one block corner must fall on a smooth side.
-    Instead each section splits at its three sharpest corners, by turning angle
-    averaged over all slices, and the midpoints between them. Straight spokes
-    from the midpoints to the section's centroid divide it into three
-    four-sided regions, each holding one corner, which sweep along the slices
-    into three six-sided blocks sharing faces.
+    The section is split with a butterfly (O-grid) partition: an inner
+    quadrilateral surrounded by four blocks, one for each of four arcs of the
+    boundary. Every boundary point meets a spoke running inward, so the cells
+    along the boundary stay close to square even at its sharp corners. A
+    partition that puts block corners at those corners instead gives cells
+    there the corner's angle, or nearly 180 degrees where smoothing rounds it.
+
+    The four split points divide each contour into arcs of equal length,
+    rotated to keep them as far as possible from the sharpest turns averaged
+    over all slices. Straight spokes run from each split point to a corner of
+    the inner quadrilateral, partway toward the section's centroid.
 
     The blocks' faces are B-spline surfaces interpolating the slices with a
     knot vector shared by every face along the curve, so neighboring faces
@@ -134,63 +143,62 @@ def contours_to_hex_blocks(slices: list[ContourSlice], spline_order: int = 3) ->
             the curve is at most 3.
 
     Returns:
-        A solid of three blocks, for hexahedral_mesh.
+        A solid of five blocks, for hexahedral_mesh.
 
     Raises:
         ValueError: If there are fewer than 2 slices, spline_order is outside
             1 to 25, a contour has too few points for spline_order or fewer
-            than 6, or contours have unequal point counts.
+            than 8, or contours have unequal point counts.
     """
     _require_loftable(slices, spline_order)
     if len({len(contour.points) for contour in slices}) > 1:
         raise ValueError("Hexahedral blocks need the same number of points on every contour")
-    if len(slices[0].points) < 6:
-        raise ValueError("Hexahedral blocks need at least 6 points on each contour")
+    if len(slices[0].points) < _MIN_HEX_POINTS:
+        raise ValueError(f"Hexahedral blocks need at least {_MIN_HEX_POINTS} points on each contour")
 
-    splits = _y_split_indices(slices)
+    splits = _butterfly_split_indices(slices)
     samples = np.linspace(0.0, 1.0, _PIECE_SAMPLES)
-    # pieces[slice][piece] holds points along the six boundary pieces between splits.
-    pieces, centroids = [], []
+    # pieces[slice][arc] holds points along the four boundary arcs; arc i runs from split i to split i + 1.
+    pieces, inner_corners = [], []
     for contour in slices:
         points = np.roll(_project_onto_plane(contour), -int(splits[0]), axis=0)
         parameters = np.interp(splits - splits[0], np.arange(len(points) + 1), _chord_parameters(points))
         curves = _split_periodic_spline(_periodic_spline(points, spline_order), parameters)
-        pieces.append([curve(curve.t[0] + samples * (curve.t[-1] - curve.t[0])) for curve in curves])
-        centroids.append(_section_centroid(contour))
-    centroids = np.array(centroids)
+        slice_pieces = [curve(curve.t[0] + samples * (curve.t[-1] - curve.t[0])) for curve in curves]
+        centroid = _section_centroid(contour)
+        pieces.append(slice_pieces)
+        inner_corners.append([centroid + _INNER_BLOCK_SCALE * (piece[0] - centroid) for piece in slice_pieces])
 
     centers = np.array([contour.center for contour in slices])
     along = _open_chord_parameters(centers)
     along_degree = min(spline_order, 3, len(slices) - 1)
-    piece_rows = [[_clamped_interpolation(samples, slice_pieces[piece], spline_order) for slice_pieces in pieces] for piece in range(6)]
-    # Spoke i runs from the midpoint that ends piece 2i to the centroid.
-    spoke_rows = [
-        [
-            (np.array([0.0, 0.0, 1.0, 1.0]), np.array([slice_pieces[2 * spoke][-1], centroid]))
-            for slice_pieces, centroid in zip(pieces, centroids)
-        ]
-        for spoke in range(3)
-    ]
+    line_knots = np.array([0.0, 0.0, 1.0, 1.0])
+    arc_rows = [[_clamped_interpolation(samples, slice_pieces[arc], spline_order) for slice_pieces in pieces] for arc in range(4)]
+    # Spoke i runs from split i to inner corner i, and inner side i from inner corner i to i + 1.
+    spoke_rows = [[(line_knots, np.array([slice_pieces[i][0], corners[i]])) for slice_pieces, corners in zip(pieces, inner_corners)] for i in range(4)]
+    inner_rows = [[(line_knots, np.array([corners[i], corners[(i + 1) % 4]])) for corners in inner_corners] for i in range(4)]
 
     with gmsh_session():
-        outer = [_add_swept_surface(rows, spline_order, along, along_degree) for rows in piece_rows]
+        arcs = [_add_swept_surface(rows, spline_order, along, along_degree) for rows in arc_rows]
         spokes = [_add_swept_surface(rows, 1, along, along_degree) for rows in spoke_rows]
+        inner = [_add_swept_surface(rows, 1, along, along_degree) for rows in inner_rows]
         caps = []
         for end in (0, -1):
-            boundary = [_add_bspline_curve(*piece_rows[piece][end], spline_order) for piece in range(6)]
-            spoke_curves = [_add_bspline_curve(*spoke_rows[spoke][end], 1) for spoke in range(3)]
+            arc_curves = [_add_bspline_curve(*arc_rows[i][end], spline_order) for i in range(4)]
+            spoke_curves = [_add_bspline_curve(*spoke_rows[i][end], 1) for i in range(4)]
+            inner_curves = [_add_bspline_curve(*inner_rows[i][end], 1) for i in range(4)]
             caps.append(
                 [
-                    gmsh.model.occ.addPlaneSurface([gmsh.model.occ.addCurveLoop(_block_sides(boundary, spoke_curves, block))])
-                    for block in range(3)
+                    gmsh.model.occ.addPlaneSurface([gmsh.model.occ.addCurveLoop(sides)])
+                    for sides in _butterfly_block_sides(arc_curves, spoke_curves, inner_curves)
                 ]
             )
         blocks = []
-        for block in range(3):
-            faces = [*_block_sides(outer, spokes, block), caps[0][block], caps[1][block]]
+        for block, sides in enumerate(_butterfly_block_sides(arcs, spokes, inner)):
+            faces = [*sides, caps[0][block], caps[1][block]]
             blocks.append((3, gmsh.model.occ.addVolume([gmsh.model.occ.addSurfaceLoop(faces, sewing=True)])))
-        # Sewing copies the shared spoke faces into each block. They are
-        # identical surfaces, so fragmenting merges them back into one each.
+        # Sewing copies the shared spoke and inner faces into each block. They
+        # are identical surfaces, so fragmenting merges them back into one each.
         gmsh.model.occ.fragment(blocks[:1], blocks[1:])
         gmsh.model.occ.synchronize()
         return _export_brep()
@@ -215,9 +223,10 @@ def _export_brep() -> BRep:
     return BRep(text)
 
 
-def _block_sides(pieces: list[int], spokes: list[int], block: int) -> list[int]:
-    """Return the four sides of a block's region: its two boundary pieces, which meet at its corner, and its two spokes."""
-    return [pieces[(2 * block - 1) % 6], pieces[2 * block], spokes[block], spokes[(block - 1) % 3]]
+def _butterfly_block_sides(arcs: list[int], spokes: list[int], inner: list[int]) -> list[list[int]]:
+    """Return the four sides of each block: the inner block, then the outer block on each boundary arc."""
+    outer = [[arcs[i], spokes[(i + 1) % 4], inner[i], spokes[i]] for i in range(4)]
+    return [list(inner), *outer]
 
 
 def _project_onto_plane(contour: ContourSlice) -> np.ndarray:
@@ -248,27 +257,31 @@ def _open_chord_parameters(points: np.ndarray) -> np.ndarray:
     return lengths / lengths[-1]
 
 
-def _y_split_indices(slices: list[ContourSlice]) -> np.ndarray:
-    """Return six sorted point indices splitting every contour into three blocks' sides.
+def _butterfly_split_indices(slices: list[ContourSlice]) -> np.ndarray:
+    """Return four sorted point indices splitting every contour into the butterfly's boundary arcs.
 
-    Even positions hold the three sharpest corners, by turning angle averaged
-    over all slices. Odd positions hold the midpoints between consecutive
-    corners, which may fall between points.
+    The splits divide the contour into arcs of equal length, by chord length
+    averaged over all slices. Their rotation minimizes the turning angle,
+    averaged over all slices, near them: each point's turn is weighted by a
+    Gaussian of its distance from the nearest split. The first split is a
+    point index and the others may fall between points.
     """
     turns = np.mean([_turning_angles(contour.points) for contour in slices], axis=0)
+    positions = np.mean([_chord_parameters(contour.points) for contour in slices], axis=0)
     count = len(turns)
-    # Corners closer than a sixth of the contour would leave a block with a
-    # nearly zero-length side, whose cells invert.
-    separation = -(-count // 6)
-    corners: list[int] = []
-    for index in np.argsort(turns)[::-1]:
-        if all(min(abs(index - corner), count - abs(index - corner)) >= separation for corner in corners):
-            corners.append(int(index))
-        if len(corners) == 3:
-            break
-    corners.sort()
-    gaps = np.diff([*corners, corners[0] + count])
-    return np.array([value for corner, gap in zip(corners, gaps) for value in (corner, corner + gap / 2)], dtype=float)
+    offsets = np.arange(4) / 4
+
+    def cost(start: int) -> float:
+        distances = np.abs(positions[:count, None] - (positions[start] + offsets)) % 1.0
+        distances = np.minimum(distances, 1.0 - distances)
+        return float(np.sum(turns[:, None] * np.exp(-0.5 * (distances / _SPLIT_TURN_WIDTH) ** 2)))
+
+    start = min(range(count), key=cost)
+    # Unwrap one turn past the end so splits beyond the last point map to indices above count.
+    unwrapped = np.concatenate((positions[:count], positions[:count] + 1.0, [2.0]))
+    splits = np.interp(positions[start] + offsets, unwrapped, np.arange(2 * count + 1))
+    logger.debug("Butterfly splits at contour indices {}", np.round(splits % count, 2).tolist())
+    return splits
 
 
 def _section_centroid(contour: ContourSlice) -> np.ndarray:

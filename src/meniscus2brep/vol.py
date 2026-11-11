@@ -15,7 +15,7 @@ from vtkmodules.util.numpy_support import numpy_to_vtk, vtk_to_numpy
 from vtkmodules.vtkCommonComputationalGeometry import vtkKochanekSpline, vtkParametricSpline
 from vtkmodules.vtkCommonCore import vtkPoints
 from vtkmodules.vtkCommonDataModel import vtkImageData, vtkPlane, vtkPolyData
-from vtkmodules.vtkFiltersCore import vtkCutter, vtkFlyingEdges3D, vtkStripper
+from vtkmodules.vtkFiltersCore import vtkCutter, vtkFlyingEdges3D, vtkStripper, vtkWindowedSincPolyDataFilter
 
 _MIN_LABEL_POINTS = 4
 _REFINEMENT_ITERATIONS = 3
@@ -30,6 +30,11 @@ _MIN_END_AREA_RATIO = 0.2
 # A Gaussian's central 95% spans 2 * 1.96 sigma. Setting that to 3 voxel edges gives this sigma in voxels.
 _DEFAULT_SIGMA_VOXELS = 3 / (2 * 1.96)
 _MAX_CONTOUR_SEGMENTS = 1_000_000
+# Windowed sinc smoothing defaults, chosen on the test fixture and a real
+# meniscus: they remove most of the ripple that makes slice contours wiggle
+# while shrinking the volume by about 3%.
+DEFAULT_SMOOTHING_ITERATIONS = 50
+DEFAULT_SMOOTHING_PASS_BAND = 0.001
 
 # Integer pixel types accepted for LabelMaps; 16-bit types allow more labels.
 LABEL_MAP_PIXEL_IDS = (sitk.sitkUInt8, sitk.sitkUInt16, sitk.sitkInt16)
@@ -184,6 +189,49 @@ def extract_isocontour(distance_field: sitk.Image, level: float = 0.0) -> vtkPol
     return surface
 
 
+def smooth_isocontour(
+    mesh: vtkPolyData, iterations: int = DEFAULT_SMOOTHING_ITERATIONS, pass_band: float = DEFAULT_SMOOTHING_PASS_BAND
+) -> vtkPolyData:
+    """Smooth a surface mesh with a windowed sinc filter, keeping its connectivity.
+
+    Boundary smoothing is off, so any open edges stay in place, and
+    non-manifold smoothing is on. Coordinates are normalized to the unit cube
+    while filtering, so the result does not depend on the physical scale.
+
+    Args:
+        mesh: Surface from extract_isocontour.
+        iterations: Number of filter iterations, which is the degree of the
+            filter's polynomial. More iterations follow the pass band more
+            closely. 0 returns the mesh unchanged.
+        pass_band: Pass band of the filter, between 0 and 2. Lower values
+            smooth more and shrink the surface more.
+
+    Returns:
+        A new smoothed mesh, or mesh itself when iterations is 0.
+
+    Raises:
+        ValueError: If iterations is negative or pass_band is not in (0, 2].
+    """
+    if iterations < 0:
+        raise ValueError(f"Smoothing iterations must not be negative, got {iterations}")
+    if not 0 < pass_band <= 2:
+        raise ValueError(f"Smoothing pass band must be in (0, 2], got {pass_band}")
+    if iterations == 0:
+        return mesh
+
+    smoother = vtkWindowedSincPolyDataFilter()
+    smoother.SetInputData(mesh)
+    smoother.SetNumberOfIterations(iterations)
+    smoother.SetPassBand(pass_band)
+    smoother.BoundarySmoothingOff()
+    smoother.FeatureEdgeSmoothingOff()
+    smoother.NonManifoldSmoothingOn()
+    smoother.NormalizeCoordinatesOn()
+    smoother.Update()
+    logger.debug("Smoothed the surface with {} iterations and pass band {}", iterations, pass_band)
+    return smoother.GetOutput()
+
+
 def slice_isocontour(mesh: vtkPolyData, curve: BSpline, spacing: float, points_per_slice: int = 32) -> list[ContourSlice]:
     """Slice a mesh with planes normal to a curve at uniform arc-length spacing.
 
@@ -197,7 +245,7 @@ def slice_isocontour(mesh: vtkPolyData, curve: BSpline, spacing: float, points_p
     twist along a roughly planar curve.
 
     Args:
-        mesh: Closed surface from extract_isocontour.
+        mesh: Closed surface from extract_isocontour or smooth_isocontour.
         curve: Curve from centerline.
         spacing: Arc-length distance between slices, in physical units.
         points_per_slice: Number of points on each contour.

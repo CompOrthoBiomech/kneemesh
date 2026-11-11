@@ -7,6 +7,7 @@ from typing import Annotated, Any, Literal, Self
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
 
 from meniscus2brep.mesh import Algorithm2D, Algorithm3D
+from meniscus2brep.vol import DEFAULT_SMOOTHING_ITERATIONS, DEFAULT_SMOOTHING_PASS_BAND
 
 
 class BaseConfig(BaseModel):
@@ -43,6 +44,12 @@ class BrepConfig(BaseConfig):
         description="Gaussian smoothing of the distance field in physical units. None spans 3 voxel edges per axis, 0 disables",
     )
     level: float = Field(default=0.0, description="Distance of the surface from the label boundary; positive is outside")
+    smoothing_iterations: int = Field(
+        default=DEFAULT_SMOOTHING_ITERATIONS, ge=0, description="Windowed sinc smoothing iterations on the surface before slicing; 0 disables"
+    )
+    smoothing_pass_band: float = Field(
+        default=DEFAULT_SMOOTHING_PASS_BAND, gt=0, le=2, description="Windowed sinc pass band in (0, 2]; lower smooths and shrinks more"
+    )
     spacing: float = Field(default=5.0, description="Arc-length distance between slices along the centerline, in physical units")
     points_per_slice: int = Field(default=32, description="Points on each slice contour. Use about 10 for hexahedral blocks")
     spline_order: int = Field(default=3, description="Polynomial degree of the B-spline geometry")
@@ -50,7 +57,7 @@ class BrepConfig(BaseConfig):
     cap_offset: OptionalFloat = Field(
         default=None, description="Apex offset of smooth caps in physical units. None is a quarter of the equivalent radius"
     )
-    hex_blocks: bool = Field(default=False, description="Build the three-block planar-capped solid that hexahedral meshing needs")
+    hex_blocks: bool = Field(default=False, description="Build the five-block butterfly solid with planar caps that hexahedral meshing needs")
 
 
 class MeshConfig(BaseConfig):

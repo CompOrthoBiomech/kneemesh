@@ -8,7 +8,7 @@ from vtkmodules.vtkCommonDataModel import vtkPolyData
 
 from meniscus2brep.disk import read_label_map
 from meniscus2brep.geo import BRep, contours_to_brep, contours_to_hex_blocks, contours_to_polydata
-from meniscus2brep.vol import ContourSlice, centerline, extract_isocontour, signed_distance_field, slice_isocontour
+from meniscus2brep.vol import ContourSlice, centerline, extract_isocontour, signed_distance_field, slice_isocontour, smooth_isocontour
 
 INNER_RADIUS = 10.0
 OUTER_RADIUS = 20.0
@@ -61,6 +61,12 @@ def meniscus_distance_field(meniscus_label: sitk.Image) -> sitk.Image:
 def meniscus_mesh(meniscus_distance_field: sitk.Image) -> vtkPolyData:
     """Surface mesh on the boundary of meniscus_label."""
     return extract_isocontour(meniscus_distance_field)
+
+
+@pytest.fixture(scope="session")
+def meniscus_smoothed_mesh(meniscus_mesh: vtkPolyData) -> vtkPolyData:
+    """meniscus_mesh after default windowed sinc smoothing."""
+    return smooth_isocontour(meniscus_mesh)
 
 
 @pytest.fixture(scope="session")

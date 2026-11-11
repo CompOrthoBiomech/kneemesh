@@ -155,9 +155,9 @@ def test_tetrahedral_mesh_rejects_invalid_arguments(meniscus_solid, arguments, m
 
 
 def test_hexahedral_mesh_is_structured_blocks(meniscus_hexahedra):
-    # Three blocks, each 4 x 4 elements per cap swept 30 times.
+    # Five blocks, each 4 x 4 elements per cap swept 30 times.
     assert list(meniscus_hexahedra.elements) == ["Hexahedron 8"]
-    assert len(meniscus_hexahedra.elements["Hexahedron 8"]) == 3 * 4 * 4 * 30
+    assert len(meniscus_hexahedra.elements["Hexahedron 8"]) == 5 * 4 * 4 * 30
 
 
 def test_hexahedral_mesh_has_no_inverted_elements(meniscus_hexahedra):
@@ -167,14 +167,15 @@ def test_hexahedral_mesh_has_no_inverted_elements(meniscus_hexahedra):
 def test_hexahedral_mesh_fills_the_solid(meniscus_hexahedra, meniscus_hex_blocks, tmp_path):
     volumes = hexahedron_volumes(meniscus_hexahedra, "Hexahedron 8")
 
-    assert volumes.sum() == pytest.approx(brep_volume(meniscus_hex_blocks, tmp_path), rel=0.03)
+    # Only 16 linear faces span each section's curved boundary, so the chords cut off about 3.5%.
+    assert volumes.sum() == pytest.approx(brep_volume(meniscus_hex_blocks, tmp_path), rel=0.05)
 
 
 @pytest.mark.parametrize(("per_edge", "along"), [(2, 15), (8, 60)])
 def test_hexahedral_mesh_is_valid_at_other_resolutions(meniscus_hex_blocks, per_edge, along):
     mesh = hexahedral_mesh(meniscus_hex_blocks, elements_per_edge=per_edge, elements_along=along)
 
-    assert len(mesh.elements["Hexahedron 8"]) == 3 * per_edge * per_edge * along
+    assert len(mesh.elements["Hexahedron 8"]) == 5 * per_edge * per_edge * along
     assert scaled_corner_jacobians(mesh, "Hexahedron 8").min() > 0
 
 
@@ -182,14 +183,14 @@ def test_hexahedral_mesh_second_order_has_27_node_hexahedra(meniscus_hex_blocks)
     mesh = hexahedral_mesh(meniscus_hex_blocks, elements_per_edge=2, elements_along=10, element_order=2)
 
     assert list(mesh.elements) == ["Hexahedron 27"]
-    assert mesh.elements["Hexahedron 27"].shape == (3 * 2 * 2 * 10, 27)
+    assert mesh.elements["Hexahedron 27"].shape == (5 * 2 * 2 * 10, 27)
 
 
 def test_hexahedral_mesh_second_order_incomplete_has_20_node_hexahedra(meniscus_hex_blocks):
     mesh = hexahedral_mesh(meniscus_hex_blocks, elements_per_edge=2, elements_along=10, element_order=2, second_order_incomplete=True)
 
     assert list(mesh.elements) == ["Hexahedron 20"]
-    assert mesh.elements["Hexahedron 20"].shape == (3 * 2 * 2 * 10, 20)
+    assert mesh.elements["Hexahedron 20"].shape == (5 * 2 * 2 * 10, 20)
 
 
 @pytest.mark.parametrize(
@@ -232,3 +233,15 @@ def test_tetrahedral_mesh_of_real_meniscus(real_label, tmp_path):
     volumes = tetrahedron_volumes(mesh.nodes, mesh.elements["Tetrahedron 4"])
     assert np.all(volumes > 0)
     assert volumes.sum() == pytest.approx(brep_volume(brep, tmp_path), rel=0.03)
+
+
+def test_hexahedral_mesh_of_real_meniscus_has_no_inverted_elements(real_label):
+    from meniscus2brep.geo import contours_to_hex_blocks
+    from meniscus2brep.vol import centerline, extract_isocontour, signed_distance_field, slice_isocontour, smooth_isocontour
+
+    surface = smooth_isocontour(extract_isocontour(signed_distance_field(real_label)))
+    slices = slice_isocontour(surface, centerline(real_label), spacing=5.0, points_per_slice=10)
+
+    mesh = hexahedral_mesh(contours_to_hex_blocks(slices), elements_per_edge=4, elements_along=20)
+
+    assert scaled_corner_jacobians(mesh, "Hexahedron 8").min() > 0.1

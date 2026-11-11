@@ -145,7 +145,7 @@ def hexahedral_mesh(
 ) -> Mesh:
     """Mesh a solid of six-sided blocks with hexahedra, using transfinite surfaces and volumes.
 
-    Every block must have six faces, such as the three blocks from
+    Every block must have six faces, such as the five blocks from
     contours_to_hex_blocks. Edges on the planar end caps get
     elements_per_edge elements, and the edges running between the caps get
     elements_along, so each block is a grid of elements_per_edge by
@@ -187,6 +187,8 @@ def hexahedral_mesh(
             gmsh.model.mesh.setRecombine(2, face)
         for volume in volumes:
             gmsh.model.mesh.setTransfiniteVolume(volume)
+        gmsh.model.add_physical_group(3, volumes, name="solid")
+
         gmsh.model.mesh.generate(3)
         return _volume_mesh()
 

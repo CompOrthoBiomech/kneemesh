@@ -26,6 +26,13 @@ def write_config(path, values):
 def test_configs_have_defaults_for_every_field():
     assert BrepConfig().points_per_slice == 32
     assert MeshConfig().algorithm_2d is Algorithm2D.FRONTAL_DELAUNAY
+    assert (BrepConfig().smoothing_iterations, BrepConfig().smoothing_pass_band) == (50, 0.001)
+
+
+def test_configure_overrides_smoothing(in_tmp_path):
+    config, _, _ = configure(BrepConfig, "test", ["--smoothing-iterations", "0", "--smoothing-pass-band", "0.01"])
+
+    assert (config.smoothing_iterations, config.smoothing_pass_band) == (0, 0.01)
 
 
 def test_mesh_config_saves_algorithms_by_name_and_reads_them_in_any_case():
@@ -100,7 +107,13 @@ def test_configure_reads_none_to_clear_optional_values(tmp_path):
 
 @pytest.mark.parametrize(
     "argv",
-    [["--points-per-slice", "many"], ["--cap", "round"], ["--not-an-option", "1"]],
+    [
+        ["--points-per-slice", "many"],
+        ["--cap", "round"],
+        ["--not-an-option", "1"],
+        ["--smoothing-iterations", "-1"],
+        ["--smoothing-pass-band", "0"],
+    ],
 )
 def test_configure_rejects_invalid_overrides(in_tmp_path, argv):
     with pytest.raises(SystemExit) as error:

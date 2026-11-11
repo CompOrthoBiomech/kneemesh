@@ -15,7 +15,7 @@ from meniscus2brep.config import BaseConfig, BrepConfig, MeshConfig
 from meniscus2brep.disk import read_brep, read_label_map, write_brep, write_mesh
 from meniscus2brep.geo import BRep, contours_to_brep, contours_to_hex_blocks
 from meniscus2brep.mesh import Mesh, hexahedral_mesh, tetrahedral_mesh
-from meniscus2brep.vol import centerline, extract_isocontour, signed_distance_field, slice_isocontour
+from meniscus2brep.vol import centerline, extract_isocontour, signed_distance_field, slice_isocontour, smooth_isocontour
 
 
 def run_brep(config: BrepConfig) -> BRep:
@@ -28,6 +28,8 @@ def run_brep(config: BrepConfig) -> BRep:
     distance_field = signed_distance_field(label_map, config.label, config.sigma)
     logger.info("Extracting the surface at level {}", config.level)
     surface = extract_isocontour(distance_field, config.level)
+    logger.info("Smoothing the surface with {} iterations and pass band {}", config.smoothing_iterations, config.smoothing_pass_band)
+    surface = smooth_isocontour(surface, config.smoothing_iterations, config.smoothing_pass_band)
     logger.info("Slicing every {} along the centerline", config.spacing)
     slices = slice_isocontour(surface, curve, config.spacing, config.points_per_slice)
     if config.hex_blocks:

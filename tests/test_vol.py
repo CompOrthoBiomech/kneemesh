@@ -7,7 +7,7 @@ from scipy.interpolate import BSpline
 from scipy.spatial import KDTree
 from vtkmodules.vtkFiltersCore import vtkFeatureEdges, vtkMassProperties
 
-from meniscus2brep.vol import centerline, extract_isocontour, signed_distance_field, slice_isocontour
+from meniscus2brep.vol import centerline, extract_isocontour, signed_distance_field, slice_isocontour, smooth_isocontour
 
 # Area centroid of the voxelized fixture's cross-section. It differs slightly
 # from the ideal triangle (16.67, -1.33) because the fixture's bottom slice lies
@@ -260,6 +260,53 @@ def test_isocontour_closes_where_label_touches_image_edge():
 def test_isocontour_rejects_level_outside_field(meniscus_distance_field, level):
     with pytest.raises(ValueError, match="no surface"):
         extract_isocontour(meniscus_distance_field, level=level)
+
+
+def excess_turning_degrees(slices):
+    """Mean turning around each contour beyond one full turn, which ripples add to."""
+    totals = []
+    for contour_slice in slices:
+        steps = np.roll(contour_slice.points, -1, axis=0) - contour_slice.points
+        steps /= np.linalg.norm(steps, axis=1, keepdims=True)
+        cosines = np.clip(np.sum(steps * np.roll(steps, 1, axis=0), axis=1), -1.0, 1.0)
+        totals.append(np.degrees(np.arccos(cosines)).sum())
+    return np.mean(totals) - 360.0
+
+
+def test_smoothed_isocontour_keeps_connectivity_and_stays_closed(meniscus_mesh, meniscus_smoothed_mesh):
+    assert meniscus_smoothed_mesh.GetNumberOfPoints() == meniscus_mesh.GetNumberOfPoints()
+    assert meniscus_smoothed_mesh.GetNumberOfCells() == meniscus_mesh.GetNumberOfCells()
+    assert open_edge_count(meniscus_smoothed_mesh) == 0
+
+
+def test_smoothed_isocontour_loses_little_volume(meniscus_mesh, meniscus_smoothed_mesh):
+    assert mesh_volume(meniscus_smoothed_mesh) == pytest.approx(mesh_volume(meniscus_mesh), rel=0.05)
+
+
+def test_smoothing_isocontour_straightens_slice_contours(meniscus_mesh, meniscus_smoothed_mesh, meniscus_centerline):
+    rough = slice_isocontour(meniscus_mesh, meniscus_centerline, spacing=2.0)
+    smooth = slice_isocontour(meniscus_smoothed_mesh, meniscus_centerline, spacing=2.0)
+
+    assert excess_turning_degrees(smooth) < 0.7 * excess_turning_degrees(rough)
+
+
+def test_smoothing_isocontour_more_shrinks_more(meniscus_mesh, meniscus_smoothed_mesh):
+    stronger = smooth_isocontour(meniscus_mesh, iterations=100)
+
+    assert mesh_volume(stronger) < mesh_volume(meniscus_smoothed_mesh)
+
+
+def test_smoothing_isocontour_with_no_iterations_returns_the_mesh(meniscus_mesh):
+    assert smooth_isocontour(meniscus_mesh, iterations=0) is meniscus_mesh
+
+
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [({"iterations": -1}, "iterations"), ({"pass_band": 0.0}, "pass band"), ({"pass_band": 2.5}, "pass band")],
+)
+def test_smoothing_isocontour_rejects_invalid_arguments(meniscus_mesh, arguments, message):
+    with pytest.raises(ValueError, match=message):
+        smooth_isocontour(meniscus_mesh, **arguments)
 
 
 def test_slices_default_to_32_points(meniscus_slices):

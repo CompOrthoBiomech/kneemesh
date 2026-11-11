@@ -251,16 +251,39 @@ def test_brep_rejects_contours_too_short_for_order():
         contours_to_brep(slices, spline_order=3)
 
 
-def test_hex_blocks_are_three_six_sided_blocks_sharing_faces(meniscus_hex_blocks, tmp_path):
+def test_hex_blocks_are_five_six_sided_blocks_sharing_faces(meniscus_hex_blocks, tmp_path):
     with gmsh_session():
         import_brep(meniscus_hex_blocks, tmp_path)
 
-        # Two caps of 7 vertices and 9 edges each, joined by 7 edges along the
-        # curve; 6 outer and 3 shared spoke faces between the 6 cap faces.
-        assert entity_counts() == [14, 25, 15, 3]
+        # Two caps of 8 vertices and 12 edges each, joined by 8 edges along the
+        # curve; 4 outer, 4 shared spoke, and 4 shared inner faces between the 10 cap faces.
+        assert entity_counts() == [16, 32, 22, 5]
         for _, volume in gmsh.model.getEntities(3):
             assert len(gmsh.model.getBoundary([(3, volume)], oriented=False)) == 6
-        assert sum(gmsh.model.getType(2, face) == "Plane" for _, face in gmsh.model.getEntities(2)) == 6
+        assert sum(gmsh.model.getType(2, face) == "Plane" for _, face in gmsh.model.getEntities(2)) == 10
+
+
+def test_hex_blocks_surround_one_inner_block(meniscus_hex_blocks, tmp_path):
+    with gmsh_session():
+        import_brep(meniscus_hex_blocks, tmp_path)
+        sides = [
+            {tag for _, tag in gmsh.model.getBoundary([(3, volume)], oriented=False) if gmsh.model.getType(2, tag) != "Plane"}
+            for _, volume in gmsh.model.getEntities(3)
+        ]
+
+    # The inner block shares all four sides; each outer block shares three and keeps one on the boundary.
+    assert sorted(sum(1 for face in own if any(face in other for other in sides if other is not own)) for own in sides) == [3, 3, 3, 3, 4]
+
+
+def test_hex_blocks_split_contours_away_from_sharp_corners(meniscus_slices):
+    from meniscus2brep.geo import _butterfly_split_indices, _turning_angles
+
+    turns = np.mean([_turning_angles(contour.points) for contour in meniscus_slices], axis=0)
+    splits = _butterfly_split_indices(meniscus_slices)
+
+    nearest = np.rint(splits).astype(int) % len(turns)
+    assert np.all(turns[nearest] < 0.25 * turns.max())
+    assert np.diff(splits) == pytest.approx(np.full(3, len(turns) / 4), abs=1.0)
 
 
 def test_hex_blocks_fill_the_planar_capped_solid(meniscus_hex_blocks, meniscus_hex_slices, tmp_path):
@@ -291,7 +314,7 @@ def test_hex_blocks_build_at_other_spline_orders(meniscus_hex_slices, tmp_path, 
     with gmsh_session():
         import_brep(contours_to_hex_blocks(meniscus_hex_slices, spline_order=order), tmp_path)
 
-        assert entity_counts() == [14, 25, 15, 3]
+        assert entity_counts() == [16, 32, 22, 5]
 
 
 def test_hex_blocks_reject_unequal_point_counts(meniscus_hex_slices, meniscus_slices):
@@ -300,9 +323,9 @@ def test_hex_blocks_reject_unequal_point_counts(meniscus_hex_slices, meniscus_sl
 
 
 def test_hex_blocks_reject_too_few_points():
-    slices = [make_slice([[0, 0, z], [1, 0, z], [1, 1, z], [0, 1, z], [-1, 1, z]]) for z in (0.0, 1.0)]
+    slices = [make_slice([[0, 0, z], [1, 0, z], [1, 1, z], [0, 1, z], [-1, 1, z], [-1, 0, z], [-1, -1, z]]) for z in (0.0, 1.0)]
 
-    with pytest.raises(ValueError, match="at least 6 points"):
+    with pytest.raises(ValueError, match="at least 8 points"):
         contours_to_hex_blocks(slices, spline_order=2)
 
 
