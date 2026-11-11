@@ -11,3 +11,5 @@ wheels/
 
 # Sphinx output
 docs/_build/
+coverage.xml
+.coverage

@@ -41,7 +41,12 @@ jobs:
         run: uv sync --locked
 
       - name: Run tests
-        run: uv run pytest
+        run: uv run pytest --cov=meniscus2brep --cov-report=term --cov-report=xml
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage.xml
 
   docs:
     name: Build and publish docs
@@ -65,6 +70,25 @@ jobs:
 
       - name: Build docs
         run: uv run sphinx-build -W --keep-going -b html docs docs/_build/html
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: coverage
+
+      # shields.io reads this file from GitHub Pages to draw the README's coverage badge.
+      - name: Write coverage badge data
+        run: |
+          python3 - <<'PY'
+          import json
+          import xml.etree.ElementTree as ElementTree
+
+          percent = 100 * float(ElementTree.parse("coverage.xml").getroot().get("line-rate"))
+          color = "brightgreen" if percent >= 90 else "green" if percent >= 80 else "yellow" if percent >= 70 else "red"
+          badge = {"schemaVersion": 1, "label": "coverage", "message": f"{percent:.0f}%", "color": color}
+          with open("docs/_build/html/coverage.json", "w") as file:
+              json.dump(badge, file)
+          print(badge)
+          PY
 
       - name: Publish to gh-pages
         uses: peaceiris/actions-gh-pages@v4
