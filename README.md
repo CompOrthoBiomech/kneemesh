@@ -24,6 +24,12 @@ uv sync
 uv run pytest
 ```
 
+Build the documentation into `docs/_build/html`:
+
+```sh
+uv run --group docs sphinx-build -W -b html docs docs/_build/html
+```
+
 ## License
 
 Licensed under the [Apache License 2.0](LICENSE).

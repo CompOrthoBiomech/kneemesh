@@ -16,7 +16,12 @@ uv add --dev <package>                         # add a dev dependency
 uv build                                       # build sdist and wheel
 uv run meniscus2brep-brep --help               # LabelMap to B-rep pipeline
 uv run meniscus2brep-mesh --help               # B-rep to mesh pipeline
+uv run --group docs sphinx-build -W -b html docs docs/_build/html   # build the docs
 ```
+
+## Docs
+
+`docs/` is a Sphinx project with the Furo theme. Pages are Markdown through MyST, with `$...$` and `$$...$$` math rendered by MathJax. Napoleon reads the Google-style docstrings, and `autodoc_pydantic` renders config models with each field's type, default, `description`, and constraints, so document a config option in its `Field(description=...)`. The build treats warnings as errors.
 
 ## Architecture
 
