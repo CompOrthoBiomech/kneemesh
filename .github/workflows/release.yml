@@ -1,0 +1,109 @@
+# Test, then publish the docs to the gh-pages branch, then publish the package to PyPI.
+# Each job runs only if the one before it succeeded.
+name: Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+# Never run two releases at once; a second waits for the first.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.13"
+  # Shared libraries the gmsh and VTK wheels load, which the runner image lacks.
+  SYSTEM_PACKAGES: libglu1-mesa libgl1 libxrender1 libxcursor1 libxft2 libxinerama1
+
+jobs:
+  test:
+    name: Run tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true # tests/dat is stored in Git LFS
+
+      - name: Install system libraries
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends $SYSTEM_PACKAGES
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Run tests
+        run: uv run pytest
+
+  docs:
+    name: Build and publish docs
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # push to the gh-pages branch
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system libraries
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends $SYSTEM_PACKAGES
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --locked --group docs
+
+      - name: Build docs
+        run: uv run sphinx-build -W --keep-going -b html docs docs/_build/html
+
+      - name: Publish to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: docs/_build/html
+          publish_branch: gh-pages
+          force_orphan: true # keep only the latest build in the branch's history
+          commit_message: "Docs for ${{ github.event.release.tag_name || github.sha }}"
+
+  pypi:
+    name: Publish to PyPI
+    needs: docs
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/meniscus2brep/
+    permissions:
+      id-token: write # PyPI trusted publishing
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Check the release tag matches the package version
+        if: github.event_name == 'release'
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          version=$(uv version --short)
+          if [ "${TAG#v}" != "$version" ]; then
+            echo "::error::Release tag $TAG does not match the version $version in pyproject.toml"
+            exit 1
+          fi
+
+      - name: Build sdist and wheel
+        run: uv build
+
+      - name: Publish
+        uses: pypa/gh-action-pypi-publish@release/v1
