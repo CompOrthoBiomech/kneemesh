@@ -1,4 +1,3 @@
-
 import numpy as np
 import pytest
 import SimpleITK as sitk
@@ -75,9 +74,7 @@ def test_smoothing_removes_the_staircase_from_contours(meniscus_label, meniscus_
         field = signed_distance_field(meniscus_label, sigma=sigma)
         slices = slice_isocontour(extract_isocontour(field), meniscus_centerline, spacing=5.0, points_per_slice=64)
         # A contour's bending is highest at its real corners, so the median measures the steps between them.
-        second_differences = [
-            np.linalg.norm(np.roll(s.points, -1, axis=0) - 2 * s.points + np.roll(s.points, 1, axis=0), axis=1) for s in slices
-        ]
+        second_differences = [np.linalg.norm(np.roll(s.points, -1, axis=0) - 2 * s.points + np.roll(s.points, 1, axis=0), axis=1) for s in slices]
         return np.median(np.concatenate(second_differences))
 
     assert roughness(None) < 0.5 * roughness(0.0)

@@ -150,8 +150,7 @@ def slice_isocontour(mesh: vtkPolyData, curve: BSpline, spacing: float, points_p
     v_axes = np.cross(normals, u_axes)
 
     slices = [
-        _slice_at(mesh, center, u_axis, v_axis, normal, points_per_slice)
-        for center, u_axis, v_axis, normal in zip(centers, u_axes, v_axes, normals)
+        _slice_at(mesh, center, u_axis, v_axis, normal, points_per_slice) for center, u_axis, v_axis, normal in zip(centers, u_axes, v_axes, normals)
     ]
     areas = np.array([0.0 if contour is None else contour.area for contour in slices])
     if not areas.any():
@@ -295,7 +294,9 @@ def contours_to_hex_blocks(slices: list[ContourSlice], spline_order: int = 3) ->
     line_knots = np.array([0.0, 0.0, 1.0, 1.0])
     arc_rows = [[clamped_interpolation(samples, slice_pieces[arc], spline_order) for slice_pieces in pieces] for arc in range(4)]
     # Spoke i runs from split i to inner corner i, and inner side i from inner corner i to i + 1.
-    spoke_rows = [[(line_knots, np.array([slice_pieces[i][0], corners[i]])) for slice_pieces, corners in zip(pieces, inner_corners)] for i in range(4)]
+    spoke_rows = [
+        [(line_knots, np.array([slice_pieces[i][0], corners[i]])) for slice_pieces, corners in zip(pieces, inner_corners)] for i in range(4)
+    ]
     inner_rows = [[(line_knots, np.array([corners[i], corners[(i + 1) % 4]])) for corners in inner_corners] for i in range(4)]
 
     with gmsh_session():

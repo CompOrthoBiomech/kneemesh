@@ -1,12 +1,11 @@
-
 import gmsh
 import numpy as np
 import pytest
 
+from kneemesh.brep import gmsh_session
 from kneemesh.disk import write_brep
 from kneemesh.geo.meniscus import centerline, contours_to_brep, slice_isocontour
 from kneemesh.segmentation import assemble_label_maps
-from kneemesh.brep import gmsh_session
 from kneemesh.tet_meshing import Algorithm2D, Algorithm3D, Mesh, import_solid, oriented_extents, tetrahedral_mesh
 from kneemesh.vol import extract_isocontour, signed_distance_field, smooth_isocontour
 
@@ -180,9 +179,7 @@ def test_tetrahedral_mesh_rejects_invalid_arguments(meniscus_solid, arguments, m
         tetrahedral_mesh(meniscus_solid, **arguments)
 
 
-@pytest.mark.parametrize(
-    ("order", "incomplete", "name"), [(2, True, "Tetrahedron 10"), (3, False, "Tetrahedron 20"), (3, True, "Tetrahedron 16")]
-)
+@pytest.mark.parametrize(("order", "incomplete", "name"), [(2, True, "Tetrahedron 10"), (3, False, "Tetrahedron 20"), (3, True, "Tetrahedron 16")])
 def test_tetrahedral_mesh_second_order_incomplete_drops_interior_nodes(meniscus_solid, order, incomplete, name):
     mesh = tetrahedral_mesh(meniscus_solid, max_size=4.0, element_order=order, second_order_incomplete=incomplete)
 

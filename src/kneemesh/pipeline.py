@@ -113,7 +113,9 @@ def _assemble(label_maps: Mapping[Structure, Path], interpolator: Interpolator, 
         logger.info("Reading LabelMap {} for {}", path, name)
         images[name] = read_label_map(path)
     segmentation = assemble_label_maps(images, interpolator, padding)
-    logger.info("Assembled labels {} on a {} grid with spacing {}", segmentation.labels, segmentation.image.GetSize(), segmentation.image.GetSpacing())
+    logger.info(
+        "Assembled labels {} on a {} grid with spacing {}", segmentation.labels, segmentation.image.GetSize(), segmentation.image.GetSpacing()
+    )
     if output is not None:
         write_segmentation(segmentation, output)
         logger.info("Wrote the assembled LabelMap to {} and its labels to {}", output, segmentation_labels_path(output))

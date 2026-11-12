@@ -1,4 +1,3 @@
-
 import gmsh
 import numpy as np
 import pytest

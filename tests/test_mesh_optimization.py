@@ -226,6 +226,7 @@ def test_high_order_nodes_follow_their_corners(meniscus_hex_blocks, incomplete):
     expected = mesh_quality(optimize_hexahedral_mesh(linear))
     assert mesh_quality(optimized).minimum == pytest.approx(expected.minimum, abs=1e-6)
     assert mesh_quality(optimized).mean == pytest.approx(expected.mean, abs=1e-6)
+
     # Node 8 lies on the edge from corner 0 to corner 1, and keeps its offset from that edge's midpoint.
     def offsets(nodes):
         return nodes[connectivity[:, 8]] - (nodes[connectivity[:, 0]] + nodes[connectivity[:, 1]]) / 2

@@ -19,7 +19,10 @@ def physical_centroid(image, value):
 def physical_corners(image):
     size = image.GetSize()
     return np.array(
-        [image.TransformContinuousIndexToPhysicalPoint([-0.5 if o == 0 else n - 0.5 for o, n in zip(offsets, size)]) for offsets in np.ndindex(2, 2, 2)]
+        [
+            image.TransformContinuousIndexToPhysicalPoint([-0.5 if o == 0 else n - 0.5 for o, n in zip(offsets, size)])
+            for offsets in np.ndindex(2, 2, 2)
+        ]
     )
 
 

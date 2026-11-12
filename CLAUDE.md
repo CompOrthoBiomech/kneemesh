@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Commands
 
-The project is managed with uv and requires Python 3.13 or newer. Type checking uses basedpyright, a dev dependency configured under `[tool.basedpyright]` in `pyproject.toml`; keep it at 0 errors and 0 warnings. No formatter is configured.
+The project is managed with uv and requires Python 3.13 or newer. Type checking uses basedpyright, a dev dependency configured under `[tool.basedpyright]` in `pyproject.toml`; keep it at 0 errors and 0 warnings. Ruff, also a dev dependency, formats code and sorts imports, configured under `[tool.ruff]` with a 150-character line length; run both commands below before committing.
 
 ```sh
 uv sync                                        # install dependencies
@@ -12,6 +12,8 @@ uv run pytest                                  # run all tests
 uv run pytest tests/test_vol.py                # run one test file
 uv run pytest tests/test_vol.py::test_name     # run one test
 uv run basedpyright                            # type check src and tests
+uv run ruff check --fix                        # lint and sort imports
+uv run ruff format                             # format code
 uv add <package>                               # add a runtime dependency
 uv add --dev <package>                         # add a dev dependency
 uv build                                       # build sdist and wheel

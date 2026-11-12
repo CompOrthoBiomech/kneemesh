@@ -33,6 +33,7 @@ dev = [
     "basedpyright>=1.40.2",
     "pytest>=9.2.0",
     "pytest-cov>=7.1.0",
+    "ruff>=0.17.5",
 ]
 docs = [
     "autodoc-pydantic>=2.2.0",
@@ -66,3 +67,15 @@ executionEnvironments = [
     { root = "tests", reportMissingParameterType = false, reportUnknownParameterType = false, reportPrivateUsage = false },
     { root = "src" },
 ]
+
+[tool.ruff]
+line-length = 150
+target-version = "py313"
+extend-exclude = ["docs/_build"]
+
+[tool.ruff.lint]
+# Ruff's defaults (pyflakes and pycodestyle errors) plus import sorting.
+extend-select = ["I"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["kneemesh"]

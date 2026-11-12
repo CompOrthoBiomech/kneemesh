@@ -271,7 +271,8 @@ class BrepMesh(BaseConfig):
     """
 
     breps: StructurePaths = Field(
-        default=None, description='B-rep file of each structure to mesh, by structure name, as JSON such as {"medial_meniscus": "medial_meniscus.brep"}'
+        default=None,
+        description='B-rep file of each structure to mesh, by structure name, as JSON such as {"medial_meniscus": "medial_meniscus.brep"}',
     )
     element_type: ElementType = Field(
         default="tet4", description="Element shape and node count: hex8, hex20, or hex27 hexahedra, or tet4 or tet10 tetrahedra"

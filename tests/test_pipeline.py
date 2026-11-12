@@ -171,11 +171,21 @@ def test_pipelines_build_and_mesh_hexahedral_blocks(in_tmp_path, meniscus_label)
     write_label_map(meniscus_label, in_tmp_path / "label.nii")
     brep_config = write_config(
         in_tmp_path / "brep.json",
-        {"label_map": "label.nii", "labels": {"lateral_meniscus": 1}, "output": "_blocks.brep", "meniscus": {"points_per_slice": 10, "hex_blocks": True}},
+        {
+            "label_map": "label.nii",
+            "labels": {"lateral_meniscus": 1},
+            "output": "_blocks.brep",
+            "meniscus": {"points_per_slice": 10, "hex_blocks": True},
+        },
     )
     mesh_config = write_config(
         in_tmp_path / "mesh.json",
-        {"breps": {"lateral_meniscus": "lateral_meniscus_blocks.brep"}, "element_type": "hex8", "output": "_{element_type}.vtk", "output_directory": "out"},
+        {
+            "breps": {"lateral_meniscus": "lateral_meniscus_blocks.brep"},
+            "element_type": "hex8",
+            "output": "_{element_type}.vtk",
+            "output_directory": "out",
+        },
     )
 
     assert brep_main(["--config", str(brep_config)]) == 0
@@ -188,7 +198,16 @@ def test_pipelines_build_and_mesh_hexahedral_blocks(in_tmp_path, meniscus_label)
 def test_mesh_pipeline_makes_serendipity_hexahedra(in_tmp_path, meniscus_hex_blocks):
     write_brep(meniscus_hex_blocks, in_tmp_path / "blocks.brep")
 
-    argv = ["--breps", '{"medial_meniscus": "blocks.brep"}', "--element-type", "hex20", "--meniscus.elements-per-edge", "2", "--meniscus.elements-along", "6"]
+    argv = [
+        "--breps",
+        '{"medial_meniscus": "blocks.brep"}',
+        "--element-type",
+        "hex20",
+        "--meniscus.elements-per-edge",
+        "2",
+        "--meniscus.elements-along",
+        "6",
+    ]
     assert mesh_main(argv) == 0
 
     assert list(mesh_entity_counts(in_tmp_path / "medial_meniscus_hex20.msh")) == ["Hexahedron 20"]

@@ -395,9 +395,7 @@ def _constraints(
         *(int(np.count_nonzero(kind[np.unique(corners)] == value)) for value in (_INTERIOR, _SURFACE, _EDGE, _FIXED)),
     )
     node_areas = np.where(kind == _SURFACE, np.linalg.norm(normals, axis=1) / 4, 0.0)
-    return _Constraints(
-        kind, nodes.copy(), direction, deviation * sizes, travel * sizes, boundary_edges, feature_edges, node_areas, preserve_volume
-    )
+    return _Constraints(kind, nodes.copy(), direction, deviation * sizes, travel * sizes, boundary_edges, feature_edges, node_areas, preserve_volume)
 
 
 def _local_sizes(nodes: np.ndarray, corners: np.ndarray) -> np.ndarray:
