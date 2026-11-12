@@ -2,7 +2,7 @@
 
 import tempfile
 import uuid
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from itertools import pairwise
@@ -29,7 +29,7 @@ class BRep:
 
 
 @contextmanager
-def gmsh_session() -> Iterator[None]:
+def gmsh_session() -> Generator[None]:
     """Run a block on a temporary gmsh model, leaving gmsh as it was found."""
     owns_gmsh = not gmsh.isInitialized()
     if owns_gmsh:

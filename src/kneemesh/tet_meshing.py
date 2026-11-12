@@ -1,7 +1,7 @@
 """Tetrahedral meshing of any solid B-rep with gmsh, and the Mesh it returns."""
 
 import tempfile
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from enum import StrEnum
@@ -143,7 +143,7 @@ def require_element_order(element_order: int) -> None:
 
 
 @contextmanager
-def gmsh_options(options: dict[str, float | bool]) -> Iterator[None]:
+def gmsh_options(options: dict[str, float | bool]) -> Generator[None]:
     """Set gmsh numeric options for a block, restoring them afterward.
 
     gmsh options are global, so they would otherwise outlive the session when
