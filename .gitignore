@@ -1,3 +1,10 @@
+# Other files
+*.brep
+*.log
+*.avi
+*.mp4
+*.vtk
+*.msh
 # Python-generated files
 __pycache__/
 *.py[oc]
