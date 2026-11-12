@@ -1,0 +1,616 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../genindex.html"><link rel="search" title="Search" href="../../search.html">
+
+    <!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
+        <title>kneemesh.config - kneemesh</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../../_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../../_static/autodoc_pydantic.css" />
+    <link rel="stylesheet" type="text/css" href="../../_static/styles/furo-extensions.css?v=8dab3a3b" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../../index.html"><div class="brand">kneemesh</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon no-toc" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../../index.html">
+  
+  <span class="sidebar-brand-text">kneemesh</span>
+  
+</a><form class="sidebar-search-container" method="get" action="../../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../usage.html">Usage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../pipeline.html">Pipeline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../configuration.html">Configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api.html">API reference</a></li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon no-toc" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <h1>Source code for kneemesh.config</h1><div class="highlight"><pre>
+<span></span><span class="sd">"""Configuration models and parsing them from JSON."""</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">os</span><span class="w"> </span><span class="kn">import</span> <span class="n">PathLike</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Annotated</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">ClassVar</span><span class="p">,</span> <span class="n">Literal</span><span class="p">,</span> <span class="n">Self</span><span class="p">,</span> <span class="n">get_args</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">pydantic</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseModel</span><span class="p">,</span> <span class="n">BeforeValidator</span><span class="p">,</span> <span class="n">ConfigDict</span><span class="p">,</span> <span class="n">Field</span><span class="p">,</span> <span class="n">model_validator</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">kneemesh.disk</span><span class="w"> </span><span class="kn">import</span> <span class="n">BREP_SUFFIXES</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">kneemesh.mesh_optimization</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">DEFAULT_FEATURE_ANGLE</span><span class="p">,</span>
+    <span class="n">DEFAULT_LAPLACIAN_ITERATIONS</span><span class="p">,</span>
+    <span class="n">DEFAULT_OPTIMIZATION_ITERATIONS</span><span class="p">,</span>
+    <span class="n">DEFAULT_SURFACE_DEVIATION</span><span class="p">,</span>
+    <span class="n">DEFAULT_SURFACE_TRAVEL</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">kneemesh.segmentation</span><span class="w"> </span><span class="kn">import</span> <span class="n">DEFAULT_PADDING_VOXELS</span><span class="p">,</span> <span class="n">Interpolator</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">kneemesh.tet_meshing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Algorithm2D</span><span class="p">,</span> <span class="n">Algorithm3D</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">kneemesh.vol</span><span class="w"> </span><span class="kn">import</span> <span class="n">DEFAULT_SMOOTHING_ITERATIONS</span><span class="p">,</span> <span class="n">DEFAULT_SMOOTHING_PASS_BAND</span>
+
+
+<div class="viewcode-block" id="BaseConfig">
+<a class="viewcode-back" href="../../api.html#kneemesh.config.BaseConfig">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">BaseConfig</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Base class for configuration models.</span>
+
+<span class="sd">    Unknown fields are rejected so that misspelled options fail at load time</span>
+<span class="sd">    instead of being silently ignored.</span>
+<span class="sd">    """</span>
+
+    <span class="n">model_config</span><span class="p">:</span> <span class="n">ClassVar</span><span class="p">[</span><span class="n">ConfigDict</span><span class="p">]</span> <span class="o">=</span> <span class="n">ConfigDict</span><span class="p">(</span><span class="n">extra</span><span class="o">=</span><span class="s2">"forbid"</span><span class="p">)</span>
+
+<div class="viewcode-block" id="BaseConfig.from_json">
+<a class="viewcode-back" href="../../api.html#kneemesh.config.BaseConfig.from_json">[docs]</a>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">from_json</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">PathLike</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Parse and validate a configuration from a JSON file."""</span>
+        <span class="k">return</span> <span class="bp">cls</span><span class="o">.</span><span class="n">model_validate_json</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="n">path</span><span class="p">)</span><span class="o">.</span><span class="n">read_bytes</span><span class="p">())</span></div>
+</div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_none_from_text</span><span class="p">(</span><span class="n">value</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Read "none" or "null" as None, so command-line overrides can clear optional values."""</span>
+    <span class="k">return</span> <span class="kc">None</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="ow">and</span> <span class="n">value</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"none"</span><span class="p">,</span> <span class="s2">"null"</span><span class="p">)</span> <span class="k">else</span> <span class="n">value</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_json_from_text</span><span class="p">(</span><span class="n">value</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Parse JSON text, so command-line overrides can give mappings such as '{"tibia": 1}', and read "none" as None."""</span>
+    <span class="n">value</span> <span class="o">=</span> <span class="n">_none_from_text</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="k">else</span> <span class="n">value</span>
+
+
+<span class="n">Structure</span> <span class="o">=</span> <span class="n">Literal</span><span class="p">[</span>
+    <span class="s2">"lateral_meniscus"</span><span class="p">,</span>
+    <span class="s2">"medial_meniscus"</span><span class="p">,</span>
+    <span class="s2">"patellar_cartilage"</span><span class="p">,</span>
+    <span class="s2">"femoral_cartilage"</span><span class="p">,</span>
+    <span class="s2">"lateral_tibial_cartilage"</span><span class="p">,</span>
+    <span class="s2">"medial_tibial_cartilage"</span><span class="p">,</span>
+    <span class="s2">"femur"</span><span class="p">,</span>
+    <span class="s2">"tibia"</span><span class="p">,</span>
+    <span class="s2">"patella"</span><span class="p">,</span>
+<span class="p">]</span>
+<span class="sd">"""Names of the knee structures. Keys of labels, label_maps, and breps must be among them, and each picks its pipeline."""</span>
+
+<span class="n">STRUCTURES</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Structure</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="n">get_args</span><span class="p">(</span><span class="n">Structure</span><span class="p">)</span>
+
+<span class="n">BONES</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">Structure</span><span class="p">,</span> <span class="n">Structure</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">"patellar_cartilage"</span><span class="p">:</span> <span class="s2">"patella"</span><span class="p">,</span>
+    <span class="s2">"femoral_cartilage"</span><span class="p">:</span> <span class="s2">"femur"</span><span class="p">,</span>
+    <span class="s2">"lateral_tibial_cartilage"</span><span class="p">:</span> <span class="s2">"tibia"</span><span class="p">,</span>
+    <span class="s2">"medial_tibial_cartilage"</span><span class="p">:</span> <span class="s2">"tibia"</span><span class="p">,</span>
+<span class="p">}</span>
+<span class="sd">"""The bone under each cartilage, which must be in the same segmentation to orient it."""</span>
+
+<span class="n">ElementType</span> <span class="o">=</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"hex8"</span><span class="p">,</span> <span class="s2">"hex20"</span><span class="p">,</span> <span class="s2">"hex27"</span><span class="p">,</span> <span class="s2">"tet4"</span><span class="p">,</span> <span class="s2">"tet10"</span><span class="p">]</span>
+<span class="sd">"""Element shape and node count: 8-node, 20-node serendipity, or 27-node hexahedra, or 4- or 10-node tetrahedra."""</span>
+
+<span class="n">OptionalFloat</span> <span class="o">=</span> <span class="n">Annotated</span><span class="p">[</span><span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span> <span class="n">BeforeValidator</span><span class="p">(</span><span class="n">_none_from_text</span><span class="p">)]</span>
+<span class="n">OptionalPath</span> <span class="o">=</span> <span class="n">Annotated</span><span class="p">[</span><span class="n">Path</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span> <span class="n">BeforeValidator</span><span class="p">(</span><span class="n">_none_from_text</span><span class="p">)]</span>
+<span class="n">LabelValues</span> <span class="o">=</span> <span class="n">Annotated</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="n">Structure</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span> <span class="n">BeforeValidator</span><span class="p">(</span><span class="n">_json_from_text</span><span class="p">)]</span>
+<span class="n">StructurePaths</span> <span class="o">=</span> <span class="n">Annotated</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="n">Structure</span><span class="p">,</span> <span class="n">Path</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span> <span class="n">BeforeValidator</span><span class="p">(</span><span class="n">_json_from_text</span><span class="p">)]</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_label_maps_field</span><span class="p">(</span><span class="n">summary</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="sa">f</span><span class="s1">'</span><span class="si">{</span><span class="n">summary</span><span class="si">}</span><span class="s1">, by structure name, as JSON such as </span><span class="se">{{</span><span class="s1">"tibia": "tibia.nii"</span><span class="se">}}</span><span class="s1">. Each file</span><span class="se">\'</span><span class="s1">s nonzero voxels are its structure'</span><span class="p">,</span>
+    <span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_interpolator_field</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">Field</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="s2">"label_gaussian"</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">"Resampling interpolator for assembling label_maps: label_gaussian or nearest_neighbor"</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_padding_field</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">Field</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="n">DEFAULT_PADDING_VOXELS</span><span class="p">,</span> <span class="n">ge</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">"Background voxels around the assembled label_maps on each side"</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_output_directory_field</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">Field</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="n">Path</span><span class="p">(</span><span class="s2">"."</span><span class="p">),</span> <span class="n">description</span><span class="o">=</span><span class="s2">"Directory to write the output files in, created if missing"</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_check_suffix</span><span class="p">(</span><span class="n">suffix</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">extensions</span><span class="p">:</span> <span class="nb">frozenset</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Raise ValueError unless suffix is a file name ending with an extension, from extensions if given."""</span>
+    <span class="k">if</span> <span class="s2">"/"</span> <span class="ow">in</span> <span class="n">suffix</span> <span class="ow">or</span> <span class="s2">"</span><span class="se">\\</span><span class="s2">"</span> <span class="ow">in</span> <span class="n">suffix</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"The output suffix is appended to each structure's name and cannot hold a directory, got </span><span class="si">{</span><span class="n">suffix</span><span class="si">!r}</span><span class="s2">"</span><span class="p">)</span>
+    <span class="n">extension</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="sa">f</span><span class="s2">"structure</span><span class="si">{</span><span class="n">suffix</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span><span class="o">.</span><span class="n">suffix</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">extension</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"The output suffix needs a file extension, got </span><span class="si">{</span><span class="n">suffix</span><span class="si">!r}</span><span class="s2">"</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">extensions</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">extension</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">extensions</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"The output suffix needs extension </span><span class="si">{</span><span class="s1">' or '</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">sorted</span><span class="p">(</span><span class="n">extensions</span><span class="p">))</span><span class="si">}</span><span class="s2">, got </span><span class="si">{</span><span class="n">suffix</span><span class="si">!r}</span><span class="s2">"</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="LabelMapAssembly">
+<a class="viewcode-back" href="../../configuration.html#kneemesh.config.LabelMapAssembly">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">LabelMapAssembly</span><span class="p">(</span><span class="n">BaseConfig</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Settings for assembling single-label LabelMaps into one multilabel LabelMap.</span>
+
+<span class="sd">    Structures get label values 1, 2, ... in the order of label_maps.</span>
+<span class="sd">    """</span>
+
+    <span class="n">label_maps</span><span class="p">:</span> <span class="n">StructurePaths</span> <span class="o">=</span> <span class="n">_label_maps_field</span><span class="p">(</span><span class="s2">"Single-label LabelMaps to assemble"</span><span class="p">)</span>
+    <span class="n">interpolator</span><span class="p">:</span> <span class="n">Interpolator</span> <span class="o">=</span> <span class="n">_interpolator_field</span><span class="p">()</span>
+    <span class="n">padding</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">_padding_field</span><span class="p">()</span>
+    <span class="n">output</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="n">Path</span><span class="p">(</span><span class="s2">"label_map.nrrd"</span><span class="p">),</span>
+        <span class="n">description</span><span class="o">=</span><span class="s2">"Multilabel LabelMap to write: .nii, .nrrd, or .mhd, with its labels in &lt;stem&gt;_labels.json beside it"</span><span class="p">,</span>
+    <span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="MeniscusBrep">
+<a class="viewcode-back" href="../../configuration.html#kneemesh.config.MeniscusBrep">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">MeniscusBrep</span><span class="p">(</span><span class="n">BaseConfig</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Settings for building the lateral and medial meniscus B-reps, with the defaults of each step."""</span>
+
+    <span class="n">sigma</span><span class="p">:</span> <span class="n">OptionalFloat</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="s2">"Gaussian smoothing of the distance field in physical units. None spans 3 voxel edges per axis, 0 disables"</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">level</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">"Distance of the surface from the label boundary; positive is outside"</span><span class="p">)</span>
+    <span class="n">smoothing_iterations</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="n">DEFAULT_SMOOTHING_ITERATIONS</span><span class="p">,</span> <span class="n">ge</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">"Windowed sinc smoothing iterations on the surface before slicing; 0 disables"</span>
+    <span class="p">)</span>
+    <span class="n">smoothing_pass_band</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="n">DEFAULT_SMOOTHING_PASS_BAND</span><span class="p">,</span> <span class="n">gt</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">le</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">"Windowed sinc pass band in (0, 2]; lower smooths and shrinks more"</span>
+    <span class="p">)</span>
+    <span class="n">spacing</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="mf">5.0</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">"Arc-length distance between slices along the centerline, in physical units"</span><span class="p">)</span>
+    <span class="n">points_per_slice</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="mi">32</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">"Points on each slice contour. Use about 10 for hexahedral blocks"</span><span class="p">)</span>
+    <span class="n">spline_order</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">"Polynomial degree of the B-spline geometry"</span><span class="p">)</span>
+    <span class="n">cap</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"none"</span><span class="p">,</span> <span class="s2">"planar"</span><span class="p">,</span> <span class="s2">"smooth"</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="s2">"planar"</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">"How to close the ends; ignored for hexahedral blocks"</span><span class="p">)</span>
+    <span class="n">cap_offset</span><span class="p">:</span> <span class="n">OptionalFloat</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">"Apex offset of smooth caps in physical units. None is a quarter of the equivalent radius"</span>
+    <span class="p">)</span>
+    <span class="n">hex_blocks</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">"Build the five-block butterfly solid with planar caps that hexahedral meshing needs"</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="MeniscusMesh">
+<a class="viewcode-back" href="../../configuration.html#kneemesh.config.MeniscusMesh">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">MeniscusMesh</span><span class="p">(</span><span class="n">BaseConfig</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Settings for meshing the lateral and medial meniscus B-reps, with the defaults of each meshing function.</span>
+
+<span class="sd">    Hexahedral element types need B-reps built with hex_blocks.</span>
+<span class="sd">    """</span>
+
+    <span class="n">min_size</span><span class="p">:</span> <span class="n">OptionalFloat</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="s2">"Smallest tetrahedron size in physical units. None is 1/20 of the shortest side of the B-rep's oriented bounding box, "</span>
+        <span class="o">+</span> <span class="s2">"but no more than max_size. 0 sets no limit"</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">max_size</span><span class="p">:</span> <span class="n">OptionalFloat</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="s2">"Largest tetrahedron size in physical units. None is 1/4 of the shortest side of the B-rep's oriented bounding box, "</span>
+        <span class="o">+</span> <span class="s2">"but no less than min_size"</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">elements_per_circle</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">"Tetrahedra per circle of surface curvature; 0 disables curvature sizing"</span><span class="p">)</span>
+    <span class="n">algorithm_2d</span><span class="p">:</span> <span class="n">Algorithm2D</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="n">Algorithm2D</span><span class="o">.</span><span class="n">FRONTAL_DELAUNAY</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">"gmsh surface algorithm for tetrahedral meshing"</span><span class="p">)</span>
+    <span class="n">algorithm_3d</span><span class="p">:</span> <span class="n">Algorithm3D</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="n">Algorithm3D</span><span class="o">.</span><span class="n">DELAUNAY</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">"gmsh volume algorithm for tetrahedral meshing"</span><span class="p">)</span>
+    <span class="n">elements_per_edge</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">"Hexahedra along each edge of a cap"</span><span class="p">)</span>
+    <span class="n">elements_along</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">"Hexahedra along the solid between the caps"</span><span class="p">)</span>
+    <span class="n">optimize</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">"Move hexahedral mesh nodes to raise the elements' scaled Jacobians after meshing"</span><span class="p">)</span>
+    <span class="n">laplacian_iterations</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="n">DEFAULT_LAPLACIAN_ITERATIONS</span><span class="p">,</span> <span class="n">ge</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">"Smart Laplacian sweeps when optimizing"</span><span class="p">)</span>
+    <span class="n">optimization_iterations</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="n">DEFAULT_OPTIMIZATION_ITERATIONS</span><span class="p">,</span> <span class="n">ge</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">"Gradient steps minimizing the sum of 1 / scaled Jacobian when optimizing"</span>
+    <span class="p">)</span>
+    <span class="n">surface_deviation</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="n">DEFAULT_SURFACE_DEVIATION</span><span class="p">,</span>
+        <span class="n">ge</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="s2">"How far boundary nodes may move off the surface when optimizing, as a fraction of the local element size"</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">surface_travel</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="n">DEFAULT_SURFACE_TRAVEL</span><span class="p">,</span>
+        <span class="n">ge</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="s2">"How far boundary nodes may slide along the surface when optimizing, as a fraction of the local element size"</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">feature_angle</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="n">DEFAULT_FEATURE_ANGLE</span><span class="p">,</span>
+        <span class="n">gt</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+        <span class="n">lt</span><span class="o">=</span><span class="mi">180</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="s2">"Angle in degrees between boundary faces above which their shared edge is kept as a feature when optimizing"</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">preserve_volume</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">"Keep the mesh's volume when optimizing by cancelling the net outward surface offset"</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="LabelMapBrep">
+<a class="viewcode-back" href="../../configuration.html#kneemesh.config.LabelMapBrep">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">LabelMapBrep</span><span class="p">(</span><span class="n">BaseConfig</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Settings for building a B-rep of every structure in a segmented LabelMap.</span>
+
+<span class="sd">    The segmentation is either one multilabel LabelMap, label_map, with labels</span>
+<span class="sd">    naming its values, or several single-label LabelMaps, label_maps, that are</span>
+<span class="sd">    assembled onto one grid. Give one or the other. Each structure named in</span>
+<span class="sd">    labels or label_maps is built by its own pipeline, with the settings of</span>
+<span class="sd">    its section such as meniscus, and written to</span>
+<span class="sd">    &lt;output_directory&gt;/&lt;structure&gt;&lt;output&gt;.</span>
+<span class="sd">    """</span>
+
+    <span class="n">label_map</span><span class="p">:</span> <span class="n">OptionalPath</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">"Multilabel LabelMap to read: .nii, .nrrd, or .mhd"</span><span class="p">)</span>
+    <span class="n">labels</span><span class="p">:</span> <span class="n">LabelValues</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="s1">'Label value of each structure in label_map by name, as JSON such as {"tibia": 1, "medial_tibial_cartilage": 2}'</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">label_maps</span><span class="p">:</span> <span class="n">StructurePaths</span> <span class="o">=</span> <span class="n">_label_maps_field</span><span class="p">(</span><span class="s2">"Single-label LabelMaps to assemble instead of label_map"</span><span class="p">)</span>
+    <span class="n">interpolator</span><span class="p">:</span> <span class="n">Interpolator</span> <span class="o">=</span> <span class="n">_interpolator_field</span><span class="p">()</span>
+    <span class="n">padding</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">_padding_field</span><span class="p">()</span>
+    <span class="n">assembled_label_map</span><span class="p">:</span> <span class="n">OptionalPath</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="s2">"Where to write the multilabel LabelMap assembled from label_maps, with its labels in &lt;stem&gt;_labels.json beside it. "</span>
+        <span class="o">+</span> <span class="s2">"None does not write it"</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">output</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="s2">".brep"</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">"Suffix of each B-rep file, appended to its structure's name, such as _hex.brep for lateral_meniscus_hex.brep"</span>
+    <span class="p">)</span>
+    <span class="n">output_directory</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">_output_directory_field</span><span class="p">()</span>
+    <span class="n">meniscus</span><span class="p">:</span> <span class="n">MeniscusBrep</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="n">MeniscusBrep</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">"Settings for the lateral and medial menisci"</span><span class="p">)</span>
+
+    <span class="nd">@model_validator</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="s2">"after"</span><span class="p">)</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_check_sources</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">label_map</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">label_maps</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"Give label_map or label_maps, not both"</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">labels</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">label_maps</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"labels names the values in label_map; label_maps are named by their keys"</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">label_map</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">labels</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"Give labels naming the structures in label_map"</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">assembled_label_map</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">label_maps</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"assembled_label_map is written only when assembling label_maps"</span><span class="p">)</span>
+        <span class="n">structures</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">structures</span>
+        <span class="k">for</span> <span class="n">structure</span> <span class="ow">in</span> <span class="n">structures</span><span class="p">:</span>
+            <span class="n">bone</span> <span class="o">=</span> <span class="n">BONES</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">structure</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">bone</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">bone</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">structures</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">structure</span><span class="si">}</span><span class="s2"> needs its bone, </span><span class="si">{</span><span class="n">bone</span><span class="si">}</span><span class="s2">, in the segmentation; got </span><span class="si">{</span><span class="nb">list</span><span class="p">(</span><span class="n">structures</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+        <span class="n">_check_suffix</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">output</span><span class="p">,</span> <span class="n">BREP_SUFFIXES</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">structures</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Structure</span><span class="p">,</span> <span class="o">...</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">"""The structures named in labels or label_maps, in order, or none if neither is given."""</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">labels</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="nb">tuple</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">labels</span><span class="p">)</span>
+        <span class="k">return</span> <span class="nb">tuple</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">label_maps</span><span class="p">)</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">label_maps</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="p">()</span>
+
+<div class="viewcode-block" id="LabelMapBrep.output_path">
+<a class="viewcode-back" href="../../api.html#kneemesh.config.LabelMapBrep.output_path">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">output_path</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">structure</span><span class="p">:</span> <span class="n">Structure</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Path</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""The B-rep file to write for structure."""</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_directory</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">structure</span><span class="si">}{</span><span class="bp">self</span><span class="o">.</span><span class="n">output</span><span class="si">}</span><span class="s2">"</span></div>
+</div>
+
+
+
+<span class="c1"># Each element type's shape, polynomial order, and whether high-order elements omit face and interior nodes.</span>
+<span class="n">ELEMENT_TYPES</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">ElementType</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Literal</span><span class="p">[</span><span class="s2">"tetrahedral"</span><span class="p">,</span> <span class="s2">"hexahedral"</span><span class="p">],</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">bool</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">"hex8"</span><span class="p">:</span> <span class="p">(</span><span class="s2">"hexahedral"</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="kc">False</span><span class="p">),</span>
+    <span class="s2">"hex20"</span><span class="p">:</span> <span class="p">(</span><span class="s2">"hexahedral"</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="kc">True</span><span class="p">),</span>
+    <span class="s2">"hex27"</span><span class="p">:</span> <span class="p">(</span><span class="s2">"hexahedral"</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="kc">False</span><span class="p">),</span>
+    <span class="s2">"tet4"</span><span class="p">:</span> <span class="p">(</span><span class="s2">"tetrahedral"</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="kc">False</span><span class="p">),</span>
+    <span class="s2">"tet10"</span><span class="p">:</span> <span class="p">(</span><span class="s2">"tetrahedral"</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="kc">False</span><span class="p">),</span>
+<span class="p">}</span>
+
+
+<div class="viewcode-block" id="BrepMesh">
+<a class="viewcode-back" href="../../configuration.html#kneemesh.config.BrepMesh">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">BrepMesh</span><span class="p">(</span><span class="n">BaseConfig</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Settings for meshing the B-rep of each structure.</span>
+
+<span class="sd">    Each structure in breps is meshed by its own pipeline, with the settings</span>
+<span class="sd">    of its section such as meniscus, and written to</span>
+<span class="sd">    &lt;output_directory&gt;/&lt;structure&gt;&lt;output&gt;.</span>
+<span class="sd">    """</span>
+
+    <span class="n">breps</span><span class="p">:</span> <span class="n">StructurePaths</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="s1">'B-rep file of each structure to mesh, by structure name, as JSON such as {"medial_meniscus": "medial_meniscus.brep"}'</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">element_type</span><span class="p">:</span> <span class="n">ElementType</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="s2">"tet4"</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">"Element shape and node count: hex8, hex20, or hex27 hexahedra, or tet4 or tet10 tetrahedra"</span>
+    <span class="p">)</span>
+    <span class="n">output</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="s2">"_</span><span class="si">{element_type}</span><span class="s2">.msh"</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="s2">"Suffix of each mesh file, appended to its structure's name, where </span><span class="si">{element_type}</span><span class="s2"> is replaced by the element type. "</span>
+        <span class="o">+</span> <span class="s2">"gmsh infers the format from the extension"</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">output_directory</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">_output_directory_field</span><span class="p">()</span>
+    <span class="n">meniscus</span><span class="p">:</span> <span class="n">MeniscusMesh</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="n">MeniscusMesh</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">"Settings for the lateral and medial menisci"</span><span class="p">)</span>
+
+    <span class="nd">@model_validator</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="s2">"after"</span><span class="p">)</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_check_mesh</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">suffix</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_suffix</span>
+        <span class="k">except</span> <span class="p">(</span><span class="ne">KeyError</span><span class="p">,</span> <span class="ne">IndexError</span><span class="p">,</span> <span class="ne">ValueError</span><span class="p">)</span> <span class="k">as</span> <span class="n">error</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"The output suffix may hold only the </span><span class="se">{{</span><span class="s2">element_type</span><span class="se">}}</span><span class="s2"> placeholder, got </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">output</span><span class="si">!r}</span><span class="s2">"</span><span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">error</span>
+        <span class="n">_check_suffix</span><span class="p">(</span><span class="n">suffix</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">meniscus</span><span class="o">.</span><span class="n">optimize</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">element_shape</span> <span class="o">!=</span> <span class="s2">"hexahedral"</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"optimize applies only to hexahedral meshes"</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">element_shape</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"tetrahedral"</span><span class="p">,</span> <span class="s2">"hexahedral"</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">"""The shape of element_type."""</span>
+        <span class="k">return</span> <span class="n">ELEMENT_TYPES</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">element_type</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">element_order</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""The polynomial order of element_type."""</span>
+        <span class="k">return</span> <span class="n">ELEMENT_TYPES</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">element_type</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">second_order_incomplete</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Whether element_type omits face and interior nodes."""</span>
+        <span class="k">return</span> <span class="n">ELEMENT_TYPES</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">element_type</span><span class="p">][</span><span class="mi">2</span><span class="p">]</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">output_suffix</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""output with its {element_type} placeholder replaced."""</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">output</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">element_type</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">element_type</span><span class="p">)</span>
+
+<div class="viewcode-block" id="BrepMesh.output_path">
+<a class="viewcode-back" href="../../api.html#kneemesh.config.BrepMesh.output_path">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">output_path</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">structure</span><span class="p">:</span> <span class="n">Structure</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Path</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""The mesh file to write for structure."""</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_directory</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">structure</span><span class="si">}{</span><span class="bp">self</span><span class="o">.</span><span class="n">output_suffix</span><span class="si">}</span><span class="s2">"</span></div>
+</div>
+
+</pre></div>
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          
+          
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026, Scott Sibole
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer no-toc">
+      
+      
+      
+    </aside>
+  </div>
+</div><script src="../../_static/documentation_options.js?v=a58bc63e"></script>
+    <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/scripts/furo.js?v=46bd48cc"></script>
+    </body>
+</html>
