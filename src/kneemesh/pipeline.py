@@ -34,6 +34,7 @@ from kneemesh.config import (
 from kneemesh.disk import read_brep, read_label_map, write_brep, write_mesh
 from kneemesh.geo.meniscus import centerline, contours_to_brep, contours_to_hex_blocks, slice_isocontour
 from kneemesh.mesh.meniscus import hexahedral_mesh
+from kneemesh.segmentation import Segmentation, assemble_label_maps
 from kneemesh.tet_meshing import Mesh, tetrahedral_mesh
 from kneemesh.vol import extract_isocontour, signed_distance_field, smooth_isocontour
 
@@ -81,13 +82,34 @@ def run_mesh(config: BrepMesh) -> Mesh:
     return mesh
 
 
-def _meniscus_brep(config: MeniscusBrep) -> BRep:
+def load_segmentation(config: LabelMapBrep) -> Segmentation:
+    """Read the multilabel LabelMap config names, or assemble its single-label LabelMaps.
+
+    Raises:
+        ValueError: If config gives neither label_map nor label_maps, or a
+            LabelMap cannot be read or combined.
+    """
+    if config.label_maps is not None:
+        logger.info("Assembling {} with the {} interpolator", ", ".join(config.label_maps), config.interpolator)
+        images = {}
+        for name, path in config.label_maps.items():
+            logger.info("Reading LabelMap {} for {}", path, name)
+            images[name] = read_label_map(path)
+        return assemble_label_maps(images, config.interpolator, config.padding)
+    if config.label_map is None:
+        raise ValueError("Give a multilabel label_map or single-label label_maps to read")
     logger.info("Reading LabelMap {}", config.label_map)
-    label_map = read_label_map(config.label_map)
-    logger.info("Fitting the centerline of label {}", config.label)
-    curve = centerline(label_map, config.label)
+    labels = config.labels if config.labels is not None else {config.name: 1}
+    return Segmentation(read_label_map(config.label_map), labels)
+
+
+def _meniscus_brep(config: MeniscusBrep) -> BRep:
+    segmentation = load_segmentation(config)
+    label_map, label = segmentation.image, segmentation.value(config.name)
+    logger.info("Fitting the centerline of {} (label {})", config.name, label)
+    curve = centerline(label_map, label)
     logger.info("Computing the signed distance field")
-    distance_field = signed_distance_field(label_map, config.label, config.sigma)
+    distance_field = signed_distance_field(label_map, label, config.sigma)
     logger.info("Extracting the surface at level {}", config.level)
     surface = extract_isocontour(distance_field, config.level)
     logger.info("Smoothing the surface with {} iterations and pass band {}", config.smoothing_iterations, config.smoothing_pass_band)

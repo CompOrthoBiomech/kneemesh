@@ -25,9 +25,11 @@ pip install kneemesh
 Two command-line pipelines take the structure as their first argument, then a JSON configuration, `--option value` overrides, or both. Run `kneemesh-brep meniscus --help` to list every option and its default.
 
 ```sh
-kneemesh-brep meniscus --label-map knee.nii --output meniscus.brep --cap planar
+kneemesh-brep meniscus --label-map meniscus.nii --output meniscus.brep --cap planar
 kneemesh-mesh meniscus --brep meniscus.brep --output meniscus.msh --max-size 1.0
 ```
+
+A multilabel LabelMap takes `--labels` naming its values, such as `--labels '{"tibia": 1, "medial_meniscus": 3}' --name medial_meniscus`. Separate single-label LabelMaps can be given with `--label-maps '{"tibia": "tibia.nii", "medial_meniscus": "meniscus.nii"}'` instead, and are resampled onto one grid. See the documentation's usage page.
 
 Each run saves the configuration it used, so it can be repeated with `--config`. Without `--config` it is saved as `settings<timestamp>.json` in the working directory. With `--config` and overrides, the changed configuration is saved beside the original as `<name>_modified.json`.
 

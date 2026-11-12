@@ -5,6 +5,8 @@ Modules at the package root apply to every structure. The `geo` and `mesh` subpa
 ```{eval-rst}
 .. automodule:: kneemesh.vol
 
+.. automodule:: kneemesh.segmentation
+
 .. automodule:: kneemesh.brep
 
 .. automodule:: kneemesh.tet_meshing

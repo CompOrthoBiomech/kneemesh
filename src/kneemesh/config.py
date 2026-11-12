@@ -1,11 +1,13 @@
 """Configuration models and parsing them from JSON."""
 
+import json
 from os import PathLike
 from pathlib import Path
 from typing import Annotated, Any, Literal, Self
 
-from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, model_validator
 
+from kneemesh.segmentation import DEFAULT_PADDING_VOXELS, Interpolator
 from kneemesh.tet_meshing import Algorithm2D, Algorithm3D
 from kneemesh.vol import DEFAULT_SMOOTHING_ITERATIONS, DEFAULT_SMOOTHING_PASS_BAND
 
@@ -30,15 +32,71 @@ def _none_from_text(value: Any) -> Any:
     return None if isinstance(value, str) and value.strip().lower() in ("none", "null") else value
 
 
+def _json_from_text(value: Any) -> Any:
+    """Parse JSON text, so command-line overrides can give mappings such as '{"tibia": 1}', and read "none" as None."""
+    value = _none_from_text(value)
+    return json.loads(value) if isinstance(value, str) else value
+
+
 OptionalFloat = Annotated[float | None, BeforeValidator(_none_from_text)]
+OptionalPath = Annotated[Path | None, BeforeValidator(_none_from_text)]
+LabelValues = Annotated[dict[str, int] | None, BeforeValidator(_json_from_text)]
+LabelPaths = Annotated[dict[str, Path] | None, BeforeValidator(_json_from_text)]
 
 
 class LabelMapBrep(BaseConfig):
-    """Settings every B-rep pipeline shares: the LabelMap to read, the structure's label in it, and the file to write."""
+    """Settings every B-rep pipeline shares: the segmentation to read, the structure to build, and the file to write.
 
-    label_map: Path = Field(default=Path("label_map.nii"), description="LabelMap to read: .nii, .nrrd, or .mhd")
+    The segmentation is either one multilabel LabelMap, label_map, with labels
+    naming its values, or several single-label LabelMaps, label_maps, that are
+    assembled onto one grid. Give one or the other.
+    """
+
+    label_map: OptionalPath = Field(default=None, description="Multilabel LabelMap to read: .nii, .nrrd, or .mhd")
+    labels: LabelValues = Field(
+        default=None,
+        description='Label value of each structure in label_map by name, as JSON such as {"tibia": 1, "medial_tibial_cartilage": 2}. '
+        "None reads label_map as holding only this structure, with value 1",
+    )
+    label_maps: LabelPaths = Field(
+        default=None,
+        description='Single-label LabelMaps to assemble instead of label_map, by structure name, as JSON such as {"tibia": "tibia.nii"}. '
+        "Each file's nonzero voxels are its structure",
+    )
+    interpolator: Interpolator = Field(
+        default="label_gaussian", description="Resampling interpolator for assembling label_maps: label_gaussian or nearest_neighbor"
+    )
+    padding: int = Field(default=DEFAULT_PADDING_VOXELS, ge=0, description="Background voxels around the assembled label_maps on each side")
+    name: str = Field(default="structure", description="Name of the structure to build, a key of labels or label_maps")
     output: Path = Field(default=Path("structure.brep"), description="B-rep file to write")
-    label: int = Field(default=1, description="Value of the structure in the LabelMap")
+
+    @model_validator(mode="after")
+    def _check_sources(self) -> Self:
+        if self.label_map is not None and self.label_maps is not None:
+            raise ValueError("Give label_map or label_maps, not both")
+        if self.labels is not None and self.label_maps is not None:
+            raise ValueError("labels names the values in label_map; label_maps are named by their keys")
+        self.require_label(self.name)
+        return self
+
+    def require_label(self, name: str) -> None:
+        """Raise ValueError if labels or label_maps is given and does not name name."""
+        names = self.labels if self.labels is not None else self.label_maps
+        if names is not None and name not in names:
+            raise ValueError(f"No label named {name!r}; got {sorted(names)}")
+
+
+class CartilageBrep(LabelMapBrep):
+    """Settings every cartilage B-rep pipeline shares, adding the underlying bone that orients the cartilage."""
+
+    bone: str = Field(default="bone", description="Name of the bone under the cartilage, a key of labels or label_maps")
+
+    @model_validator(mode="after")
+    def _check_bone(self) -> Self:
+        if self.bone == self.name:
+            raise ValueError(f"The cartilage and its bone need different labels, got {self.name!r} for both")
+        self.require_label(self.bone)
+        return self
 
 
 class BrepMesh(BaseConfig):
@@ -53,6 +111,7 @@ class BrepMesh(BaseConfig):
 class MeniscusBrep(LabelMapBrep):
     """Settings for building a meniscus B-rep from a segmented LabelMap, with the defaults of each step."""
 
+    name: str = Field(default="meniscus", description="Name of the structure to build, a key of labels or label_maps")
     output: Path = Field(default=Path("meniscus.brep"), description="B-rep file to write")
     sigma: OptionalFloat = Field(
         default=None,
@@ -92,14 +151,15 @@ class MeniscusMesh(BrepMesh):
     elements_along: int = Field(default=20, description="Hexahedra along the solid between the caps")
 
 
-class TibialCartilageBrep(LabelMapBrep):
+class TibialCartilageBrep(CartilageBrep):
     """Settings for building a tibial cartilage B-rep from a segmented LabelMap. Not implemented yet."""
 
-    output: Path = Field(default=Path("tibial_cartilage.brep"), description="B-rep file to write")
     name: str = Field(
         default="tibial_cartilage",
-        description="Name of the cartilage plate, such as lateral or medial. Both plates share one B-rep and meshing strategy",
+        description="Name of the cartilage plate's label, such as lateral_tibial_cartilage. Both plates share one B-rep and meshing strategy",
     )
+    bone: str = Field(default="tibia", description="Name of the bone under the cartilage, a key of labels or label_maps")
+    output: Path = Field(default=Path("tibial_cartilage.brep"), description="B-rep file to write")
 
 
 class TibialCartilageMesh(BrepMesh):
@@ -113,9 +173,11 @@ class TibialCartilageMesh(BrepMesh):
     )
 
 
-class FemoralCartilageBrep(LabelMapBrep):
+class FemoralCartilageBrep(CartilageBrep):
     """Settings for building a femoral cartilage B-rep from a segmented LabelMap. Not implemented yet."""
 
+    name: str = Field(default="femoral_cartilage", description="Name of the structure to build, a key of labels or label_maps")
+    bone: str = Field(default="femur", description="Name of the bone under the cartilage, a key of labels or label_maps")
     output: Path = Field(default=Path("femoral_cartilage.brep"), description="B-rep file to write")
 
 
@@ -126,9 +188,11 @@ class FemoralCartilageMesh(BrepMesh):
     output: Path = Field(default=Path("femoral_cartilage.msh"), description="Mesh file to write; gmsh infers the format from the extension")
 
 
-class PatellarCartilageBrep(LabelMapBrep):
+class PatellarCartilageBrep(CartilageBrep):
     """Settings for building a patellar cartilage B-rep from a segmented LabelMap. Not implemented yet."""
 
+    name: str = Field(default="patellar_cartilage", description="Name of the structure to build, a key of labels or label_maps")
+    bone: str = Field(default="patella", description="Name of the bone under the cartilage, a key of labels or label_maps")
     output: Path = Field(default=Path("patellar_cartilage.brep"), description="B-rep file to write")
 
 
@@ -142,6 +206,7 @@ class PatellarCartilageMesh(BrepMesh):
 class TibiaBrep(LabelMapBrep):
     """Settings for building a tibia B-rep from a segmented LabelMap. Not implemented yet."""
 
+    name: str = Field(default="tibia", description="Name of the structure to build, a key of labels or label_maps")
     output: Path = Field(default=Path("tibia.brep"), description="B-rep file to write")
 
 
@@ -155,6 +220,7 @@ class TibiaMesh(BrepMesh):
 class FemurBrep(LabelMapBrep):
     """Settings for building a femur B-rep from a segmented LabelMap. Not implemented yet."""
 
+    name: str = Field(default="femur", description="Name of the structure to build, a key of labels or label_maps")
     output: Path = Field(default=Path("femur.brep"), description="B-rep file to write")
 
 
@@ -168,6 +234,7 @@ class FemurMesh(BrepMesh):
 class PatellaBrep(LabelMapBrep):
     """Settings for building a patella B-rep from a segmented LabelMap. Not implemented yet."""
 
+    name: str = Field(default="patella", description="Name of the structure to build, a key of labels or label_maps")
     output: Path = Field(default=Path("patella.brep"), description="B-rep file to write")
 
 

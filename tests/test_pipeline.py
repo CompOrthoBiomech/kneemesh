@@ -2,6 +2,7 @@ import json
 
 import gmsh
 import pytest
+import SimpleITK as sitk
 from loguru import logger
 
 from kneemesh.brep import gmsh_session
@@ -250,9 +251,11 @@ def test_every_structure_has_configs_with_defaults(structure):
 def test_configure_picks_the_structure_config(in_tmp_path):
     config_types = {structure: brep for structure, (brep, _) in STRUCTURES.items()}
 
-    config, _, _ = configure(config_types, "test", ["tibial-cartilage", "--name", "lateral", "--label", "3"])
+    argv = ["tibial-cartilage", "--label-map", "knee.nii", "--labels", '{"tibia": 1, "lateral": 3}', "--name", "lateral"]
 
-    assert config == TibialCartilageBrep(name="lateral", label=3)
+    config, _, _ = configure(config_types, "test", argv)
+
+    assert config == TibialCartilageBrep(label_map="knee.nii", labels={"tibia": 1, "lateral": 3}, name="lateral")
 
 
 def test_configure_requires_a_structure(in_tmp_path):
@@ -275,3 +278,34 @@ def test_unimplemented_structures_report_an_error(in_tmp_path, structure, capsys
     assert mesh_main([structure]) == 1
 
     assert "not implemented" in capsys.readouterr().err
+
+
+def test_pipeline_reads_a_named_label_from_a_multilabel_image(in_tmp_path, meniscus_label):
+    other = sitk.Cast(sitk.BinaryDilate(meniscus_label, [2, 2, 1]) - meniscus_label, sitk.sitkUInt8)
+    write_label_map(meniscus_label * 7 + other * 2, in_tmp_path / "knee.nii")
+
+    argv = ["meniscus", "--label-map", "knee.nii", "--labels", '{"rim": 2, "lateral_meniscus": 7}', "--name", "lateral_meniscus"]
+    assert brep_main(argv) == 0
+
+    assert read_brep(in_tmp_path / "meniscus.brep").text
+
+
+def test_pipeline_assembles_single_label_maps(in_tmp_path, meniscus_label):
+    write_label_map(meniscus_label, in_tmp_path / "meniscus.nii")
+    coarse = sitk.Resample(meniscus_label, [51, 51, 17], sitk.Transform(), sitk.sitkNearestNeighbor, (-25.0, -25.0, -8.0), (1.0, 1.0, 1.0))
+    write_label_map(sitk.Cast(coarse == 0, sitk.sitkUInt8), in_tmp_path / "surroundings.nii")
+    config = write_config(
+        in_tmp_path / "assemble.json",
+        {"label_maps": {"surroundings": "surroundings.nii", "meniscus": "meniscus.nii"}, "output": "assembled.brep"},
+    )
+
+    assert brep_main(["meniscus", "--config", str(config)]) == 0
+
+    assert "Assembling surroundings, meniscus" in (in_tmp_path / "assemble.log").read_text()
+    assert read_brep(in_tmp_path / "assembled.brep").text
+
+
+def test_pipeline_without_a_segmentation_reports_an_error(in_tmp_path, capsys):
+    assert brep_main(["meniscus"]) == 1
+
+    assert "label_map or single-label label_maps" in capsys.readouterr().err

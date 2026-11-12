@@ -3,10 +3,28 @@
 Two command-line pipelines, `kneemesh-brep` and `kneemesh-mesh`, take the structure as their first argument, then a JSON configuration, `--option value` overrides, or both. The structures are `meniscus`, `tibial-cartilage`, `femoral-cartilage`, `patellar-cartilage`, `tibia`, `femur`, and `patella`; only `meniscus` is implemented so far. Run `kneemesh-brep meniscus --help` to list every option and its default. Every option is a field of the structure's model, such as {py:class}`~kneemesh.config.MeniscusBrep` or {py:class}`~kneemesh.config.MeniscusMesh`, with underscores written as dashes.
 
 ```sh
-kneemesh-brep meniscus --label-map knee.nii --output meniscus.brep --cap planar
+kneemesh-brep meniscus --label-map meniscus.nii --output meniscus.brep --cap planar
+kneemesh-brep meniscus --label-map knee.nii --labels '{"tibia": 1, "medial_meniscus": 3}' --name medial_meniscus
 kneemesh-mesh meniscus --brep meniscus.brep --output meniscus.msh --max-size 1.0
 ```
 
 Each run saves the configuration it used, so it can be repeated with `--config`, still naming the structure. Without `--config` it is saved as `settings<timestamp>.json` in the working directory. With `--config` and overrides, the changed configuration is saved beside the original as `<name>_modified.json`.
 
 For a hexahedral mesh, build the B-rep with `--hex-blocks true --points-per-slice 10` and mesh it with `--element hexahedral`.
+
+## Segmentations
+
+Every B-rep pipeline reads a segmentation and builds the structure that `--name` names in it. Give the segmentation one of two ways:
+
+- **A multilabel LabelMap** with `--label-map`, and `--labels` naming its values as JSON, such as `'{"tibia": 1, "medial_tibial_cartilage": 2, "medial_meniscus": 3}'`. Without `--labels`, the LabelMap is read as holding only the structure, with value 1.
+- **Single-label LabelMaps** with `--label-maps`, one file per structure by name, such as `'{"tibia": "tibia.nii", "medial_meniscus": "meniscus.nii"}'`. Every nonzero voxel of a file is its structure. {py:func}`~kneemesh.segmentation.assemble_label_maps` resamples them onto one grid, in the first file's orientation, with the smallest voxel spacing along each axis and a background margin of `--padding` voxels. `--interpolator` chooses `label_gaussian` (the default) or `nearest_neighbor`. Where structures overlap after resampling, the one listed later wins.
+
+Cartilage structures also name the bone beneath them with `--bone`, which must be in the segmentation too.
+
+```json
+{
+  "label_maps": {"tibia": "tibia.nii", "medial_meniscus": "medial_meniscus.nii"},
+  "name": "medial_meniscus",
+  "output": "medial_meniscus.brep"
+}
+```

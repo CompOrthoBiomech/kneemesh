@@ -9,6 +9,9 @@ Each pipeline reads one of these models from JSON with {py:meth}`~kneemesh.confi
 .. autopydantic_model:: kneemesh.config.BrepMesh
    :noindex:
 
+.. autopydantic_model:: kneemesh.config.CartilageBrep
+   :noindex:
+
 .. autopydantic_model:: kneemesh.config.MeniscusBrep
    :noindex:
 
@@ -18,7 +21,7 @@ Each pipeline reads one of these models from JSON with {py:meth}`~kneemesh.confi
 
 ## Planned structures
 
-These models hold only the shared settings until their pipelines are implemented. Lateral and medial tibial cartilage share one strategy and are told apart by `name`.
+These models hold only the shared settings until their pipelines are implemented. Cartilage models extend {py:class}`~kneemesh.config.CartilageBrep`, which names the underlying bone. Lateral and medial tibial cartilage share one strategy and are told apart by `name`.
 
 ```{eval-rst}
 .. autopydantic_model:: kneemesh.config.TibialCartilageBrep
