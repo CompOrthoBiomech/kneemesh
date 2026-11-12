@@ -8,7 +8,7 @@ Generate B-rep geometry of knee structures from a segmentation LabelMap, and mes
 
 - **B-rep from segmentation labels.** Reads a LabelMap (`.nii`, `.nrrd`, or `.mhd`), fits a centerline through the labeled meniscus, slices its smoothed surface into cross-section contours, and lofts them into a solid B-spline B-rep (`.brep`) with planar or smooth end caps.
 - **Tetrahedral meshing** with linear 4-node or quadratic 10-node tetrahedra.
-- **Hexahedral meshing** with block-structured 8-node, 20-node, or 27-node hexahedra. The solid is split into a butterfly (O-grid) of five blocks, so elements stay well shaped at the meniscus's sharp corners.
+- **Hexahedral meshing** with block-structured 8-node, 20-node, or 27-node hexahedra. The solid is split into a butterfly (O-grid) of five blocks, so elements stay well shaped at the meniscus's sharp corners. Optional node optimization (`--optimize true`) then raises the scaled Jacobians further, roughly doubling the worst element's on the real test menisci.
 
 Meshes are written in any format gmsh infers from the file extension, such as `.msh`, `.vtk`, or `.inp`.
 

@@ -35,6 +35,7 @@ from kneemesh.config import (
 from kneemesh.disk import read_brep, read_label_map, segmentation_labels_path, write_brep, write_mesh, write_segmentation
 from kneemesh.geo.meniscus import centerline, contours_to_brep, contours_to_hex_blocks, slice_isocontour
 from kneemesh.mesh.meniscus import hexahedral_mesh
+from kneemesh.mesh_optimization import mesh_quality, optimize_hexahedral_mesh
 from kneemesh.segmentation import Interpolator, Segmentation, assemble_label_maps
 from kneemesh.tet_meshing import Mesh, tetrahedral_mesh
 from kneemesh.vol import extract_isocontour, signed_distance_field, smooth_isocontour
@@ -151,7 +152,8 @@ def _meniscus_mesh(config: MeniscusMesh) -> Mesh:
     brep = read_brep(config.brep)
     logger.info("Meshing with {} elements of order {}", config.element, config.element_order)
     if config.element == "hexahedral":
-        return hexahedral_mesh(brep, config.elements_per_edge, config.elements_along, config.element_order, config.second_order_incomplete)
+        mesh = hexahedral_mesh(brep, config.elements_per_edge, config.elements_along, config.element_order, config.second_order_incomplete)
+        return _optimize(mesh, config) if config.optimize else mesh
     return tetrahedral_mesh(
         brep,
         config.min_size,
@@ -162,6 +164,24 @@ def _meniscus_mesh(config: MeniscusMesh) -> Mesh:
         config.element_order,
         config.second_order_incomplete,
     )
+
+
+def _optimize(mesh: Mesh, config: MeniscusMesh) -> Mesh:
+    before = mesh_quality(mesh)
+    count = sum(len(connectivity) for connectivity in mesh.elements.values())
+    logger.info("Optimizing {} hexahedra with minimum scaled Jacobian {:.3f} and mean {:.3f}", count, before.minimum, before.mean)
+    optimized = optimize_hexahedral_mesh(
+        mesh,
+        config.laplacian_iterations,
+        config.optimization_iterations,
+        config.surface_deviation,
+        config.surface_travel,
+        config.feature_angle,
+        config.preserve_volume,
+    )
+    after = mesh_quality(optimized)
+    logger.info("Optimized minimum scaled Jacobian to {:.3f} and mean to {:.3f}", after.minimum, after.mean)
+    return optimized
 
 
 class Configuration[ConfigType: BaseConfig](NamedTuple):

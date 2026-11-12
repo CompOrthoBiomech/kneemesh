@@ -10,7 +10,7 @@ kneemesh-mesh meniscus --brep meniscus.brep --output meniscus.msh --max-size 1.0
 
 Each run saves the configuration it used, so it can be repeated with `--config`, still naming the structure. Without `--config` it is saved as `settings<timestamp>.json` in the working directory. With `--config` and overrides, the changed configuration is saved beside the original as `<name>_modified.json`.
 
-For a hexahedral mesh, build the B-rep with `--hex-blocks true --points-per-slice 10` and mesh it with `--element hexahedral`.
+For a hexahedral mesh, build the B-rep with `--hex-blocks true --points-per-slice 10` and mesh it with `--element hexahedral`. Add `--optimize true` to move the nodes afterward for better scaled Jacobians with {py:func}`~kneemesh.mesh_optimization.optimize_hexahedral_mesh`. Boundary nodes may then leave the B-rep's surface by up to `--surface-deviation` times the local element size, 0.1 by default, without changing the volume overall; `--surface-deviation 0` keeps them on its tangent planes.
 
 ## Segmentations
 

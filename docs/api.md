@@ -11,6 +11,8 @@ Modules at the package root apply to every structure. The `geo` and `mesh` subpa
 
 .. automodule:: kneemesh.tet_meshing
 
+.. automodule:: kneemesh.mesh_optimization
+
 .. automodule:: kneemesh.disk
 
 .. automodule:: kneemesh.config

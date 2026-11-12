@@ -51,6 +51,7 @@ The package converts segmented knee images into B-rep geometry and meshes, as a 
 - `vol.py` operates on LabelMaps: the signed distance field, isocontour extraction and smoothing, `require_3d_label_map`, and the `ContourSlice` value.
 - `brep.py` holds the `BRep` value, `gmsh_session`, `export_brep`, the B-spline helpers that structure modules build geometry from (chord parameters, periodic and clamped fits, splitting, adding curves, wires, and swept surfaces to gmsh), and `contours_to_polydata`.
 - `tet_meshing.py` meshes any solid B-rep with tetrahedra and defines the `Mesh` it returns: node coordinates, per-type connectivity in gmsh's node ordering, and gmsh element type numbers. Its `gmsh_options`, `import_solid`, `volume_mesh`, and `require_element_order` are shared with structure meshers. `write_mesh` rebuilds a `Mesh` as a discrete gmsh volume to write it.
+- `mesh_optimization.py` moves the nodes of any hexahedral `Mesh` to raise its scaled Jacobians, and reports quality with `scaled_jacobians` and `mesh_quality`. `MeniscusMesh.optimize` runs it after hexahedral meshing.
 - `geo/meniscus.py` fits the centerline, slices the surface into ordered contours, lofts them into a B-rep with gmsh's Open Cascade kernel, and builds the five-block solid that hexahedral meshing needs.
 - `mesh/meniscus.py` meshes the five-block solid into block-structured hexahedra.
 - `config.py` provides `BaseConfig`, the pydantic base class for configuration models parsed from JSON, which rejects unknown keys. `LabelMapAssembly` configures `kneemesh-assemble`. `LabelMapBrep` (segmentation source, structure `name`, output) and `BrepMesh` (B-rep, output, element order) hold the settings every structure shares. Each structure has a `<Structure>Brep` and `<Structure>Mesh` model, such as `MeniscusBrep` and `MeniscusMesh`, holding every pipeline argument with its default; the planned structures' models hold only the shared fields. Cartilage B-rep models extend `CartilageBrep`, which adds the underlying `bone`; lateral and medial tibial plates share one strategy and differ only in `name`. Mapping fields (`labels`, `label_maps`) accept JSON text, so they work as command-line options. The gmsh algorithm enums are string enums named for readability, with gmsh's option number on `.number` and case-insensitive lookup, so configs store them as plain names. Optional numbers read "none" as None.
@@ -120,6 +121,19 @@ gmsh holds its models in global state, so a `BRep` is a plain value holding the 
 - `hexahedral_mesh` makes every curve, surface, and volume transfinite. Curves on the planar caps get `elements_per_edge` and all others `elements_along`.
 - Hexahedral tests use 10-point contours, which give valid elements and small B-reps. Contours need at least 8 points.
 - gmsh's "initial mesh only" 2D algorithm crashes the process with a segmentation fault, and BAMG fails on these shapes, so `Algorithm2D` omits them. `Algorithm3D` omits R-tree, which writes `new_points.pos` into the working directory.
+
+### Hexahedral mesh optimization
+
+`optimize_hexahedral_mesh` runs smart Laplacian smoothing, then projected gradient descent on the sum of 1 / SJ over all element corners. Keep these points when changing it:
+
+- The objective is infinite for any corner with a determinant at or below zero, so a backtracking step can never invert an element. Optimization therefore needs a valid start, and is skipped with a warning if smoothing leaves an element inverted.
+- 1 / SJ, unlike Knupp's condition number, does not penalize unequal edge lengths, so it leaves the deliberately long elements along the meniscus alone. It weighs the worst corners most.
+- The gradient uses d log SJ / dE = E^-T - e_k / |e_k|^2 for the matrix E of a corner's edge rows, with E^-T from cross products rather than `np.linalg.inv`, and scatters with `np.bincount`; `np.add.at` and batched `inv` made it twice as slow. Steps are scaled by each node's local size squared so the step length is dimensionless.
+- Boundary nodes are classified from the mesh's own boundary quadrilaterals, not the B-rep: feature edges are where adjacent boundary faces meet at more than `feature_angle`; nodes where feature edges end, branch, or turn are fixed. Surface nodes are limited to `surface_deviation` off and `surface_travel` along their starting tangent plane, as fractions of the mean incident edge length; feature edge nodes the reverse.
+- Optimization pushes surface nodes outward: at `surface_deviation` 0.1 the real menisci swell 5-7%. `preserve_volume` removes the area-weighted mean normal offset in the projection, which keeps volume within 0.5% at the same quality.
+- Smart Laplacian is a Jacobi sweep that undoes moves around any element that got worse, repeating until none did. It untangles the inverted test grid but barely changes gmsh's transfinite meshes; the optimization does most of the work there.
+- High-order nodes move by trilinear interpolation of their element's corner displacements, using the local node coordinates gmsh reports, so curved edges keep their offsets. Quality is measured on corners only.
+- On the real menisci at 4 by 20 elements, optimization takes about 2 s and raises the minimum scaled Jacobian from 0.08-0.17 to 0.36-0.40 and the mean from 0.64-0.72 to 0.80-0.83. 1000 steps instead of 200 add little.
 
 ## Tests
 

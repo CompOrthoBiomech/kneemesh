@@ -4,5 +4,6 @@
   "element": "hexahedral",
   "element_order": 1,
   "elements_per_edge": 6,
-  "elements_along": 40
+  "elements_along": 40,
+  "optimize": true
 }

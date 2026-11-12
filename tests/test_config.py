@@ -3,7 +3,7 @@ from pathlib import Path
 import pydantic
 import pytest
 
-from kneemesh.config import BaseConfig, FemoralCartilageBrep, MeniscusBrep, TibialCartilageBrep
+from kneemesh.config import BaseConfig, FemoralCartilageBrep, MeniscusBrep, MeniscusMesh, TibialCartilageBrep
 
 
 class ExampleConfig(BaseConfig):
@@ -74,3 +74,9 @@ def test_cartilage_config_needs_its_bone_labeled():
         FemoralCartilageBrep(labels={"femoral_cartilage": 2})
     with pytest.raises(pydantic.ValidationError, match="different labels"):
         TibialCartilageBrep(labels={"tibia": 1}, name="tibia")
+
+
+def test_mesh_optimization_applies_only_to_hexahedra():
+    assert MeniscusMesh(element="hexahedral", optimize=True).optimize
+    with pytest.raises(pydantic.ValidationError, match="only to hexahedral"):
+        MeniscusMesh(optimize=True)

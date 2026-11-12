@@ -7,6 +7,13 @@ from typing import Annotated, Any, ClassVar, Literal, Self
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, model_validator
 
+from kneemesh.mesh_optimization import (
+    DEFAULT_FEATURE_ANGLE,
+    DEFAULT_LAPLACIAN_ITERATIONS,
+    DEFAULT_OPTIMIZATION_ITERATIONS,
+    DEFAULT_SURFACE_DEVIATION,
+    DEFAULT_SURFACE_TRAVEL,
+)
 from kneemesh.segmentation import DEFAULT_PADDING_VOXELS, Interpolator
 from kneemesh.tet_meshing import Algorithm2D, Algorithm3D
 from kneemesh.vol import DEFAULT_SMOOTHING_ITERATIONS, DEFAULT_SMOOTHING_PASS_BAND
@@ -180,6 +187,34 @@ class MeniscusMesh(BrepMesh):
     algorithm_3d: Algorithm3D = Field(default=Algorithm3D.DELAUNAY, description="gmsh volume algorithm for tetrahedral meshing")
     elements_per_edge: int = Field(default=4, description="Hexahedra along each edge of a cap")
     elements_along: int = Field(default=20, description="Hexahedra along the solid between the caps")
+    optimize: bool = Field(default=False, description="Move hexahedral mesh nodes to raise the elements' scaled Jacobians after meshing")
+    laplacian_iterations: int = Field(default=DEFAULT_LAPLACIAN_ITERATIONS, ge=0, description="Smart Laplacian sweeps when optimizing")
+    optimization_iterations: int = Field(
+        default=DEFAULT_OPTIMIZATION_ITERATIONS, ge=0, description="Gradient steps minimizing the sum of 1 / scaled Jacobian when optimizing"
+    )
+    surface_deviation: float = Field(
+        default=DEFAULT_SURFACE_DEVIATION,
+        ge=0,
+        description="How far boundary nodes may move off the surface when optimizing, as a fraction of the local element size",
+    )
+    surface_travel: float = Field(
+        default=DEFAULT_SURFACE_TRAVEL,
+        ge=0,
+        description="How far boundary nodes may slide along the surface when optimizing, as a fraction of the local element size",
+    )
+    feature_angle: float = Field(
+        default=DEFAULT_FEATURE_ANGLE,
+        gt=0,
+        lt=180,
+        description="Angle in degrees between boundary faces above which their shared edge is kept as a feature when optimizing",
+    )
+    preserve_volume: bool = Field(default=True, description="Keep the mesh's volume when optimizing by cancelling the net outward surface offset")
+
+    @model_validator(mode="after")
+    def _check_optimization(self) -> Self:
+        if self.optimize and self.element != "hexahedral":
+            raise ValueError("optimize applies only to hexahedral meshes")
+        return self
 
 
 class TibialCartilageBrep(CartilageBrep):

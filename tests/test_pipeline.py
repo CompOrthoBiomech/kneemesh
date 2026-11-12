@@ -383,3 +383,16 @@ def test_assembly_pipeline_without_label_maps_reports_an_error(capsys):
     assert assemble_main([]) == 1
 
     assert "label_maps to assemble" in capsys.readouterr().err
+
+
+def test_mesh_pipeline_optimizes_hexahedra(in_tmp_path, meniscus_hex_blocks, capsys):
+    from kneemesh.disk import write_brep
+
+    write_brep(meniscus_hex_blocks, in_tmp_path / "blocks.brep")
+    argv = ["meniscus", "--brep", "blocks.brep", "--output", "blocks.vtk", "--element", "hexahedral", "--optimize", "true"]
+
+    assert mesh_main([*argv, "--elements-per-edge", "3", "--elements-along", "12"]) == 0
+
+    stderr = capsys.readouterr().err
+    assert "Optimized minimum scaled Jacobian" in stderr
+    assert (in_tmp_path / "blocks.vtk").stat().st_size > 0
