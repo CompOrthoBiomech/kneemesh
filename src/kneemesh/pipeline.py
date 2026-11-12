@@ -1,4 +1,4 @@
-"""Command-line pipelines for building B-reps of knee structures and meshing them."""
+"""Command-line pipelines for assembling segmentations, building B-reps of knee structures, and meshing them."""
 
 import argparse
 import json
@@ -19,6 +19,7 @@ from kneemesh.config import (
     FemoralCartilageMesh,
     FemurBrep,
     FemurMesh,
+    LabelMapAssembly,
     LabelMapBrep,
     MeniscusBrep,
     MeniscusMesh,
@@ -34,7 +35,7 @@ from kneemesh.config import (
 from kneemesh.disk import read_brep, read_label_map, segmentation_labels_path, write_brep, write_mesh, write_segmentation
 from kneemesh.geo.meniscus import centerline, contours_to_brep, contours_to_hex_blocks, slice_isocontour
 from kneemesh.mesh.meniscus import hexahedral_mesh
-from kneemesh.segmentation import Segmentation, assemble_label_maps
+from kneemesh.segmentation import Interpolator, Segmentation, assemble_label_maps
 from kneemesh.tet_meshing import Mesh, tetrahedral_mesh
 from kneemesh.vol import extract_isocontour, signed_distance_field, smooth_isocontour
 
@@ -82,6 +83,31 @@ def run_mesh(config: BrepMesh) -> Mesh:
     return mesh
 
 
+def run_assembly(config: LabelMapAssembly) -> Segmentation:
+    """Assemble config's single-label LabelMaps and write the result and its labels to config.output.
+
+    Raises:
+        ValueError: If config gives no label_maps, or they cannot be read or combined.
+    """
+    if not config.label_maps:
+        raise ValueError("Give the single-label label_maps to assemble")
+    return _assemble(config.label_maps, config.interpolator, config.padding, config.output)
+
+
+def _assemble(label_maps: Mapping[str, Path], interpolator: Interpolator, padding: int, output: Path | None) -> Segmentation:
+    logger.info("Assembling {} with the {} interpolator", ", ".join(label_maps), interpolator)
+    images = {}
+    for name, path in label_maps.items():
+        logger.info("Reading LabelMap {} for {}", path, name)
+        images[name] = read_label_map(path)
+    segmentation = assemble_label_maps(images, interpolator, padding)
+    logger.info("Assembled labels {} on a {} grid with spacing {}", segmentation.labels, segmentation.image.GetSize(), segmentation.image.GetSpacing())
+    if output is not None:
+        write_segmentation(segmentation, output)
+        logger.info("Wrote the assembled LabelMap to {} and its labels to {}", output, segmentation_labels_path(output))
+    return segmentation
+
+
 def load_segmentation(config: LabelMapBrep) -> Segmentation:
     """Read the multilabel LabelMap config names, or assemble its single-label LabelMaps.
 
@@ -92,20 +118,7 @@ def load_segmentation(config: LabelMapBrep) -> Segmentation:
             LabelMap cannot be read or combined.
     """
     if config.label_maps is not None:
-        logger.info("Assembling {} with the {} interpolator", ", ".join(config.label_maps), config.interpolator)
-        images = {}
-        for name, path in config.label_maps.items():
-            logger.info("Reading LabelMap {} for {}", path, name)
-            images[name] = read_label_map(path)
-        segmentation = assemble_label_maps(images, config.interpolator, config.padding)
-        if config.assembled_label_map is not None:
-            write_segmentation(segmentation, config.assembled_label_map)
-            logger.info(
-                "Wrote the assembled LabelMap to {} and its labels to {}",
-                config.assembled_label_map,
-                segmentation_labels_path(config.assembled_label_map),
-            )
-        return segmentation
+        return _assemble(config.label_maps, config.interpolator, config.padding, config.assembled_label_map)
     if config.label_map is None:
         raise ValueError("Give a multilabel label_map or single-label label_maps to read")
     logger.info("Reading LabelMap {}", config.label_map)
@@ -160,51 +173,53 @@ class Configuration[ConfigType: BaseConfig](NamedTuple):
 
 
 def configure[ConfigType: BaseConfig](
-    config_types: Mapping[str, type[ConfigType]], description: str, argv: Sequence[str] | None = None, timestamp: str | None = None
+    config_types: Mapping[str, type[ConfigType]] | type[ConfigType],
+    description: str,
+    argv: Sequence[str] | None = None,
+    timestamp: str | None = None,
 ) -> Configuration[ConfigType]:
-    """Build a configuration from a structure subcommand, an optional JSON file, and command-line overrides.
+    """Build a configuration from command-line options, an optional JSON file, and overrides.
 
-    The first argument names the structure, a key of config_types, and every
-    field of its configuration is an option, such as
-    meniscus --points-per-slice 10. Values given on the command line override
-    those in --config. The configuration is saved so the run can be repeated:
-    as settings<timestamp>.json in the working directory when there is no
+    Given a mapping, the first argument is a subcommand naming the structure,
+    a key of config_types, such as meniscus --points-per-slice 10. Given a
+    single model, there is no subcommand. Every field of the configuration is
+    an option, and values given on the command line override those in
+    --config. The configuration is saved so the run can be repeated: as
+    settings<timestamp>.json in the working directory when there is no
     --config, or as <config stem>_modified.json beside the file when
     overrides change it. A config file used without overrides is not copied.
 
     Args:
-        config_types: Configuration model for each structure subcommand.
+        config_types: Configuration model for each structure subcommand, or
+            the one model of a command without subcommands.
         description: Description for the command's help.
         argv: Command-line arguments, by default sys.argv[1:].
         timestamp: Timestamp for the settings file name, by default the current time.
 
     Returns:
-        The chosen structure's configuration, the --config file if any, and
-        the path the configuration was saved to, or None if it was not saved.
+        The configuration, the --config file if any, and the path the
+        configuration was saved to, or None if it was not saved.
     """
     parser = argparse.ArgumentParser(description=description)
-    subparsers = parser.add_subparsers(dest="structure", required=True, metavar="structure")
-    structure_parsers: dict[str, argparse.ArgumentParser] = {}
-    for structure, config_type in config_types.items():
-        summary = (config_type.__doc__ or "").strip().splitlines()[0]
-        subparser = subparsers.add_parser(structure, help=summary, description=summary)
-        subparser.add_argument("--config", type=Path, help="JSON configuration; options given here override its values")
-        defaults = config_type().model_dump(mode="json")
-        for name, field in config_type.model_fields.items():
-            subparser.add_argument(
-                f"--{name.replace('_', '-')}", dest=name, default=argparse.SUPPRESS, help=f"{field.description} (default: {defaults[name]})"
-            )
-        structure_parsers[structure] = subparser
-    arguments = vars(parser.parse_args(argv))
-    structure = arguments.pop("structure")
-    config_type = config_types[structure]
+    if isinstance(config_types, Mapping):
+        subparsers = parser.add_subparsers(dest="structure", required=True, metavar="structure")
+        option_parsers: dict[str, argparse.ArgumentParser] = {}
+        for structure, structure_type in config_types.items():
+            summary = (structure_type.__doc__ or "").strip().splitlines()[0]
+            option_parsers[structure] = _add_config_options(subparsers.add_parser(structure, help=summary, description=summary), structure_type)
+        arguments = vars(parser.parse_args(argv))
+        structure = arguments.pop("structure")
+        config_type, option_parser = config_types[structure], option_parsers[structure]
+    else:
+        config_type, option_parser = config_types, _add_config_options(parser, config_types)
+        arguments = vars(parser.parse_args(argv))
     config_path = arguments.pop("config")
 
     values = json.loads(config_path.read_text(encoding="utf-8")) if config_path is not None else {}
     try:
         config = config_type.model_validate({**values, **arguments})
     except ValidationError as error:
-        structure_parsers[structure].error(str(error))
+        option_parser.error(str(error))
 
     if config_path is None:
         saved = Path(f"settings{timestamp or _timestamp()}.json")
@@ -215,6 +230,22 @@ def configure[ConfigType: BaseConfig](
     if saved is not None:
         saved.write_text(config.model_dump_json(indent=2) + "\n", encoding="utf-8")
     return Configuration(config, config_path, saved)
+
+
+def _add_config_options(parser: argparse.ArgumentParser, config_type: type[BaseConfig]) -> argparse.ArgumentParser:
+    """Add --config and an option for every field of config_type to parser, returning parser."""
+    parser.add_argument("--config", type=Path, help="JSON configuration; options given here override its values")
+    defaults = config_type().model_dump(mode="json")
+    for name, field in config_type.model_fields.items():
+        parser.add_argument(f"--{name.replace('_', '-')}", dest=name, default=argparse.SUPPRESS, help=f"{field.description} (default: {defaults[name]})")
+    return parser
+
+
+def assemble_main(argv: Sequence[str] | None = None) -> int:
+    """Run the LabelMap assembly pipeline from the command line."""
+    timestamp = _timestamp()
+    setup = configure(LabelMapAssembly, "Assemble single-label LabelMaps into one multilabel LabelMap.", argv, timestamp)
+    return _run(lambda: run_assembly(setup.config), setup, Path(f"assemble{timestamp}.log"))
 
 
 def brep_main(argv: Sequence[str] | None = None) -> int:
@@ -237,7 +268,7 @@ def _timestamp() -> str:
     return f"{datetime.now():%Y%m%d_%H%M%S}"
 
 
-def _run[ConfigType: LabelMapBrep | BrepMesh](step: Callable[[], object], setup: Configuration[ConfigType], default_log: Path) -> int:
+def _run[ConfigType: LabelMapAssembly | LabelMapBrep | BrepMesh](step: Callable[[], object], setup: Configuration[ConfigType], default_log: Path) -> int:
     """Run a pipeline step, logging to stderr and to a file named for its configuration.
 
     The log file is <config stem>.log beside the --config file, or default_log

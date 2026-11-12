@@ -3,3 +3,4 @@
 !.gitignore
 !*_brep_*.json
 !*_mesh_*.json
+!*_assemble.json

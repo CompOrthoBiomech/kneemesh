@@ -7,9 +7,9 @@ import SimpleITK as sitk
 from loguru import logger
 
 from kneemesh.brep import gmsh_session
-from kneemesh.config import MeniscusBrep, MeniscusMesh, TibialCartilageBrep
+from kneemesh.config import LabelMapAssembly, MeniscusBrep, MeniscusMesh, TibialCartilageBrep
 from kneemesh.disk import read_brep, read_segmentation, write_label_map
-from kneemesh.pipeline import STRUCTURES, brep_main, configure, mesh_main
+from kneemesh.pipeline import STRUCTURES, assemble_main, brep_main, configure, mesh_main
 from kneemesh.tet_meshing import Algorithm2D, Algorithm3D
 from kneemesh.vol import signed_distance_field
 
@@ -337,3 +337,49 @@ def test_pipeline_builds_one_meniscus_from_assembled_real_menisci(in_tmp_path, r
     assert assembled.labels == {"lateral_meniscus": 1, "medial_meniscus": 2}
     assert json.loads((in_tmp_path / "knee_labels.json").read_text()) == assembled.labels
     assert read_brep(in_tmp_path / "meniscus.brep").text
+
+
+def test_configure_without_subcommands_reads_options_of_one_model(in_tmp_path):
+    config, _, saved = configure(LabelMapAssembly, "test", ["--label-maps", '{"meniscus": "m.nii"}', "--padding", "2"])
+
+    assert config == LabelMapAssembly(label_maps={"meniscus": Path("m.nii")}, padding=2)
+    assert saved is not None
+    assert LabelMapAssembly.from_json(in_tmp_path / saved.name) == config
+
+
+@pytest.mark.usefixtures("in_tmp_path")
+def test_configure_without_subcommands_rejects_a_structure():
+    with pytest.raises(SystemExit) as error:
+        configure(LabelMapAssembly, "test", ["meniscus"])
+
+    assert error.value.code == 2
+
+
+def test_assembly_pipeline_writes_the_segmentation_and_its_labels(in_tmp_path, real_label, real_medial_label, capsys):
+    write_label_map(real_label, in_tmp_path / "lateral.nii")
+    write_label_map(real_medial_label, in_tmp_path / "medial.nii")
+    label_maps = json.dumps({"lateral_meniscus": "lateral.nii", "medial_meniscus": "medial.nii"})
+
+    assert assemble_main(["--label-maps", label_maps, "--interpolator", "nearest_neighbor", "--output", "knee.nii"]) == 0
+
+    segmentation = read_segmentation(in_tmp_path / "knee.nii")
+    assert segmentation.labels == {"lateral_meniscus": 1, "medial_meniscus": 2}
+    assert segmentation.image.GetSpacing() == pytest.approx(real_label.GetSpacing())
+    assert len(list(in_tmp_path.glob("assemble*.log"))) == 1
+    assert "Wrote knee.nii" in capsys.readouterr().err
+
+
+def test_brep_pipeline_reads_an_assembled_segmentation(in_tmp_path, meniscus_label):
+    write_label_map(meniscus_label, in_tmp_path / "meniscus.nii")
+    assert assemble_main(["--label-maps", '{"meniscus": "meniscus.nii"}', "--output", "knee.nrrd"]) == 0
+    labels = (in_tmp_path / "knee_labels.json").read_text()
+
+    assert brep_main(["meniscus", "--label-map", "knee.nrrd", "--labels", labels, "--output", "solid.brep"]) == 0
+    assert read_brep(in_tmp_path / "solid.brep").text
+
+
+@pytest.mark.usefixtures("in_tmp_path")
+def test_assembly_pipeline_without_label_maps_reports_an_error(capsys):
+    assert assemble_main([]) == 1
+
+    assert "label_maps to assemble" in capsys.readouterr().err

@@ -22,14 +22,16 @@ pip install kneemesh
 
 ## Usage
 
-Two command-line pipelines take the structure as their first argument, then a JSON configuration, `--option value` overrides, or both. Run `kneemesh-brep meniscus --help` to list every option and its default.
+The command-line pipelines take a JSON configuration, `--option value` overrides, or both. `kneemesh-brep` and `kneemesh-mesh` also take the structure as their first argument. Run `kneemesh-brep meniscus --help` to list every option and its default.
 
 ```sh
+kneemesh-assemble --label-maps '{"lateral_meniscus": "lateral.nii", "medial_meniscus": "medial.nii"}' --output knee.nrrd
+kneemesh-brep meniscus --label-map knee.nrrd --labels "$(cat knee_labels.json)" --name medial_meniscus --output meniscus.brep
 kneemesh-brep meniscus --label-map meniscus.nii --output meniscus.brep --cap planar
 kneemesh-mesh meniscus --brep meniscus.brep --output meniscus.msh --max-size 1.0
 ```
 
-A multilabel LabelMap takes `--labels` naming its values, such as `--labels '{"tibia": 1, "medial_meniscus": 3}' --name medial_meniscus`. Separate single-label LabelMaps can be given with `--label-maps '{"tibia": "tibia.nii", "medial_meniscus": "meniscus.nii"}'` instead, and are resampled onto one grid. See the documentation's usage page.
+A multilabel LabelMap takes `--labels` naming its values, such as `--labels '{"tibia": 1, "medial_meniscus": 3}' --name medial_meniscus`. `kneemesh-assemble` resamples separate single-label LabelMaps onto one grid and writes the multilabel LabelMap with its labels in `<stem>_labels.json`. `kneemesh-brep` can also take `--label-maps` directly and assemble them within the run. Example configurations are in `examples/`. See the documentation's usage page.
 
 Each run saves the configuration it used, so it can be repeated with `--config`. Without `--config` it is saved as `settings<timestamp>.json` in the working directory. With `--config` and overrides, the changed configuration is saved beside the original as `<name>_modified.json`.
 

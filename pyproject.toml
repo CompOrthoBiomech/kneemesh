@@ -20,6 +20,7 @@ dependencies = [
 ]
 
 [project.scripts]
+kneemesh-assemble = "kneemesh.pipeline:assemble_main"
 kneemesh-brep = "kneemesh.pipeline:brep_main"
 kneemesh-mesh = "kneemesh.pipeline:mesh_main"
 

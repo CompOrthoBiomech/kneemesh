@@ -44,6 +44,36 @@ LabelValues = Annotated[dict[str, int] | None, BeforeValidator(_json_from_text)]
 LabelPaths = Annotated[dict[str, Path] | None, BeforeValidator(_json_from_text)]
 
 
+def _label_maps_field(summary: str) -> Any:
+    return Field(
+        default=None,
+        description=f'{summary}, by structure name, as JSON such as {{"tibia": "tibia.nii"}}. Each file\'s nonzero voxels are its structure',
+    )
+
+
+def _interpolator_field() -> Any:
+    return Field(default="label_gaussian", description="Resampling interpolator for assembling label_maps: label_gaussian or nearest_neighbor")
+
+
+def _padding_field() -> Any:
+    return Field(default=DEFAULT_PADDING_VOXELS, ge=0, description="Background voxels around the assembled label_maps on each side")
+
+
+class LabelMapAssembly(BaseConfig):
+    """Settings for assembling single-label LabelMaps into one multilabel LabelMap.
+
+    Structures get label values 1, 2, ... in the order of label_maps.
+    """
+
+    label_maps: LabelPaths = _label_maps_field("Single-label LabelMaps to assemble")
+    interpolator: Interpolator = _interpolator_field()
+    padding: int = _padding_field()
+    output: Path = Field(
+        default=Path("label_map.nrrd"),
+        description="Multilabel LabelMap to write: .nii, .nrrd, or .mhd, with its labels in <stem>_labels.json beside it",
+    )
+
+
 class LabelMapBrep(BaseConfig):
     """Settings every B-rep pipeline shares: the segmentation to read, the structure to build, and the file to write.
 
@@ -58,15 +88,9 @@ class LabelMapBrep(BaseConfig):
         description='Label value of each structure in label_map by name, as JSON such as {"tibia": 1, "medial_tibial_cartilage": 2}. '
         + "None reads label_map as holding only this structure, with value 1",
     )
-    label_maps: LabelPaths = Field(
-        default=None,
-        description='Single-label LabelMaps to assemble instead of label_map, by structure name, as JSON such as {"tibia": "tibia.nii"}. '
-        + "Each file's nonzero voxels are its structure",
-    )
-    interpolator: Interpolator = Field(
-        default="label_gaussian", description="Resampling interpolator for assembling label_maps: label_gaussian or nearest_neighbor"
-    )
-    padding: int = Field(default=DEFAULT_PADDING_VOXELS, ge=0, description="Background voxels around the assembled label_maps on each side")
+    label_maps: LabelPaths = _label_maps_field("Single-label LabelMaps to assemble instead of label_map")
+    interpolator: Interpolator = _interpolator_field()
+    padding: int = _padding_field()
     assembled_label_map: OptionalPath = Field(
         default=None,
         description="Where to write the multilabel LabelMap assembled from label_maps, with its labels in <stem>_labels.json beside it. "
