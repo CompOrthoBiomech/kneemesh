@@ -4,6 +4,6 @@
     "medial_meniscus": "tests/dat/mns_m.nii"
   },
   "assembled_label_map": "examples/menisci.nrrd",
-  "name": "medial_meniscus",
-  "output": "examples/medial_meniscus_tet4.brep"
+  "output": "_tet4.brep",
+  "output_directory": "examples"
 }

@@ -1,7 +1,12 @@
 {
-  "brep": "examples/medial_meniscus_tet4.brep",
-  "output": "examples/medial_meniscus_tet4.vtk",
-  "element": "tetrahedral",
-  "element_order": 1,
-  "max_size": 1.0
+  "breps": {
+    "lateral_meniscus": "examples/lateral_meniscus_tet4.brep",
+    "medial_meniscus": "examples/medial_meniscus_tet4.brep"
+  },
+  "element_type": "tet4",
+  "output": "_{element_type}.vtk",
+  "output_directory": "examples",
+  "meniscus": {
+    "max_size": 1.0
+  }
 }

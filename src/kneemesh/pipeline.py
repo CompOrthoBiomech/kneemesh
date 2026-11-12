@@ -6,32 +6,15 @@ import sys
 from collections.abc import Callable, Mapping, Sequence
 from datetime import datetime
 from pathlib import Path
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
+import SimpleITK as sitk
 from loguru import logger
 from pydantic import ValidationError
+from pydantic.fields import FieldInfo
 
 from kneemesh.brep import BRep
-from kneemesh.config import (
-    BaseConfig,
-    BrepMesh,
-    FemoralCartilageBrep,
-    FemoralCartilageMesh,
-    FemurBrep,
-    FemurMesh,
-    LabelMapAssembly,
-    LabelMapBrep,
-    MeniscusBrep,
-    MeniscusMesh,
-    PatellaBrep,
-    PatellaMesh,
-    PatellarCartilageBrep,
-    PatellarCartilageMesh,
-    TibiaBrep,
-    TibialCartilageBrep,
-    TibialCartilageMesh,
-    TibiaMesh,
-)
+from kneemesh.config import BaseConfig, BrepMesh, LabelMapAssembly, LabelMapBrep, MeniscusMesh, Structure
 from kneemesh.disk import read_brep, read_label_map, segmentation_labels_path, write_brep, write_mesh, write_segmentation
 from kneemesh.geo.meniscus import centerline, contours_to_brep, contours_to_hex_blocks, slice_isocontour
 from kneemesh.mesh.meniscus import hexahedral_mesh
@@ -40,48 +23,76 @@ from kneemesh.segmentation import Interpolator, Segmentation, assemble_label_map
 from kneemesh.tet_meshing import Mesh, tetrahedral_mesh
 from kneemesh.vol import extract_isocontour, signed_distance_field, smooth_isocontour
 
-# Each structure's command-line name and its B-rep and meshing configurations.
-STRUCTURES: dict[str, tuple[type[LabelMapBrep], type[BrepMesh]]] = {
-    "meniscus": (MeniscusBrep, MeniscusMesh),
-    "tibial-cartilage": (TibialCartilageBrep, TibialCartilageMesh),
-    "femoral-cartilage": (FemoralCartilageBrep, FemoralCartilageMesh),
-    "patellar-cartilage": (PatellarCartilageBrep, PatellarCartilageMesh),
-    "tibia": (TibiaBrep, TibiaMesh),
-    "femur": (FemurBrep, FemurMesh),
-    "patella": (PatellaBrep, PatellaMesh),
-}
+type _BrepBuilder = Callable[[Segmentation, Structure, LabelMapBrep], BRep]
+type _Mesher = Callable[[BRep, BrepMesh], Mesh]
 
 
-def run_brep(config: LabelMapBrep) -> BRep:
-    """Build a B-rep as config describes, choosing the structure by config's type, and write it to config.output.
+def run_brep(config: LabelMapBrep) -> dict[Structure, BRep]:
+    """Build a B-rep of every structure in config's segmentation and write each to config.output_path(structure).
+
+    Each structure's name picks its pipeline. Every structure is checked
+    before any work starts, and each B-rep is written as soon as it is built.
+
+    Returns:
+        The B-rep of each structure.
 
     Raises:
-        NotImplementedError: If the structure has no B-rep pipeline yet.
+        ValueError: If config gives no segmentation, or it cannot be read or combined.
+        NotImplementedError: If a structure has no B-rep pipeline yet.
     """
-    match config:
-        case MeniscusBrep():
-            brep = _meniscus_brep(config)
-        case _:
-            raise NotImplementedError(f"B-rep generation is not implemented for {type(config).__name__}")
-    write_brep(brep, config.output)
-    return brep
+    structures = config.structures
+    if not structures:
+        raise ValueError("Give a multilabel label_map with labels or single-label label_maps to read")
+    builders: dict[Structure, _BrepBuilder | None] = {structure: _BREP_BUILDERS.get(structure) for structure in structures}
+    missing = [structure for structure, builder in builders.items() if builder is None]
+    if missing:
+        raise NotImplementedError(f"B-rep generation is not implemented for {', '.join(missing)}")
+    segmentation = load_segmentation(config)
+    breps: dict[Structure, BRep] = {}
+    for structure, builder in builders.items():
+        assert builder is not None
+        breps[structure] = builder(segmentation, structure, config)
+        path = config.output_path(structure)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        write_brep(breps[structure], path)
+        logger.info("Wrote {}", path)
+    return breps
 
 
-def run_mesh(config: BrepMesh) -> Mesh:
-    """Mesh a B-rep as config describes, choosing the structure by config's type, and write it to config.output.
+def run_mesh(config: BrepMesh) -> dict[Structure, Mesh]:
+    """Mesh the B-rep of every structure in config.breps and write each to config.output_path(structure).
+
+    Each structure's name picks its pipeline. Every structure is checked
+    before any work starts, and each mesh is written as soon as it is made.
+
+    Returns:
+        The mesh of each structure.
 
     Raises:
-        NotImplementedError: If the structure has no meshing pipeline yet.
+        ValueError: If config gives no breps.
+        OSError: If a B-rep cannot be read.
+        NotImplementedError: If a structure has no meshing pipeline yet.
     """
-    match config:
-        case MeniscusMesh():
-            mesh = _meniscus_mesh(config)
-        case _:
-            raise NotImplementedError(f"Meshing is not implemented for {type(config).__name__}")
-    counts = ", ".join(f"{len(connectivity)} {name}" for name, connectivity in mesh.elements.items())
-    logger.info("Meshed {} nodes and {}", len(mesh.nodes), counts)
-    write_mesh(mesh, config.output)
-    return mesh
+    if not config.breps:
+        raise ValueError("Give the breps to mesh, by structure")
+    meshers: dict[Structure, _Mesher | None] = {structure: _MESHERS.get(structure) for structure in config.breps}
+    missing = [structure for structure, mesher in meshers.items() if mesher is None]
+    if missing:
+        raise NotImplementedError(f"Meshing is not implemented for {', '.join(missing)}")
+    meshes: dict[Structure, Mesh] = {}
+    for structure, path in config.breps.items():
+        mesher = meshers[structure]
+        assert mesher is not None
+        logger.info("Reading B-rep {} for {}", path, structure)
+        mesh = mesher(read_brep(path), config)
+        counts = ", ".join(f"{len(connectivity)} {name}" for name, connectivity in mesh.elements.items())
+        logger.info("Meshed {} with {} nodes and {}", structure, len(mesh.nodes), counts)
+        output = config.output_path(structure)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        write_mesh(mesh, output)
+        logger.info("Wrote {}", output)
+        meshes[structure] = mesh
+    return meshes
 
 
 def run_assembly(config: LabelMapAssembly) -> Segmentation:
@@ -95,9 +106,9 @@ def run_assembly(config: LabelMapAssembly) -> Segmentation:
     return _assemble(config.label_maps, config.interpolator, config.padding, config.output)
 
 
-def _assemble(label_maps: Mapping[str, Path], interpolator: Interpolator, padding: int, output: Path | None) -> Segmentation:
+def _assemble(label_maps: Mapping[Structure, Path], interpolator: Interpolator, padding: int, output: Path | None) -> Segmentation:
     logger.info("Assembling {} with the {} interpolator", ", ".join(label_maps), interpolator)
-    images = {}
+    images: dict[str, sitk.Image] = {}
     for name, path in label_maps.items():
         logger.info("Reading LabelMap {} for {}", path, name)
         images[name] = read_label_map(path)
@@ -120,17 +131,17 @@ def load_segmentation(config: LabelMapBrep) -> Segmentation:
     """
     if config.label_maps is not None:
         return _assemble(config.label_maps, config.interpolator, config.padding, config.assembled_label_map)
-    if config.label_map is None:
-        raise ValueError("Give a multilabel label_map or single-label label_maps to read")
+    if config.label_map is None or config.labels is None:
+        raise ValueError("Give a multilabel label_map with labels or single-label label_maps to read")
     logger.info("Reading LabelMap {}", config.label_map)
-    labels = config.labels if config.labels is not None else {config.name: 1}
+    labels: dict[str, int] = {name: value for name, value in config.labels.items()}
     return Segmentation(read_label_map(config.label_map), labels)
 
 
-def _meniscus_brep(config: MeniscusBrep) -> BRep:
-    segmentation = load_segmentation(config)
-    label_map, label = segmentation.image, segmentation.value(config.name)
-    logger.info("Fitting the centerline of {} (label {})", config.name, label)
+def _meniscus_brep(segmentation: Segmentation, structure: Structure, brep_config: LabelMapBrep) -> BRep:
+    config = brep_config.meniscus
+    label_map, label = segmentation.image, segmentation.value(structure)
+    logger.info("Fitting the centerline of {} (label {})", structure, label)
     curve = centerline(label_map, label)
     logger.info("Computing the signed distance field")
     distance_field = signed_distance_field(label_map, label, config.sigma)
@@ -147,12 +158,11 @@ def _meniscus_brep(config: MeniscusBrep) -> BRep:
     return contours_to_brep(slices, config.spline_order, config.cap, config.cap_offset)
 
 
-def _meniscus_mesh(config: MeniscusMesh) -> Mesh:
-    logger.info("Reading B-rep {}", config.brep)
-    brep = read_brep(config.brep)
-    logger.info("Meshing with {} elements of order {}", config.element, config.element_order)
-    if config.element == "hexahedral":
-        mesh = hexahedral_mesh(brep, config.elements_per_edge, config.elements_along, config.element_order, config.second_order_incomplete)
+def _meniscus_mesh(brep: BRep, mesh_config: BrepMesh) -> Mesh:
+    config = mesh_config.meniscus
+    logger.info("Meshing with {} elements", mesh_config.element_type)
+    if mesh_config.element_shape == "hexahedral":
+        mesh = hexahedral_mesh(brep, config.elements_per_edge, config.elements_along, mesh_config.element_order, mesh_config.second_order_incomplete)
         return _optimize(mesh, config) if config.optimize else mesh
     return tetrahedral_mesh(
         brep,
@@ -161,8 +171,8 @@ def _meniscus_mesh(config: MeniscusMesh) -> Mesh:
         config.elements_per_circle,
         config.algorithm_2d,
         config.algorithm_3d,
-        config.element_order,
-        config.second_order_incomplete,
+        mesh_config.element_order,
+        mesh_config.second_order_incomplete,
     )
 
 
@@ -184,6 +194,19 @@ def _optimize(mesh: Mesh, config: MeniscusMesh) -> Mesh:
     return optimized
 
 
+# The pipeline that builds each implemented structure's B-rep from a segmentation.
+_BREP_BUILDERS: dict[Structure, _BrepBuilder] = {
+    "lateral_meniscus": _meniscus_brep,
+    "medial_meniscus": _meniscus_brep,
+}
+
+# The pipeline that meshes each implemented structure's B-rep.
+_MESHERS: dict[Structure, _Mesher] = {
+    "lateral_meniscus": _meniscus_mesh,
+    "medial_meniscus": _meniscus_mesh,
+}
+
+
 class Configuration[ConfigType: BaseConfig](NamedTuple):
     """A pipeline's configuration and the files it came from and was saved to."""
 
@@ -193,25 +216,25 @@ class Configuration[ConfigType: BaseConfig](NamedTuple):
 
 
 def configure[ConfigType: BaseConfig](
-    config_types: Mapping[str, type[ConfigType]] | type[ConfigType],
+    config_type: type[ConfigType],
     description: str,
     argv: Sequence[str] | None = None,
     timestamp: str | None = None,
 ) -> Configuration[ConfigType]:
     """Build a configuration from command-line options, an optional JSON file, and overrides.
 
-    Given a mapping, the first argument is a subcommand naming the structure,
-    a key of config_types, such as meniscus --points-per-slice 10. Given a
-    single model, there is no subcommand. Every field of the configuration is
-    an option, and values given on the command line override those in
-    --config. The configuration is saved so the run can be repeated: as
-    settings<timestamp>.json in the working directory when there is no
-    --config, or as <config stem>_modified.json beside the file when
-    overrides change it. A config file used without overrides is not copied.
+    Every field of the configuration is an option, such as --points-per-slice
+    for points_per_slice. A field holding another configuration, a section
+    such as meniscus, gives an option for each of its fields, such as
+    --meniscus.points-per-slice. Values given on the command line override
+    those in --config, field by field within sections. The configuration is
+    saved so the run can be repeated: as settings<timestamp>.json in the
+    working directory when there is no --config, or as
+    <config stem>_modified.json beside the file when overrides change it. A
+    config file used without overrides is not copied.
 
     Args:
-        config_types: Configuration model for each structure subcommand, or
-            the one model of a command without subcommands.
+        config_type: Configuration model of the command.
         description: Description for the command's help.
         argv: Command-line arguments, by default sys.argv[1:].
         timestamp: Timestamp for the settings file name, by default the current time.
@@ -221,25 +244,16 @@ def configure[ConfigType: BaseConfig](
         configuration was saved to, or None if it was not saved.
     """
     parser = argparse.ArgumentParser(description=description)
-    if isinstance(config_types, Mapping):
-        subparsers = parser.add_subparsers(dest="structure", required=True, metavar="structure")
-        option_parsers: dict[str, argparse.ArgumentParser] = {}
-        for structure, structure_type in config_types.items():
-            summary = (structure_type.__doc__ or "").strip().splitlines()[0]
-            option_parsers[structure] = _add_config_options(subparsers.add_parser(structure, help=summary, description=summary), structure_type)
-        arguments = vars(parser.parse_args(argv))
-        structure = arguments.pop("structure")
-        config_type, option_parser = config_types[structure], option_parsers[structure]
-    else:
-        config_type, option_parser = config_types, _add_config_options(parser, config_types)
-        arguments = vars(parser.parse_args(argv))
-    config_path = arguments.pop("config")
+    parser.add_argument("--config", type=Path, help="JSON configuration; options given here override its values")
+    _add_config_options(parser, config_type)
+    arguments = vars(parser.parse_args(argv))
+    config_path: Path | None = arguments.pop("config")
 
     values = json.loads(config_path.read_text(encoding="utf-8")) if config_path is not None else {}
     try:
-        config = config_type.model_validate({**values, **arguments})
+        config = config_type.model_validate(_merge_overrides(values, arguments))
     except ValidationError as error:
-        option_parser.error(str(error))
+        parser.error(str(error))
 
     if config_path is None:
         saved = Path(f"settings{timestamp or _timestamp()}.json")
@@ -252,13 +266,46 @@ def configure[ConfigType: BaseConfig](
     return Configuration(config, config_path, saved)
 
 
-def _add_config_options(parser: argparse.ArgumentParser, config_type: type[BaseConfig]) -> argparse.ArgumentParser:
-    """Add --config and an option for every field of config_type to parser, returning parser."""
-    parser.add_argument("--config", type=Path, help="JSON configuration; options given here override its values")
+def _section_type(annotation: object) -> type[BaseConfig] | None:
+    """The configuration model a field holds, or None if it holds a plain value."""
+    return annotation if isinstance(annotation, type) and issubclass(annotation, BaseConfig) else None
+
+
+def _add_config_options(parser: argparse.ArgumentParser, config_type: type[BaseConfig]) -> None:
+    """Add an option for every field of config_type to parser, with one argument group per section."""
     defaults = config_type().model_dump(mode="json")
     for name, field in config_type.model_fields.items():
-        parser.add_argument(f"--{name.replace('_', '-')}", dest=name, default=argparse.SUPPRESS, help=f"{field.description} (default: {defaults[name]})")
-    return parser
+        section = _section_type(field.annotation)
+        if section is None:
+            parser.add_argument(f"--{name.replace('_', '-')}", dest=name, default=argparse.SUPPRESS, help=_option_help(field, defaults[name]))
+            continue
+        group = parser.add_argument_group(f"{name} options", field.description)
+        for option, option_field in section.model_fields.items():
+            group.add_argument(
+                f"--{name.replace('_', '-')}.{option.replace('_', '-')}",
+                dest=f"{name}.{option}",
+                metavar=option.upper(),
+                default=argparse.SUPPRESS,
+                help=_option_help(option_field, defaults[name][option]),
+            )
+
+
+def _option_help(field: FieldInfo, default: object) -> str:
+    # argparse formats help with %, so a literal percent sign must be doubled.
+    return f"{field.description} (default: {default})".replace("%", "%%")
+
+
+def _merge_overrides(values: dict[str, Any], arguments: Mapping[str, object]) -> dict[str, Any]:
+    """Layer command-line arguments over config file values, merging section.field arguments into their sections."""
+    merged = dict(values)
+    for key, value in arguments.items():
+        section, _, name = key.rpartition(".")
+        if not section:
+            merged[key] = value
+            continue
+        current = merged.get(section)
+        merged[section] = {**(current if isinstance(current, dict) else {}), name: value}
+    return merged
 
 
 def assemble_main(argv: Sequence[str] | None = None) -> int:
@@ -271,16 +318,14 @@ def assemble_main(argv: Sequence[str] | None = None) -> int:
 def brep_main(argv: Sequence[str] | None = None) -> int:
     """Run the B-rep pipeline from the command line."""
     timestamp = _timestamp()
-    config_types = {structure: brep for structure, (brep, _) in STRUCTURES.items()}
-    setup = configure(config_types, "Build a B-rep of a knee structure from a segmented LabelMap.", argv, timestamp)
+    setup = configure(LabelMapBrep, "Build a B-rep of each knee structure in a segmented LabelMap.", argv, timestamp)
     return _run(lambda: run_brep(setup.config), setup, Path(f"brep{timestamp}.log"))
 
 
 def mesh_main(argv: Sequence[str] | None = None) -> int:
     """Run the meshing pipeline from the command line."""
     timestamp = _timestamp()
-    config_types = {structure: mesh for structure, (_, mesh) in STRUCTURES.items()}
-    setup = configure(config_types, "Mesh a knee structure's B-rep.", argv, timestamp)
+    setup = configure(BrepMesh, "Mesh the B-rep of each knee structure.", argv, timestamp)
     return _run(lambda: run_mesh(setup.config), setup, Path(f"mesh{timestamp}.log"))
 
 
@@ -288,7 +333,7 @@ def _timestamp() -> str:
     return f"{datetime.now():%Y%m%d_%H%M%S}"
 
 
-def _run[ConfigType: LabelMapAssembly | LabelMapBrep | BrepMesh](step: Callable[[], object], setup: Configuration[ConfigType], default_log: Path) -> int:
+def _run[ConfigType: BaseConfig](step: Callable[[], object], setup: Configuration[ConfigType], default_log: Path) -> int:
     """Run a pipeline step, logging to stderr and to a file named for its configuration.
 
     The log file is <config stem>.log beside the --config file, or default_log
@@ -316,7 +361,6 @@ def _run[ConfigType: LabelMapAssembly | LabelMapBrep | BrepMesh](step: Callable[
         except Exception:
             logger.exception("Pipeline failed unexpectedly")
             raise
-        logger.info("Wrote {}", setup.config.output)
         return 0
     finally:
         logger.disable("kneemesh")

@@ -1,39 +1,43 @@
 # Usage
 
-`kneemesh-assemble` combines single-label LabelMaps into one multilabel LabelMap. Two further pipelines, `kneemesh-brep` and `kneemesh-mesh`, take the structure as their first argument, then a JSON configuration, `--option value` overrides, or both. The structures are `meniscus`, `tibial-cartilage`, `femoral-cartilage`, `patellar-cartilage`, `tibia`, `femur`, and `patella`; only `meniscus` is implemented so far. Run `kneemesh-brep meniscus --help` to list every option and its default. Every option is a field of the structure's model, such as {py:class}`~kneemesh.config.MeniscusBrep` or {py:class}`~kneemesh.config.MeniscusMesh`, with underscores written as dashes.
+`kneemesh-assemble` combines single-label LabelMaps into one multilabel LabelMap. `kneemesh-brep` builds a B-rep of every structure in a segmentation, and `kneemesh-mesh` meshes each structure's B-rep. Each takes a JSON configuration, `--option value` overrides, or both, and `--help` lists every option and its default. Every option is a field of the command's model, {py:class}`~kneemesh.config.LabelMapAssembly`, {py:class}`~kneemesh.config.LabelMapBrep`, or {py:class}`~kneemesh.config.BrepMesh`, with underscores written as dashes. Settings for one kind of structure sit in a section, such as `meniscus`, and are given on the command line as `--meniscus.points-per-slice 10`.
+
+The structure names, keys of `labels`, `label_maps`, and `breps`, pick each structure's pipeline: `lateral_meniscus`, `medial_meniscus`, `patellar_cartilage`, `femoral_cartilage`, `lateral_tibial_cartilage`, `medial_tibial_cartilage`, `femur`, `tibia`, and `patella`. Only the menisci are implemented so far; naming any other structure fails before any work starts.
+
+Each structure's output is written to `<output-directory>/<structure><output>`, where `--output` is a suffix. B-rep suffixes end in `.brep`, `.brep` by default. Mesh suffixes default to `_{element_type}.msh`, with `{element_type}` replaced by `--element-type`: `hex8`, `hex20`, `hex27`, `tet4` (the default), or `tet10`. gmsh infers the mesh format from the extension.
 
 ```sh
-kneemesh-brep meniscus --label-map meniscus.nii --output meniscus.brep --cap planar
-kneemesh-brep meniscus --label-map knee.nii --labels '{"tibia": 1, "medial_meniscus": 3}' --name medial_meniscus
-kneemesh-mesh meniscus --brep meniscus.brep --output meniscus.msh --max-size 1.0
+kneemesh-brep --label-map meniscus.nii --labels '{"medial_meniscus": 1}' --meniscus.cap planar
+kneemesh-brep --label-map knee.nii --labels '{"lateral_meniscus": 2, "medial_meniscus": 3}'
+kneemesh-mesh --breps '{"medial_meniscus": "medial_meniscus.brep"}' --meniscus.max-size 1.0
 ```
 
-Each run saves the configuration it used, so it can be repeated with `--config`, still naming the structure. Without `--config` it is saved as `settings<timestamp>.json` in the working directory. With `--config` and overrides, the changed configuration is saved beside the original as `<name>_modified.json`.
+The last command writes `medial_meniscus_tet4.msh`. Each run saves the configuration it used, so it can be repeated with `--config`. Without `--config` it is saved as `settings<timestamp>.json` in the working directory. With `--config` and overrides, the changed configuration is saved beside the original as `<name>_modified.json`. Section overrides change only the fields given, leaving the section's other values from `--config`.
 
-For a hexahedral mesh, build the B-rep with `--hex-blocks true --points-per-slice 10` and mesh it with `--element hexahedral`. Add `--optimize true` to move the nodes afterward for better scaled Jacobians with {py:func}`~kneemesh.mesh_optimization.optimize_hexahedral_mesh`. Boundary nodes may then leave the B-rep's surface by up to `--surface-deviation` times the local element size, 0.1 by default, without changing the volume overall; `--surface-deviation 0` keeps them on its tangent planes.
+For a hexahedral mesh, build the B-reps with `--meniscus.hex-blocks true --meniscus.points-per-slice 10` and mesh them with `--element-type hex8`, `hex20`, or `hex27`. Add `--meniscus.optimize true` to move the nodes afterward for better scaled Jacobians with {py:func}`~kneemesh.mesh_optimization.optimize_hexahedral_mesh`. Boundary nodes may then leave the B-rep's surface by up to `--meniscus.surface-deviation` times the local element size, 0.1 by default, without changing the volume overall; `--meniscus.surface-deviation 0` keeps them on its tangent planes.
 
 ## Segmentations
 
 When the structures are segmented in separate files, assemble them once with `kneemesh-assemble`, a pipeline configured by {py:class}`~kneemesh.config.LabelMapAssembly`:
 
 ```sh
-kneemesh-assemble --label-maps '{"tibia": "tibia.nii", "medial_meniscus": "meniscus.nii"}' --output knee.nrrd
+kneemesh-assemble --label-maps '{"lateral_meniscus": "lateral.nii", "medial_meniscus": "medial.nii"}' --output knee.nrrd
 ```
 
 It writes `knee.nrrd` and its labels in `knee_labels.json` beside it, logging to `assemble<timestamp>.log`. Structures get the values 1, 2, ... in the order given.
 
-Every B-rep pipeline reads a segmentation and builds the structure that `--name` names in it. Give the segmentation one of two ways:
+`kneemesh-brep` reads a segmentation and builds every structure named in it. Give the segmentation one of two ways:
 
-- **A multilabel LabelMap** with `--label-map`, and `--labels` naming its values as JSON, such as `'{"tibia": 1, "medial_tibial_cartilage": 2, "medial_meniscus": 3}'`. Without `--labels`, the LabelMap is read as holding only the structure, with value 1. An assembled LabelMap is read with `--label-map knee.nrrd --labels "$(cat knee_labels.json)"`.
-- **Single-label LabelMaps** with `--label-maps`, assembled within the run as `kneemesh-assemble` does, one file per structure by name, such as `'{"tibia": "tibia.nii", "medial_meniscus": "meniscus.nii"}'`. Every nonzero voxel of a file is its structure. {py:func}`~kneemesh.segmentation.assemble_label_maps` resamples them onto one grid, in the first file's orientation, with the smallest voxel spacing along each axis and a background margin of `--padding` voxels. `--interpolator` chooses `label_gaussian` (the default) or `nearest_neighbor`. Where structures overlap after resampling, the one listed later wins. `--assembled-label-map knee.nrrd` also writes the assembled LabelMap and `knee_labels.json`, as `kneemesh-assemble` does. {py:func}`~kneemesh.disk.read_segmentation` reads them in Python.
+- **A multilabel LabelMap** with `--label-map`, and `--labels` naming its values as JSON, such as `'{"lateral_meniscus": 2, "medial_meniscus": 3}'`. `--labels` is required, and values it does not name are ignored. An assembled LabelMap is read with `--label-map knee.nrrd --labels "$(cat knee_labels.json)"`.
+- **Single-label LabelMaps** with `--label-maps`, assembled within the run as `kneemesh-assemble` does, one file per structure by name, such as `'{"lateral_meniscus": "lateral.nii", "medial_meniscus": "medial.nii"}'`. Every nonzero voxel of a file is its structure. {py:func}`~kneemesh.segmentation.assemble_label_maps` resamples them onto one grid, in the first file's orientation, with the smallest voxel spacing along each axis and a background margin of `--padding` voxels. `--interpolator` chooses `label_gaussian` (the default) or `nearest_neighbor`. Where structures overlap after resampling, the one listed later wins. `--assembled-label-map knee.nrrd` also writes the assembled LabelMap and `knee_labels.json`, as `kneemesh-assemble` does. {py:func}`~kneemesh.disk.read_segmentation` reads them in Python.
 
-Cartilage structures also name the bone beneath them with `--bone`, which must be in the segmentation too.
+Every structure in the segmentation is built, so name only implemented structures for now. A cartilage will need the bone beneath it in the segmentation too: `patella` for `patellar_cartilage`, `femur` for `femoral_cartilage`, and `tibia` for either tibial cartilage.
 
 ```json
 {
-  "label_maps": {"tibia": "tibia.nii", "medial_meniscus": "medial_meniscus.nii"},
+  "label_maps": {"lateral_meniscus": "lateral_meniscus.nii", "medial_meniscus": "medial_meniscus.nii"},
   "assembled_label_map": "knee.nrrd",
-  "name": "medial_meniscus",
-  "output": "medial_meniscus.brep"
+  "output": "_hex.brep",
+  "meniscus": {"points_per_slice": 10, "hex_blocks": true}
 }
 ```

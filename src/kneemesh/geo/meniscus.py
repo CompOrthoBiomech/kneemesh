@@ -25,6 +25,7 @@ from kneemesh.brep import (
     add_bspline_curve,
     add_closed_points,
     add_closed_wire,
+    add_periodic_swept_surface,
     add_swept_surface,
     chord_parameters,
     clamped_interpolation,
@@ -172,14 +173,15 @@ def contours_to_brep(
 ) -> BRep:
     """Loft a B-spline surface through contour slices, optionally capping its ends.
 
-    Each contour becomes a periodic B-spline through all of its points, and the
-    surface interpolates those curves in the order given. Without caps it spans
-    only the first to last slice.
+    Each contour becomes a periodic B-spline through all of its points, at
+    parameters shared by every contour, and the surface interpolates those
+    curves in the order given, at parameters proportional to the distance
+    between slice centers. Without caps it spans only the first to last slice.
 
     Args:
         slices: Contours from slice_isocontour, in order along the curve.
-        spline_order: Polynomial degree of the contour splines and the maximum
-            degree of the surface. 3 is cubic.
+        spline_order: Polynomial degree of the contour splines. The degree
+            along the curve is at most 3. 3 is cubic, and 1 gives a ruled surface.
         cap: How to close the two ends. "none" leaves an open surface.
             "planar" closes each end with a flat face in its slice's plane.
             "smooth" closes each with a convex dome converging to one point.
@@ -193,8 +195,9 @@ def contours_to_brep(
 
     Raises:
         ValueError: If there are fewer than 2 slices, spline_order is outside
-            1 to 25, a contour has too few points for spline_order, cap is
-            unknown, or cap_offset is not positive.
+            1 to 25, a contour has too few points for spline_order, contours
+            have unequal point counts, cap is unknown, or cap_offset is not
+            positive.
     """
     if cap not in ("none", "planar", "smooth"):
         # Unreachable for type-checked callers, but configs and scripts can pass any string.
@@ -203,25 +206,30 @@ def contours_to_brep(
         raise ValueError(f"cap_offset must be positive, got {cap_offset}")
     _require_loftable(slices, spline_order)
 
+    if len({len(contour.points) for contour in slices}) > 1:
+        raise ValueError("Lofting needs the same number of points on every contour")
+
+    point_count = len(slices[0].points)
+    projected = [_project_onto_plane(contour) for contour in slices]
+    # Shared parameters give every contour spline the same knot vector, so the
+    # surface's poles form a grid. Contour points are evenly spaced, so the
+    # mean chord parameters stay close to each contour's own.
+    parameters = np.mean([chord_parameters(points) for points in projected], axis=0)
+    splines = [periodic_spline(points, spline_order, parameters) for points in projected]
+    along = open_chord_parameters(np.array([contour.center for contour in slices]))
+    along_degree = min(spline_order, 3, len(slices) - 1)
+
     with gmsh_session():
-        splines = [periodic_spline(_project_onto_plane(contour), spline_order) for contour in slices]
-        wires = [add_closed_wire(spline, len(contour.points)) for spline, contour in zip(splines, slices)]
-        # Open Cascade only honors a loft degree of 1 for a ruled surface.
-        # Open Cascade's default C2 continuity makes the loft overshoot in its end
-        # spans where real sections taper quickly toward the horns, folding the
-        # surface so gmsh cannot mesh it. C1 lets it follow the sections.
-        loft = gmsh.model.occ.addThruSections(
-            wires, makeSolid=False, makeRuled=spline_order == 1, maxDegree=spline_order, continuity="C1"
-        )
-        ends = [(slices[0], splines[0], wires[0], -1.0), (slices[-1], splines[-1], wires[-1], 1.0)]
+        loft = add_periodic_swept_surface(splines, point_count, along, along_degree)
+        ends = [(slices[0], splines[0], -1.0), (slices[-1], splines[-1], 1.0)]
         caps = None
         if cap == "planar":
-            caps = [gmsh.model.occ.addPlaneSurface([wire]) for _, _, wire, _ in ends]
+            caps = [gmsh.model.occ.addPlaneSurface([add_closed_wire(spline, point_count)]) for _, spline, _ in ends]
         elif cap == "smooth":
-            caps = [_add_smooth_cap(spline, contour, sign * contour.normal, cap_offset) for contour, spline, _, sign in ends]
-        if cap != "none" and caps is not None:
-            # addThruSections' makeSolid returns a volume with no end faces.
-            shell = gmsh.model.occ.addSurfaceLoop([*(tag for _, tag in loft), *caps], sewing=True)
+            caps = [_add_smooth_cap(spline, contour, sign * contour.normal, cap_offset) for contour, spline, sign in ends]
+        if caps is not None:
+            # The caps' rims are the loft's end sections, so sewing joins them.
+            shell = gmsh.model.occ.addSurfaceLoop([loft, *caps], sewing=True)
             gmsh.model.occ.addVolume([shell])
         gmsh.model.occ.synchronize()
         return export_brep()
@@ -244,7 +252,9 @@ def contours_to_hex_blocks(slices: list[ContourSlice], spline_order: int = 3) ->
 
     The blocks' faces are B-spline surfaces interpolating the slices with a
     knot vector shared by every face along the curve, so neighboring faces
-    meet exactly. They differ slightly from contours_to_brep's loft.
+    meet exactly. contours_to_brep builds its surface the same way, but at
+    shared contour parameters rather than split at the block corners, so the
+    two differ slightly.
 
     Args:
         slices: Contours from slice_isocontour, in order along the curve, all

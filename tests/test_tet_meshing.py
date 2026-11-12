@@ -50,7 +50,7 @@ def test_tetrahedral_mesh_follows_max_size(meniscus_solid, size):
 
 
 def test_tetrahedral_mesh_min_size_limits_curvature_refinement(meniscus_solid):
-    fine = tetrahedral_mesh(meniscus_solid, max_size=4.0, elements_per_circle=12)
+    fine = tetrahedral_mesh(meniscus_solid, min_size=0.0, max_size=4.0, elements_per_circle=12)
     limited = tetrahedral_mesh(meniscus_solid, min_size=2.0, max_size=4.0, elements_per_circle=12)
 
     assert len(limited.elements["Tetrahedron 4"]) < len(fine.elements["Tetrahedron 4"])
@@ -59,7 +59,8 @@ def test_tetrahedral_mesh_min_size_limits_curvature_refinement(meniscus_solid):
 
 def test_curvature_sizing_refines_the_mesh(meniscus_solid):
     def count(elements_per_circle):
-        return len(tetrahedral_mesh(meniscus_solid, max_size=4.0, elements_per_circle=elements_per_circle).elements["Tetrahedron 4"])
+        mesh = tetrahedral_mesh(meniscus_solid, min_size=0.0, max_size=4.0, elements_per_circle=elements_per_circle)
+        return len(mesh.elements["Tetrahedron 4"])
 
     assert count(0) < count(6) < count(12)
 
@@ -103,6 +104,19 @@ def test_tetrahedral_mesh_restores_options_of_running_gmsh(meniscus_solid):
         gmsh.finalize()
 
 
+def test_default_min_size_limits_curvature_refinement(meniscus_solid):
+    unlimited = tetrahedral_mesh(meniscus_solid, min_size=0.0, max_size=4.0, elements_per_circle=24)
+    default = tetrahedral_mesh(meniscus_solid, max_size=4.0, elements_per_circle=24)
+    span = np.ptp(default.nodes, axis=0).max()
+
+    assert len(default.elements["Tetrahedron 4"]) < len(unlimited.elements["Tetrahedron 4"])
+    assert median_edge_length(default) > 0.8 * span / 20
+
+
+def test_default_min_size_yields_to_a_smaller_max_size(meniscus_solid):
+    assert median_edge_length(tetrahedral_mesh(meniscus_solid, max_size=1.0)) == pytest.approx(1.0, rel=0.25)
+
+
 def test_tetrahedral_mesh_rejects_open_surface(meniscus_surface):
     with pytest.raises(ValueError, match="solid"):
         tetrahedral_mesh(meniscus_surface)
@@ -113,6 +127,7 @@ def test_tetrahedral_mesh_rejects_open_surface(meniscus_surface):
     [
         ({"min_size": -1.0}, "min_size"),
         ({"min_size": 2.0, "max_size": 1.0}, "max_size"),
+        ({"max_size": 0.0}, "max_size must be positive"),
         ({"elements_per_circle": -1}, "elements_per_circle"),
         ({"element_order": 0}, "element_order"),
     ],

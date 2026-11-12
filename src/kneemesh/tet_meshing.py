@@ -63,6 +63,10 @@ class Algorithm3D(_GmshAlgorithm):
     HXT = "hxt", 10
 
 
+DEFAULT_MIN_SIZE_FRACTION = 1 / 20
+"""Default smallest element size as a fraction of the longest side of the shape's bounding box."""
+
+
 @dataclass(frozen=True, eq=False)
 class Mesh:
     """A volume mesh.
@@ -82,7 +86,7 @@ class Mesh:
 
 def tetrahedral_mesh(
     brep: BRep,
-    min_size: float = 0.0,
+    min_size: float | None = None,
     max_size: float | None = None,
     elements_per_circle: int = 0,
     algorithm_2d: Algorithm2D = Algorithm2D.FRONTAL_DELAUNAY,
@@ -94,7 +98,11 @@ def tetrahedral_mesh(
 
     Args:
         brep: A solid, such as contours_to_brep with a cap.
-        min_size: Smallest element size, in physical units.
+        min_size: Smallest element size, in physical units. By default
+            DEFAULT_MIN_SIZE_FRACTION of the longest side of the shape's
+            bounding box, but no more than max_size, which keeps small
+            geometric features and curvature sizing from producing
+            excessively small elements. 0 sets no limit.
         max_size: Largest element size, in physical units. By default gmsh's
             size from the shape's extent applies.
         elements_per_circle: Size elements so that a full circle of the local
@@ -112,16 +120,17 @@ def tetrahedral_mesh(
     Raises:
         ValueError: If a size or count is out of range or brep has no volume.
     """
-    if min_size < 0:
+    if max_size is not None and max_size <= 0:
+        raise ValueError(f"max_size must be positive, got {max_size}")
+    if min_size is not None and min_size < 0:
         raise ValueError(f"min_size must not be negative, got {min_size}")
-    if max_size is not None and max_size <= min_size:
+    if min_size is not None and max_size is not None and max_size <= min_size:
         raise ValueError(f"max_size must exceed min_size, got {max_size} and {min_size}")
     if elements_per_circle < 0:
         raise ValueError(f"elements_per_circle must not be negative, got {elements_per_circle}")
     require_element_order(element_order)
 
-    options = {
-        "Mesh.MeshSizeMin": min_size,
+    options: dict[str, float | bool] = {
         "Mesh.MeshSizeFromCurvature": elements_per_circle,
         "Mesh.Algorithm": Algorithm2D(algorithm_2d).number,
         "Mesh.Algorithm3D": Algorithm3D(algorithm_3d).number,
@@ -131,9 +140,16 @@ def tetrahedral_mesh(
     if max_size is not None:
         options["Mesh.MeshSizeMax"] = max_size
 
-    with gmsh_session(), gmsh_options(options):
+    with gmsh_session():
         import_solid(brep)
-        gmsh.model.mesh.generate(3)
+        if min_size is None:
+            min_size = DEFAULT_MIN_SIZE_FRACTION * longest_extent()
+            if max_size is not None:
+                min_size = min(min_size, max_size)
+            logger.debug("Default smallest element size is {:.4g}", min_size)
+        options["Mesh.MeshSizeMin"] = min_size
+        with gmsh_options(options):
+            gmsh.model.mesh.generate(3)
         return volume_mesh()
 
 
@@ -169,6 +185,12 @@ def import_solid(brep: BRep) -> None:
     gmsh.model.occ.synchronize()
     if not gmsh.model.getEntities(3):
         raise ValueError("Meshing needs a solid B-rep, such as contours_to_brep with a cap")
+
+
+def longest_extent() -> float:
+    """Return the longest side of the current gmsh model's bounding box."""
+    x_min, y_min, z_min, x_max, y_max, z_max = gmsh.model.getBoundingBox(-1, -1)
+    return float(max(x_max - x_min, y_max - y_min, z_max - z_min))
 
 
 def volume_mesh() -> Mesh:

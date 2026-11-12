@@ -65,9 +65,20 @@ def chord_parameters(points: np.ndarray) -> np.ndarray:
     return lengths / lengths[-1]
 
 
-def periodic_spline(points: np.ndarray, spline_order: int) -> BSpline:
-    """Return a periodic B-spline through points, over parameters 0 to 1 proportional to chord length."""
-    return make_interp_spline(chord_parameters(points), np.vstack((points, points[:1])), k=spline_order, bc_type="periodic")
+def periodic_spline(points: np.ndarray, spline_order: int, parameters: np.ndarray | None = None) -> BSpline:
+    """Return a periodic B-spline through points.
+
+    Args:
+        points: (N, 3) points around a closed contour, without the closing point repeated.
+        spline_order: Polynomial degree.
+        parameters: N + 1 increasing parameters from 0 to 1, the last for the
+            repeated first point. By default proportional to chord length.
+            Splines through equally many points at the same parameters share
+            one knot vector.
+    """
+    if parameters is None:
+        parameters = chord_parameters(points)
+    return make_interp_spline(parameters, np.vstack((points, points[:1])), k=spline_order, bc_type="periodic")
 
 
 def open_chord_parameters(points: np.ndarray) -> np.ndarray:
@@ -121,6 +132,41 @@ def add_swept_surface(rows: list[tuple[np.ndarray, np.ndarray]], degree: int, al
         knotsU=unique_knots.tolist(),
         knotsV=unique_along.tolist(),
         multiplicitiesU=multiplicities.tolist(),
+        multiplicitiesV=along_multiplicities.tolist(),
+    )
+
+
+def add_periodic_swept_surface(splines: list[BSpline], point_count: int, along: np.ndarray, along_degree: int) -> int:
+    """Add a closed B-spline surface through periodic section splines sharing one knot vector, returning its tag.
+
+    Each column of poles is interpolated along the curve at the parameters
+    along, as in add_swept_surface, so the surface passes exactly through
+    every section and its two end rims are those sections' curves. Lofting
+    with addThruSections instead lets Open Cascade's approximation overshoot
+    in the end spans where real sections taper, folding the surface so gmsh
+    cannot mesh it.
+
+    Args:
+        splines: Periodic splines from periodic_spline at shared parameters, in order along the curve.
+        point_count: Number of points each spline interpolates.
+        along: Parameter of each section along the curve, from 0 to 1.
+        along_degree: Degree along the curve, at most len(splines) - 1.
+    """
+    sections = [periodic_poles_and_knots(spline, point_count) for spline in splines]
+    knots = sections[0][1]
+    grid = np.array([poles for poles, _ in sections])
+    columns = [clamped_interpolation(along, grid[:, column], along_degree) for column in range(point_count)]
+    along_knots = columns[0][0]
+    poles = np.stack([column_poles for _, column_poles in columns], axis=1)
+    unique_along, along_multiplicities = np.unique(along_knots, return_counts=True)
+    return gmsh.model.occ.addBSplineSurface(
+        [tag for row in poles for tag in add_closed_points(row)],
+        point_count + 1,
+        degreeU=splines[0].k,
+        degreeV=along_degree,
+        knotsU=knots,
+        knotsV=unique_along.tolist(),
+        multiplicitiesU=[1] * len(knots),
         multiplicitiesV=along_multiplicities.tolist(),
     )
 

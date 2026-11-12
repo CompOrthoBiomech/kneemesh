@@ -1,4 +1,5 @@
 import re
+from dataclasses import replace
 from itertools import pairwise
 
 import gmsh
@@ -11,7 +12,8 @@ from scipy.spatial import KDTree
 from kneemesh.brep import gmsh_session
 from kneemesh.disk import write_brep
 from kneemesh.geo.meniscus import centerline, contours_to_brep, contours_to_hex_blocks, slice_isocontour
-from kneemesh.vol import ContourSlice, extract_isocontour, signed_distance_field
+from kneemesh.segmentation import assemble_label_maps
+from kneemesh.vol import DEFAULT_SMOOTHING_ITERATIONS, ContourSlice, extract_isocontour, signed_distance_field, smooth_isocontour
 
 # Area centroid of the voxelized fixture's cross-section. It differs slightly
 # from the ideal triangle (16.67, -1.33) because the fixture's bottom slice lies
@@ -427,9 +429,14 @@ def test_spline_order_sets_surface_degree(meniscus_slices, order):
 
 
 def test_spline_order_one_is_ruled_between_slices(meniscus_slices):
-    degrees = spline_surface_degrees(contours_to_brep(meniscus_slices, spline_order=1))
+    assert spline_surface_degrees(contours_to_brep(meniscus_slices, spline_order=1)) == [(1, 1)]
 
-    assert degrees == [(1, 1)] * (len(meniscus_slices) - 1)
+
+def test_loft_rejects_contours_with_unequal_point_counts(meniscus_slices):
+    shorter = replace(meniscus_slices[1], points=meniscus_slices[1].points[::2])
+
+    with pytest.raises(ValueError, match="same number of points"):
+        contours_to_brep([meniscus_slices[0], shorter, *meniscus_slices[2:]])
 
 
 @pytest.mark.parametrize("fixture", ["meniscus_solid", "meniscus_domed_solid"])
@@ -583,12 +590,16 @@ def surface_folds(brep, tmp_path):
     return folds
 
 
+@pytest.mark.parametrize(("assembled", "smoothing_iterations"), [(False, 0), (True, DEFAULT_SMOOTHING_ITERATIONS)])
 @pytest.mark.parametrize("order", [2, 3])
-def test_loft_of_real_meniscus_does_not_fold(real_label, tmp_path, order):
-    from kneemesh.geo.meniscus import centerline, slice_isocontour
+def test_loft_of_real_meniscus_does_not_fold(real_label, tmp_path, order, assembled, smoothing_iterations):
+    # The pipeline's label Gaussian assembly and smoothing gave sections that
+    # made addThruSections fold the surface, where the raw label did not.
+    label = assemble_label_maps({"lateral_meniscus": real_label}).image if assembled else real_label
+    surface = smooth_isocontour(extract_isocontour(signed_distance_field(label)), smoothing_iterations)
+    slices = slice_isocontour(surface, centerline(label), spacing=5.0)
 
-    slices = slice_isocontour(extract_isocontour(signed_distance_field(real_label)), centerline(real_label), spacing=5.0)
-
-    # The real sections taper quickly toward the horns. A C2 loft overshoots
-    # there and folds, which stalls gmsh's surface meshing indefinitely.
+    # The real sections taper quickly toward the horns. Open Cascade's
+    # addThruSections overshoots there and folds the surface, which stalls
+    # gmsh's surface meshing indefinitely.
     assert surface_folds(contours_to_brep(slices, spline_order=order, cap="planar"), tmp_path) == 0
