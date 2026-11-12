@@ -1,0 +1,5 @@
+# Pipeline outputs; only the configurations are tracked.
+*
+!.gitignore
+!*_brep_*.json
+!*_mesh_*.json

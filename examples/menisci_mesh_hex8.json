@@ -1,0 +1,8 @@
+{
+  "brep": "examples/medial_meniscus_hex8.brep",
+  "output": "examples/medial_meniscus_hex8.vtk",
+  "element": "hexahedral",
+  "element_order": 1,
+  "elements_per_edge": 6,
+  "elements_along": 40
+}

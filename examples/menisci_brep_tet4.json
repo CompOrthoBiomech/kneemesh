@@ -1,0 +1,9 @@
+{
+  "label_maps": {
+    "lateral_meniscus": "tests/dat/mns_l.nii",
+    "medial_meniscus": "tests/dat/mns_m.nii"
+  },
+  "assembled_label_map": "examples/menisci.nrrd",
+  "name": "medial_meniscus",
+  "output": "examples/medial_meniscus_tet4.brep"
+}
