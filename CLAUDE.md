@@ -14,8 +14,8 @@ uv run pytest tests/test_vol.py::test_name     # run one test
 uv add <package>                               # add a runtime dependency
 uv add --dev <package>                         # add a dev dependency
 uv build                                       # build sdist and wheel
-uv run meniscus2brep-brep --help               # LabelMap to B-rep pipeline
-uv run meniscus2brep-mesh --help               # B-rep to mesh pipeline
+uv run kneemesh-brep meniscus --help           # LabelMap to B-rep pipeline
+uv run kneemesh-mesh meniscus --help           # B-rep to mesh pipeline
 uv run --group docs sphinx-build -W -b html docs docs/_build/html   # build the docs
 ```
 
@@ -25,21 +25,23 @@ uv run --group docs sphinx-build -W -b html docs docs/_build/html   # build the 
 
 ## Architecture
 
-The package converts a segmented meniscus image into B-rep geometry, as a pipeline across `src/meniscus2brep/`:
+The package converts segmented knee images into B-rep geometry and meshes, as a pipeline across `src/kneemesh/`. Only the meniscus is implemented; tibial (lateral and medial), femoral, and patellar cartilage and the three bones are planned. Root modules apply to every structure; the `geo/` and `mesh/` subpackages hold one module per structure (`meniscus.py`, `tibia.py`, `femur.py`, `patella.py`). The tibia, femur, and patella modules are docstring-only placeholders.
 
 - `disk.py` reads and writes LabelMaps, `.vtp` poly data, and `.brep` files, and writes meshes in any volume format gmsh infers from the extension.
-- `vol.py` operates on LabelMaps. It produces the centerline spline and the ordered cross-section contours.
-- `geo.py` lofts contour slices into a B-rep with gmsh's Open Cascade kernel, builds the three-block solid that hexahedral meshing needs, and can assemble slices into one `vtkPolyData` of closed polylines.
-- `mesh.py` meshes solid B-reps with gmsh into tetrahedra or block-structured hexahedra, returning a `Mesh` of node coordinates, per-type connectivity in gmsh's node ordering, and gmsh element type numbers. `write_mesh` rebuilds a `Mesh` as a discrete gmsh volume to write it.
-- `config.py` provides `BaseConfig`, the pydantic base class for configuration models parsed from JSON, which rejects unknown keys. `BrepConfig` and `MeshConfig` hold every pipeline argument with its default. The gmsh algorithm enums are string enums named for readability, with gmsh's option number on `.number` and case-insensitive lookup, so configs store them as plain names. Optional numbers read "none" as None.
-- `pipeline.py` runs the two console scripts. `configure` builds an option for every config field, layers command-line values over `--config`, and saves the result: `settings<timestamp>.json` in the working directory without `--config`, or `<stem>_modified.json` beside it when options change it. Command-line values arrive as strings and rely on pydantic's lax coercion.
-- Logging uses loguru. `__init__.py` disables the `meniscus2brep` logger so the library stays silent; modules log step details at DEBUG. The pipelines enable it for the run, sending INFO to stderr and DEBUG to `brep<timestamp>.log` or `mesh<timestamp>.log` in the working directory, or to `<config stem>.log` beside `--config`. They remove their handlers and disable the logger again on exit. Use `logger`, not `print`.
+- `vol.py` operates on LabelMaps: the signed distance field, isocontour extraction and smoothing, `require_3d_label_map`, and the `ContourSlice` value.
+- `brep.py` holds the `BRep` value, `gmsh_session`, `export_brep`, the B-spline helpers that structure modules build geometry from (chord parameters, periodic and clamped fits, splitting, adding curves, wires, and swept surfaces to gmsh), and `contours_to_polydata`.
+- `tet_meshing.py` meshes any solid B-rep with tetrahedra and defines the `Mesh` it returns: node coordinates, per-type connectivity in gmsh's node ordering, and gmsh element type numbers. Its `gmsh_options`, `import_solid`, `volume_mesh`, and `require_element_order` are shared with structure meshers. `write_mesh` rebuilds a `Mesh` as a discrete gmsh volume to write it.
+- `geo/meniscus.py` fits the centerline, slices the surface into ordered contours, lofts them into a B-rep with gmsh's Open Cascade kernel, and builds the five-block solid that hexahedral meshing needs.
+- `mesh/meniscus.py` meshes the five-block solid into block-structured hexahedra.
+- `config.py` provides `BaseConfig`, the pydantic base class for configuration models parsed from JSON, which rejects unknown keys. `LabelMapBrep` (label map, output, label) and `BrepMesh` (B-rep, output, element order) hold the settings every structure shares. Each structure has a `<Structure>Brep` and `<Structure>Mesh` model, such as `MeniscusBrep` and `MeniscusMesh`, holding every pipeline argument with its default; the planned structures' models hold only the shared fields, and the tibial cartilage ones add `name`, since lateral and medial plates share one strategy. The gmsh algorithm enums are string enums named for readability, with gmsh's option number on `.number` and case-insensitive lookup, so configs store them as plain names. Optional numbers read "none" as None.
+- `pipeline.py` runs the two console scripts. `STRUCTURES` maps each subcommand (`meniscus`, `tibial-cartilage`, ...) to its two config models. `configure` takes a subcommand-to-model mapping, builds an option for every field of each model, layers command-line values over `--config`, and saves the result: `settings<timestamp>.json` in the working directory without `--config`, or `<stem>_modified.json` beside it when options change it. Command-line values arrive as strings and rely on pydantic's lax coercion. `run_brep` and `run_mesh` dispatch on the config's type and raise `NotImplementedError` for planned structures, which the console scripts report as an error with exit code 1.
+- Logging uses loguru. `__init__.py` disables the `kneemesh` logger so the library stays silent; modules log step details at DEBUG. The pipelines enable it for the run, sending INFO to stderr and DEBUG to `brep<timestamp>.log` or `mesh<timestamp>.log` in the working directory, or to `<config stem>.log` beside `--config`. They remove their handlers and disable the logger again on exit. Use `logger`, not `print`.
 
 ### LabelMap convention
 
-A LabelMap is a scalar `sitk.Image` with pixel type `sitkUInt8`, `sitkUInt16`, or `sitkInt16` (`vol.LABEL_MAP_PIXEL_IDS`), not SimpleITK's run-length `sitkLabel*` pixel types. `disk.py` enforces this on both read and write and keeps the pixel type rather than casting. It accepts only `.nii`, `.nrrd`, and `.mhd` + `.raw`, so `.nii.gz` is rejected. `vol.centerline` additionally requires a 3D image.
+A LabelMap is a scalar `sitk.Image` with pixel type `sitkUInt8`, `sitkUInt16`, or `sitkInt16` (`vol.LABEL_MAP_PIXEL_IDS`), not SimpleITK's run-length `sitkLabel*` pixel types. `disk.py` enforces this on both read and write and keeps the pixel type rather than casting. It accepts only `.nii`, `.nrrd`, and `.mhd` + `.raw`, so `.nii.gz` is rejected. `vol.signed_distance_field` and `geo.meniscus.centerline` additionally require a 3D image.
 
-### How `vol.centerline` works
+### How `geo.meniscus.centerline` works
 
 `sitk.BinaryThinning` only thins in 2D. Given a 3D image it thins slice by slice and returns a sheet, so it cannot produce the curve directly. It only provides the initial estimate:
 
@@ -65,7 +67,7 @@ The result is a cubic `scipy.interpolate.BSpline` over u in [0, 1], in physical 
 
 ### B-reps through gmsh
 
-gmsh holds its models in global state, so a `BRep` is a plain value holding the `.brep` file's text, and all gmsh work happens inside `gmsh_session()`. Keep these points when changing `contours_to_brep`:
+gmsh holds its models in global state, so a `BRep` is a plain value holding the `.brep` file's text, and all gmsh work happens inside `gmsh_session()`. Keep these points when changing `geo.meniscus.contours_to_brep`:
 
 - gmsh treats a B-spline whose first and last point tags match as periodic, so contours are built with periodic knots.
 - `addThruSections(makeSolid=True)` returns a volume with no end faces and no error. Solids are instead built from the lofted surface, the two caps, and a sewn surface loop.
@@ -91,10 +93,11 @@ gmsh holds its models in global state, so a `BRep` is a plain value holding the 
 
 ## Tests
 
-`tests/conftest.py` defines session-scoped fixtures that every test shares, so tests must not modify them in place:
+Test files mirror the package: root modules have `tests/test_<module>.py`, and structure modules have `tests/geo/test_<structure>.py` and `tests/mesh/test_<structure>.py`. Duplicate basenames work because pytest runs with `--import-mode=importlib`. `tests/conftest.py` defines session-scoped fixtures that every test shares, so tests must not modify them in place:
 
 - `meniscus_label` is a synthetic meniscus: a triangular cross-section swept 270° about the z axis, with the gap facing -x.
 - `meniscus_centerline` is `centerline(meniscus_label)`. Use it instead of calling `centerline` on the same image again.
-- `meniscus_distance_field`, `meniscus_mesh`, `meniscus_slices`, `meniscus_contours`, `meniscus_surface`, `meniscus_solid`, `meniscus_domed_solid`, `meniscus_hex_slices`, and `meniscus_hex_blocks` are the later pipeline stages for the same label.
+- `meniscus_distance_field`, `meniscus_mesh`, `meniscus_smoothed_mesh`, `meniscus_slices`, `meniscus_contours`, `meniscus_surface`, `meniscus_solid`, `meniscus_domed_solid`, `meniscus_hex_slices`, `meniscus_hex_blocks`, `meniscus_tetrahedra`, and `meniscus_hexahedra` are the later pipeline stages for the same label.
+- `real_label` is the real meniscus in `tests/dat/mns_l.nii`, a single label.
 
 The fixture's voxelized cross-section centroid is r = 16.43, z = -1.67, not the ideal triangle's r = 16.67, z = -1.33. Its bottom slice lies exactly on the triangle's base and counts as a whole voxel layer, which also makes its voxel volume about 12% above the analytic value. Compare against the voxelized values or use a suitable tolerance.

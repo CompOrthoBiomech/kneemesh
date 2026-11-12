@@ -41,7 +41,7 @@ jobs:
         run: uv sync --locked
 
       - name: Run tests
-        run: uv run pytest --cov=meniscus2brep --cov-report=term --cov-report=xml
+        run: uv run pytest --cov=kneemesh --cov-report=term --cov-report=xml
 
       - uses: actions/upload-artifact@v4
         with:
@@ -105,7 +105,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: pypi
-      url: https://pypi.org/project/meniscus2brep/
+      url: https://pypi.org/project/kneemesh/
     permissions:
       id-token: write # PyPI trusted publishing
     steps:

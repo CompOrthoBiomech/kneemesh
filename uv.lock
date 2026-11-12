@@ -596,6 +596,55 @@ wheels = [
 ]
 
 [[package]]
+name = "kneemesh"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "gmsh" },
+    { name = "loguru" },
+    { name = "numpy" },
+    { name = "pydantic" },
+    { name = "scipy" },
+    { name = "simpleitk" },
+    { name = "vtk" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "pytest-cov" },
+]
+docs = [
+    { name = "autodoc-pydantic" },
+    { name = "furo" },
+    { name = "myst-parser" },
+    { name = "sphinx" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "gmsh", specifier = ">=4.15.2" },
+    { name = "loguru", specifier = ">=0.7.3" },
+    { name = "numpy", specifier = ">=2.5.4" },
+    { name = "pydantic", specifier = ">=2.14.3" },
+    { name = "scipy", specifier = ">=1.18.1" },
+    { name = "simpleitk", specifier = ">=2.5.7" },
+    { name = "vtk", specifier = ">=9.7.2" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest", specifier = ">=9.2.0" },
+    { name = "pytest-cov", specifier = ">=7.1.0" },
+]
+docs = [
+    { name = "autodoc-pydantic", specifier = ">=2.2.0" },
+    { name = "furo", specifier = ">=2025.12.19" },
+    { name = "myst-parser", specifier = ">=5.2.0" },
+    { name = "sphinx", specifier = ">=9.2.0" },
+]
+
+[[package]]
 name = "loguru"
 version = "0.7.3"
 source = { registry = "https://pypi.org/simple" }
@@ -791,55 +840,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/d6/54/cfe61301667036ec958cb99bd3efefba235e65cdeb9c84d24a8293ba1d90/mdurl-0.1.2.tar.gz", hash = "sha256:bb413d29f5eea38f31dd4754dd7377d4465116fb207585f97bf925588687c1ba", size = 8729, upload-time = "2022-08-14T12:40:10.846Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b3/38/89ba8ad64ae25be8de66a6d463314cf1eb366222074cfda9ee839c56a4b4/mdurl-0.1.2-py3-none-any.whl", hash = "sha256:84008a41e51615a49fc9966191ff91509e3c40b939176e643fd50a5c2196b8f8", size = 9979, upload-time = "2022-08-14T12:40:09.779Z" },
-]
-
-[[package]]
-name = "meniscus2brep"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "gmsh" },
-    { name = "loguru" },
-    { name = "numpy" },
-    { name = "pydantic" },
-    { name = "scipy" },
-    { name = "simpleitk" },
-    { name = "vtk" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "pytest" },
-    { name = "pytest-cov" },
-]
-docs = [
-    { name = "autodoc-pydantic" },
-    { name = "furo" },
-    { name = "myst-parser" },
-    { name = "sphinx" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "gmsh", specifier = ">=4.15.2" },
-    { name = "loguru", specifier = ">=0.7.3" },
-    { name = "numpy", specifier = ">=2.5.4" },
-    { name = "pydantic", specifier = ">=2.14.3" },
-    { name = "scipy", specifier = ">=1.18.1" },
-    { name = "simpleitk", specifier = ">=2.5.7" },
-    { name = "vtk", specifier = ">=9.7.2" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "pytest", specifier = ">=9.2.0" },
-    { name = "pytest-cov", specifier = ">=7.1.0" },
-]
-docs = [
-    { name = "autodoc-pydantic", specifier = ">=2.2.0" },
-    { name = "furo", specifier = ">=2025.12.19" },
-    { name = "myst-parser", specifier = ">=5.2.0" },
-    { name = "sphinx", specifier = ">=9.2.0" },
 ]
 
 [[package]]

@@ -1,10 +1,10 @@
 import SimpleITK as sitk
 
-import meniscus2brep
+import kneemesh
 
 
 def test_package_has_version():
-    assert meniscus2brep.__version__
+    assert kneemesh.__version__
 
 
 def test_simpleitk_creates_image():

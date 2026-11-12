@@ -4,9 +4,10 @@ import pytest
 import SimpleITK as sitk
 from vtkmodules.util.numpy_support import vtk_to_numpy
 
-from meniscus2brep.disk import read_brep, read_label_map, read_poly_data, write_brep, write_label_map, write_mesh, write_poly_data
-from meniscus2brep.geo import BRep, gmsh_session
-from meniscus2brep.mesh import hexahedral_mesh, tetrahedral_mesh
+from kneemesh.brep import BRep, gmsh_session
+from kneemesh.disk import read_brep, read_label_map, read_poly_data, write_brep, write_label_map, write_mesh, write_poly_data
+from kneemesh.mesh.meniscus import hexahedral_mesh
+from kneemesh.tet_meshing import tetrahedral_mesh
 
 
 @pytest.mark.parametrize("pixel_id", [sitk.sitkUInt8, sitk.sitkUInt16, sitk.sitkInt16])

@@ -1,15 +1,41 @@
 # API reference
 
+Modules at the package root apply to every structure. The `geo` and `mesh` subpackages hold one module per structure.
+
 ```{eval-rst}
-.. automodule:: meniscus2brep.vol
+.. automodule:: kneemesh.vol
 
-.. automodule:: meniscus2brep.geo
+.. automodule:: kneemesh.brep
 
-.. automodule:: meniscus2brep.mesh
+.. automodule:: kneemesh.tet_meshing
 
-.. automodule:: meniscus2brep.disk
+.. automodule:: kneemesh.disk
 
-.. automodule:: meniscus2brep.config
+.. automodule:: kneemesh.config
 
-.. automodule:: meniscus2brep.pipeline
+.. automodule:: kneemesh.pipeline
+```
+
+## Meniscus
+
+```{eval-rst}
+.. automodule:: kneemesh.geo.meniscus
+
+.. automodule:: kneemesh.mesh.meniscus
+```
+
+## Planned structures
+
+```{eval-rst}
+.. automodule:: kneemesh.geo.tibia
+
+.. automodule:: kneemesh.geo.femur
+
+.. automodule:: kneemesh.geo.patella
+
+.. automodule:: kneemesh.mesh.tibia
+
+.. automodule:: kneemesh.mesh.femur
+
+.. automodule:: kneemesh.mesh.patella
 ```

@@ -6,9 +6,12 @@ import SimpleITK as sitk
 from scipy.interpolate import BSpline
 from vtkmodules.vtkCommonDataModel import vtkPolyData
 
-from meniscus2brep.disk import read_label_map
-from meniscus2brep.geo import BRep, contours_to_brep, contours_to_hex_blocks, contours_to_polydata
-from meniscus2brep.vol import ContourSlice, centerline, extract_isocontour, signed_distance_field, slice_isocontour, smooth_isocontour
+from kneemesh.brep import BRep, contours_to_polydata
+from kneemesh.disk import read_label_map
+from kneemesh.geo.meniscus import centerline, contours_to_brep, contours_to_hex_blocks, slice_isocontour
+from kneemesh.mesh.meniscus import hexahedral_mesh
+from kneemesh.tet_meshing import Mesh, tetrahedral_mesh
+from kneemesh.vol import ContourSlice, extract_isocontour, signed_distance_field, smooth_isocontour
 
 INNER_RADIUS = 10.0
 OUTER_RADIUS = 20.0
@@ -115,3 +118,15 @@ def meniscus_hex_blocks(meniscus_hex_slices: list[ContourSlice]) -> BRep:
 def real_label() -> sitk.Image:
     """A real meniscus LabelMap (label 1) whose arc touches the edge of the image."""
     return read_label_map(Path(__file__).parent / "dat" / "mns_l.nii")
+
+
+@pytest.fixture(scope="session")
+def meniscus_tetrahedra(meniscus_solid: BRep) -> Mesh:
+    """Linear tetrahedral mesh of meniscus_solid with a 2 mm maximum size."""
+    return tetrahedral_mesh(meniscus_solid, max_size=2.0)
+
+
+@pytest.fixture(scope="session")
+def meniscus_hexahedra(meniscus_hex_blocks: BRep) -> Mesh:
+    """Linear hexahedral mesh of meniscus_hex_blocks, 4 elements per cap edge and 30 along."""
+    return hexahedral_mesh(meniscus_hex_blocks, elements_per_edge=4, elements_along=30)

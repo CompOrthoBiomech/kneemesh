@@ -1,6 +1,6 @@
-# meniscus2brep
+# kneemesh
 
-Convert a segmented meniscus image into B-rep geometry, and mesh it with tetrahedra or hexahedra.
+Convert segmented knee images into B-rep geometry, and mesh it with tetrahedra or hexahedra. The meniscus is supported now; tibial, femoral, and patellar cartilage and bone are planned.
 
 ```{toctree}
 :maxdepth: 2

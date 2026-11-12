@@ -1,8 +1,8 @@
-"""Sphinx configuration for the meniscus2brep documentation."""
+"""Sphinx configuration for the kneemesh documentation."""
 
 from importlib.metadata import metadata
 
-_metadata = metadata("meniscus2brep")
+_metadata = metadata("kneemesh")
 
 project = _metadata["Name"]
 author = "Scott Sibole"
@@ -52,4 +52,4 @@ intersphinx_mapping = {
 }
 
 html_theme = "furo"
-html_title = "meniscus2brep"
+html_title = "kneemesh"

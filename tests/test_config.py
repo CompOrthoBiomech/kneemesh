@@ -1,7 +1,7 @@
 import pydantic
 import pytest
 
-from meniscus2brep.config import BaseConfig
+from kneemesh.config import BaseConfig
 
 
 class ExampleConfig(BaseConfig):
