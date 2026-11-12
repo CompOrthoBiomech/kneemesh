@@ -1,4 +1,4 @@
-"""Tetrahedral and hexahedral meshing of B-reps with gmsh."""
+"""Tetrahedral meshing of any solid B-rep with gmsh, and the Mesh it returns."""
 
 import tempfile
 from collections.abc import Iterator
@@ -12,7 +12,7 @@ import gmsh
 import numpy as np
 from loguru import logger
 
-from meniscus2brep.geo import BRep, gmsh_session
+from kneemesh.brep import BRep, gmsh_session
 
 
 class _GmshAlgorithm(StrEnum):
@@ -117,7 +117,7 @@ def tetrahedral_mesh(
         raise ValueError(f"max_size must exceed min_size, got {max_size} and {min_size}")
     if elements_per_circle < 0:
         raise ValueError(f"elements_per_circle must not be negative, got {elements_per_circle}")
-    _require_element_order(element_order)
+    require_element_order(element_order)
 
     options = {
         "Mesh.MeshSizeMin": min_size,
@@ -130,76 +130,20 @@ def tetrahedral_mesh(
     if max_size is not None:
         options["Mesh.MeshSizeMax"] = max_size
 
-    with gmsh_session(), _gmsh_options(options):
-        _import_solid(brep)
+    with gmsh_session(), gmsh_options(options):
+        import_solid(brep)
         gmsh.model.mesh.generate(3)
-        return _volume_mesh()
+        return volume_mesh()
 
 
-def hexahedral_mesh(
-    brep: BRep,
-    elements_per_edge: int = 4,
-    elements_along: int = 20,
-    element_order: int = 1,
-    second_order_incomplete: bool = False,
-) -> Mesh:
-    """Mesh a solid of six-sided blocks with hexahedra, using transfinite surfaces and volumes.
-
-    Every block must have six faces, such as the five blocks from
-    contours_to_hex_blocks. Edges on the planar end caps get
-    elements_per_edge elements, and the edges running between the caps get
-    elements_along, so each block is a grid of elements_per_edge by
-    elements_per_edge quadrilaterals swept elements_along times.
-
-    Args:
-        brep: A solid of six-sided blocks with planar caps.
-        elements_per_edge: Elements along each edge of a cap.
-        elements_along: Elements along the solid between the caps.
-        element_order: Polynomial order of the elements. 2 gives 27-node hexahedra.
-        second_order_incomplete: Omit face and interior nodes from high-order
-            elements, giving 20-node instead of 27-node second-order hexahedra.
-
-    Returns:
-        The hexahedral mesh.
-
-    Raises:
-        ValueError: If a count is below 1, or brep is not a solid of six-sided
-            blocks with planar caps.
-    """
-    if elements_per_edge < 1 or elements_along < 1:
-        raise ValueError(f"Element counts must be at least 1, got {elements_per_edge} and {elements_along}")
-    _require_element_order(element_order)
-
-    options = {"Mesh.ElementOrder": element_order, "Mesh.SecondOrderIncomplete": second_order_incomplete}
-    with gmsh_session(), _gmsh_options(options):
-        _import_solid(brep)
-        volumes = [tag for _, tag in gmsh.model.getEntities(3)]
-        caps = [tag for _, tag in gmsh.model.getEntities(2) if gmsh.model.getType(2, tag) == "Plane"]
-        six_sided = all(len(gmsh.model.getBoundary([(3, volume)], oriented=False)) == 6 for volume in volumes)
-        if not six_sided or len(caps) != 2 * len(volumes):
-            raise ValueError("Hexahedral meshing needs a solid of six-sided blocks with planar caps, such as contours_to_hex_blocks gives")
-
-        cap_edges = {abs(tag) for _, tag in gmsh.model.getBoundary([(2, cap) for cap in caps], combined=False, oriented=False)}
-        for _, curve in gmsh.model.getEntities(1):
-            gmsh.model.mesh.setTransfiniteCurve(curve, (elements_per_edge if curve in cap_edges else elements_along) + 1)
-        for _, face in gmsh.model.getEntities(2):
-            gmsh.model.mesh.setTransfiniteSurface(face)
-            gmsh.model.mesh.setRecombine(2, face)
-        for volume in volumes:
-            gmsh.model.mesh.setTransfiniteVolume(volume)
-        gmsh.model.add_physical_group(3, volumes, name="solid")
-
-        gmsh.model.mesh.generate(3)
-        return _volume_mesh()
-
-
-def _require_element_order(element_order: int) -> None:
+def require_element_order(element_order: int) -> None:
+    """Raise ValueError unless element_order is at least 1."""
     if element_order < 1:
         raise ValueError(f"element_order must be at least 1, got {element_order}")
 
 
 @contextmanager
-def _gmsh_options(options: dict[str, float | bool]) -> Iterator[None]:
+def gmsh_options(options: dict[str, float | bool]) -> Iterator[None]:
     """Set gmsh numeric options for a block, restoring them afterward.
 
     gmsh options are global, so they would otherwise outlive the session when
@@ -215,7 +159,8 @@ def _gmsh_options(options: dict[str, float | bool]) -> Iterator[None]:
             gmsh.option.setNumber(name, value)
 
 
-def _import_solid(brep: BRep) -> None:
+def import_solid(brep: BRep) -> None:
+    """Load a B-rep into the current gmsh model, raising ValueError if it has no volume."""
     with tempfile.TemporaryDirectory() as directory:
         path = Path(directory) / "shape.brep"
         path.write_text(brep.text, encoding="utf-8")
@@ -225,7 +170,8 @@ def _import_solid(brep: BRep) -> None:
         raise ValueError("Meshing needs a solid B-rep, such as contours_to_brep with a cap")
 
 
-def _volume_mesh() -> Mesh:
+def volume_mesh() -> Mesh:
+    """Return the current gmsh model's 3D elements and nodes as a Mesh."""
     node_tags, coordinates, _ = gmsh.model.mesh.getNodes()
     coordinates = np.array(coordinates)
     node_tags = np.array(node_tags)

@@ -1,10 +1,10 @@
-"""meniscus2brep."""
+"""kneemesh: B-rep geometry and meshes of knee structures from segmented images."""
 
 from importlib.metadata import version
 
 from loguru import logger
 
-__version__ = version("meniscus2brep")
+__version__ = version("kneemesh")
 
-# A library stays silent unless its user opts in with logger.enable("meniscus2brep").
-logger.disable("meniscus2brep")
+# A library stays silent unless its user opts in with logger.enable("kneemesh").
+logger.disable("kneemesh")

@@ -10,9 +10,9 @@ from loguru import logger
 from vtkmodules.vtkCommonDataModel import vtkPolyData
 from vtkmodules.vtkIOXML import vtkXMLPolyDataReader, vtkXMLPolyDataWriter
 
-from meniscus2brep.geo import BRep, gmsh_session
-from meniscus2brep.mesh import Mesh
-from meniscus2brep.vol import LABEL_MAP_PIXEL_IDS
+from kneemesh.brep import BRep, gmsh_session
+from kneemesh.tet_meshing import Mesh
+from kneemesh.vol import LABEL_MAP_PIXEL_IDS
 
 SUPPORTED_SUFFIXES = frozenset({".nii", ".nrrd", ".mhd"})
 POLY_DATA_SUFFIXES = frozenset({".vtp"})
