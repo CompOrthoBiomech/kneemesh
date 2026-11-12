@@ -152,7 +152,7 @@ def configure[ConfigType: BaseConfig](
     """
     parser = argparse.ArgumentParser(description=description)
     subparsers = parser.add_subparsers(dest="structure", required=True, metavar="structure")
-    structure_parsers = {}
+    structure_parsers: dict[str, argparse.ArgumentParser] = {}
     for structure, config_type in config_types.items():
         summary = (config_type.__doc__ or "").strip().splitlines()[0]
         subparser = subparsers.add_parser(structure, help=summary, description=summary)
