@@ -202,17 +202,13 @@ def test_assembly_treats_every_nonzero_value_as_the_structure(meniscus_label):
     assert voxel_count(segmentation.image, 1) == voxel_count(meniscus_label)
 
 
-@pytest.mark.parametrize(
-    ("arguments", "message"),
-    [
-        ({"label_maps": {}}, "at least one"),
-        ({"interpolator": "linear"}, "interpolator"),
-        ({"padding": -1}, "padding"),
-    ],
-)
-def test_assembly_rejects_invalid_arguments(meniscus_label, arguments, message):
-    with pytest.raises(ValueError, match=message):
-        assemble_label_maps(**{"label_maps": {"meniscus": meniscus_label}, **arguments})
+def test_assembly_rejects_invalid_arguments(meniscus_label):
+    with pytest.raises(ValueError, match="at least one"):
+        assemble_label_maps({})
+    with pytest.raises(ValueError, match="interpolator"):
+        assemble_label_maps({"meniscus": meniscus_label}, "linear")  # pyright: ignore[reportArgumentType]
+    with pytest.raises(ValueError, match="padding"):
+        assemble_label_maps({"meniscus": meniscus_label}, padding=-1)
 
 
 def test_assembly_rejects_empty_and_2d_inputs(meniscus_label):
@@ -220,3 +216,21 @@ def test_assembly_rejects_empty_and_2d_inputs(meniscus_label):
         assemble_label_maps({"meniscus": meniscus_label, "empty": meniscus_label * 0})
     with pytest.raises(ValueError, match="LabelMap must be 3D"):
         assemble_label_maps({"flat": sitk.Image(4, 4, sitk.sitkUInt8)})
+
+
+def test_assembly_of_real_menisci_keeps_both_exactly(real_label, real_medial_label):
+    # The two grids share spacing and orientation and are offset by whole voxels.
+    segmentation = assemble_label_maps({"lateral_meniscus": real_label, "medial_meniscus": real_medial_label}, "nearest_neighbor")
+
+    assert segmentation.image.GetSpacing() == pytest.approx(real_label.GetSpacing())
+    for name, source in (("lateral_meniscus", real_label), ("medial_meniscus", real_medial_label)):
+        value = segmentation.value(name)
+        assert voxel_count(segmentation.image, value) == voxel_count(source)
+        assert physical_centroid(segmentation.image, value) == pytest.approx(physical_centroid(source, 1), abs=1e-6)
+
+
+def test_label_gaussian_assembly_of_real_menisci_loses_little(real_label, real_medial_label):
+    segmentation = assemble_label_maps({"lateral_meniscus": real_label, "medial_meniscus": real_medial_label})
+
+    for name, source in (("lateral_meniscus", real_label), ("medial_meniscus", real_medial_label)):
+        assert voxel_count(segmentation.image, segmentation.value(name)) == pytest.approx(voxel_count(source), rel=0.03)

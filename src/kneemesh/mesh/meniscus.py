@@ -40,7 +40,7 @@ def hexahedral_mesh(
         raise ValueError(f"Element counts must be at least 1, got {elements_per_edge} and {elements_along}")
     require_element_order(element_order)
 
-    options = {"Mesh.ElementOrder": element_order, "Mesh.SecondOrderIncomplete": second_order_incomplete}
+    options: dict[str, float | bool] = {"Mesh.ElementOrder": element_order, "Mesh.SecondOrderIncomplete": second_order_incomplete}
     with gmsh_session(), gmsh_options(options):
         import_solid(brep)
         volumes = [tag for _, tag in gmsh.model.getEntities(3)]

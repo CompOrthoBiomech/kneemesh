@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import gmsh
 import pytest
@@ -7,7 +8,7 @@ from loguru import logger
 
 from kneemesh.brep import gmsh_session
 from kneemesh.config import MeniscusBrep, MeniscusMesh, TibialCartilageBrep
-from kneemesh.disk import read_brep, write_label_map
+from kneemesh.disk import read_brep, read_segmentation, write_label_map
 from kneemesh.pipeline import STRUCTURES, brep_main, configure, mesh_main
 from kneemesh.tet_meshing import Algorithm2D, Algorithm3D
 from kneemesh.vol import signed_distance_field
@@ -30,7 +31,8 @@ def test_configs_have_defaults_for_every_field():
     assert (MeniscusBrep().smoothing_iterations, MeniscusBrep().smoothing_pass_band) == (50, 0.001)
 
 
-def test_configure_overrides_smoothing(in_tmp_path):
+@pytest.mark.usefixtures("in_tmp_path")
+def test_configure_overrides_smoothing():
     config, _, _ = configure({"meniscus": MeniscusBrep}, "test", ["meniscus", "--smoothing-iterations", "0", "--smoothing-pass-band", "0.01"])
 
     assert (config.smoothing_iterations, config.smoothing_pass_band) == (0, 0.01)
@@ -73,6 +75,7 @@ def test_configure_without_arguments_saves_defaults(in_tmp_path):
     config, _, saved = configure({"meniscus": MeniscusMesh}, "test", ["meniscus"])
 
     assert config == MeniscusMesh()
+    assert saved is not None
     assert MeniscusMesh.from_json(in_tmp_path / saved.name) == MeniscusMesh()
 
 
@@ -166,7 +169,8 @@ def test_pipelines_build_and_mesh_hexahedral_blocks(in_tmp_path, meniscus_label)
     assert MeniscusMesh.from_json(in_tmp_path / "mesh_modified.json").elements_per_edge == 2
 
 
-def test_pipeline_reports_errors_without_traceback(in_tmp_path, capsys):
+@pytest.mark.usefixtures("in_tmp_path")
+def test_pipeline_reports_errors_without_traceback(capsys):
     assert mesh_main(["meniscus", "--brep", "missing.brep"]) == 1
     assert "No such file" in capsys.readouterr().err
 
@@ -177,8 +181,11 @@ def test_configure_returns_the_config_file(tmp_path):
     assert configure({"meniscus": MeniscusMesh}, "test", ["meniscus", "--config", str(path)]).source == path
 
 
-def test_configure_names_settings_with_the_given_timestamp(in_tmp_path):
-    assert configure({"meniscus": MeniscusMesh}, "test", ["meniscus"], timestamp="20260102_030405").saved.name == "settings20260102_030405.json"
+@pytest.mark.usefixtures("in_tmp_path")
+def test_configure_names_settings_with_the_given_timestamp():
+    saved = configure({"meniscus": MeniscusMesh}, "test", ["meniscus"], timestamp="20260102_030405").saved
+
+    assert saved is not None and saved.name == "settings20260102_030405.json"
 
 
 def test_package_logging_is_disabled_by_default(meniscus_label):
@@ -228,7 +235,8 @@ def test_pipeline_logs_errors_to_file(in_tmp_path, capsys):
     assert "No such file" in capsys.readouterr().err
 
 
-def test_pipeline_disables_package_logging_when_done(in_tmp_path, meniscus_label):
+@pytest.mark.usefixtures("in_tmp_path")
+def test_pipeline_disables_package_logging_when_done(meniscus_label):
     mesh_main(["meniscus", "--brep", "missing.brep"])
     messages = []
     handler = logger.add(messages.append, level="DEBUG")
@@ -248,24 +256,27 @@ def test_every_structure_has_configs_with_defaults(structure):
     assert mesh_type().brep == brep_type().output
 
 
-def test_configure_picks_the_structure_config(in_tmp_path):
+@pytest.mark.usefixtures("in_tmp_path")
+def test_configure_picks_the_structure_config():
     config_types = {structure: brep for structure, (brep, _) in STRUCTURES.items()}
 
     argv = ["tibial-cartilage", "--label-map", "knee.nii", "--labels", '{"tibia": 1, "lateral": 3}', "--name", "lateral"]
 
     config, _, _ = configure(config_types, "test", argv)
 
-    assert config == TibialCartilageBrep(label_map="knee.nii", labels={"tibia": 1, "lateral": 3}, name="lateral")
+    assert config == TibialCartilageBrep(label_map=Path("knee.nii"), labels={"tibia": 1, "lateral": 3}, name="lateral")
 
 
-def test_configure_requires_a_structure(in_tmp_path):
+@pytest.mark.usefixtures("in_tmp_path")
+def test_configure_requires_a_structure():
     with pytest.raises(SystemExit) as error:
         configure({"meniscus": MeniscusBrep}, "test", ["--spacing", "2"])
 
     assert error.value.code == 2
 
 
-def test_configure_rejects_another_structures_options(in_tmp_path):
+@pytest.mark.usefixtures("in_tmp_path")
+def test_configure_rejects_another_structures_options():
     config_types = {structure: brep for structure, (brep, _) in STRUCTURES.items()}
 
     with pytest.raises(SystemExit):
@@ -273,7 +284,8 @@ def test_configure_rejects_another_structures_options(in_tmp_path):
 
 
 @pytest.mark.parametrize("structure", [structure for structure in STRUCTURES if structure != "meniscus"])
-def test_unimplemented_structures_report_an_error(in_tmp_path, structure, capsys):
+@pytest.mark.usefixtures("in_tmp_path")
+def test_unimplemented_structures_report_an_error(structure, capsys):
     assert brep_main([structure]) == 1
     assert mesh_main([structure]) == 1
 
@@ -300,12 +312,28 @@ def test_pipeline_assembles_single_label_maps(in_tmp_path, meniscus_label):
     )
 
     assert brep_main(["meniscus", "--config", str(config)]) == 0
+    assert not list(in_tmp_path.glob("*_labels.json"))
 
     assert "Assembling surroundings, meniscus" in (in_tmp_path / "assemble.log").read_text()
     assert read_brep(in_tmp_path / "assembled.brep").text
 
 
-def test_pipeline_without_a_segmentation_reports_an_error(in_tmp_path, capsys):
+@pytest.mark.usefixtures("in_tmp_path")
+def test_pipeline_without_a_segmentation_reports_an_error(capsys):
     assert brep_main(["meniscus"]) == 1
 
     assert "label_map or single-label label_maps" in capsys.readouterr().err
+
+
+def test_pipeline_builds_one_meniscus_from_assembled_real_menisci(in_tmp_path, real_label, real_medial_label):
+    write_label_map(real_label, in_tmp_path / "lateral.nii")
+    write_label_map(real_medial_label, in_tmp_path / "medial.nii")
+    label_maps = json.dumps({"lateral_meniscus": "lateral.nii", "medial_meniscus": "medial.nii"})
+
+    argv = ["meniscus", "--label-maps", label_maps, "--name", "medial_meniscus", "--assembled-label-map", "knee.nrrd", "--spacing", "8"]
+    assert brep_main(argv) == 0
+
+    assembled = read_segmentation(in_tmp_path / "knee.nrrd")
+    assert assembled.labels == {"lateral_meniscus": 1, "medial_meniscus": 2}
+    assert json.loads((in_tmp_path / "knee_labels.json").read_text()) == assembled.labels
+    assert read_brep(in_tmp_path / "meniscus.brep").text

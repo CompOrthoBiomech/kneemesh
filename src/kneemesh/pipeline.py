@@ -31,7 +31,7 @@ from kneemesh.config import (
     TibialCartilageMesh,
     TibiaMesh,
 )
-from kneemesh.disk import read_brep, read_label_map, write_brep, write_mesh
+from kneemesh.disk import read_brep, read_label_map, segmentation_labels_path, write_brep, write_mesh, write_segmentation
 from kneemesh.geo.meniscus import centerline, contours_to_brep, contours_to_hex_blocks, slice_isocontour
 from kneemesh.mesh.meniscus import hexahedral_mesh
 from kneemesh.segmentation import Segmentation, assemble_label_maps
@@ -85,6 +85,8 @@ def run_mesh(config: BrepMesh) -> Mesh:
 def load_segmentation(config: LabelMapBrep) -> Segmentation:
     """Read the multilabel LabelMap config names, or assemble its single-label LabelMaps.
 
+    An assembled segmentation is also written to config.assembled_label_map when that is set.
+
     Raises:
         ValueError: If config gives neither label_map nor label_maps, or a
             LabelMap cannot be read or combined.
@@ -95,7 +97,15 @@ def load_segmentation(config: LabelMapBrep) -> Segmentation:
         for name, path in config.label_maps.items():
             logger.info("Reading LabelMap {} for {}", path, name)
             images[name] = read_label_map(path)
-        return assemble_label_maps(images, config.interpolator, config.padding)
+        segmentation = assemble_label_maps(images, config.interpolator, config.padding)
+        if config.assembled_label_map is not None:
+            write_segmentation(segmentation, config.assembled_label_map)
+            logger.info(
+                "Wrote the assembled LabelMap to {} and its labels to {}",
+                config.assembled_label_map,
+                segmentation_labels_path(config.assembled_label_map),
+            )
+        return segmentation
     if config.label_map is None:
         raise ValueError("Give a multilabel label_map or single-label label_maps to read")
     logger.info("Reading LabelMap {}", config.label_map)
@@ -227,7 +237,7 @@ def _timestamp() -> str:
     return f"{datetime.now():%Y%m%d_%H%M%S}"
 
 
-def _run(step: Callable[[], object], setup: Configuration, default_log: Path) -> int:
+def _run[ConfigType: LabelMapBrep | BrepMesh](step: Callable[[], object], setup: Configuration[ConfigType], default_log: Path) -> int:
     """Run a pipeline step, logging to stderr and to a file named for its configuration.
 
     The log file is <config stem>.log beside the --config file, or default_log

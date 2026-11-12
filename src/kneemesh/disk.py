@@ -1,5 +1,6 @@
-"""Reading and writing LabelMaps as .nii, .nrrd, or .mhd + .raw, poly data as .vtp, and B-reps as .brep, and writing meshes."""
+"""Reading and writing LabelMaps as .nii, .nrrd, or .mhd + .raw, segmentations, poly data as .vtp, and B-reps as .brep, and writing meshes."""
 
+import json
 from os import PathLike
 from pathlib import Path
 
@@ -11,6 +12,7 @@ from vtkmodules.vtkCommonDataModel import vtkPolyData
 from vtkmodules.vtkIOXML import vtkXMLPolyDataReader, vtkXMLPolyDataWriter
 
 from kneemesh.brep import BRep, gmsh_session
+from kneemesh.segmentation import Segmentation
 from kneemesh.tet_meshing import Mesh
 from kneemesh.vol import LABEL_MAP_PIXEL_IDS
 
@@ -47,6 +49,40 @@ def write_label_map(image: sitk.Image, path: str | PathLike[str]) -> None:
     path = _validated_path(path)
     _require_label_map(image)
     sitk.WriteImage(image, str(path), useCompression=False)
+
+
+def segmentation_labels_path(path: str | PathLike[str]) -> Path:
+    """Return where write_segmentation puts the labels of a segmentation written to path: <stem>_labels.json beside it."""
+    path = Path(path)
+    return path.with_name(f"{path.stem}_labels.json")
+
+
+def write_segmentation(segmentation: Segmentation, path: str | PathLike[str]) -> None:
+    """Write a segmentation's LabelMap to path and its {name: value} labels as JSON beside it.
+
+    The labels go to segmentation_labels_path(path), so the image can be read
+    back with read_segmentation or given to a pipeline as label_map with those labels.
+
+    Raises:
+        ValueError: If the file format is unsupported.
+        OSError: If a file cannot be written.
+    """
+    write_label_map(segmentation.image, path)
+    labels_path = segmentation_labels_path(path)
+    labels_path.write_text(json.dumps(segmentation.labels, indent=2) + "\n", encoding="utf-8")
+    logger.debug("Wrote labels {} to {}", segmentation.labels, labels_path)
+
+
+def read_segmentation(path: str | PathLike[str]) -> Segmentation:
+    """Read a segmentation written by write_segmentation.
+
+    Raises:
+        ValueError: If the file format is unsupported, the image is not a
+            LabelMap, or the labels are invalid for it.
+        OSError: If the image or its labels file cannot be read.
+    """
+    labels = json.loads(segmentation_labels_path(path).read_text(encoding="utf-8"))
+    return Segmentation(read_label_map(path), labels)
 
 
 def read_poly_data(path: str | PathLike[str]) -> vtkPolyData:

@@ -6,7 +6,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import Self
+from typing import Self, override
 
 import gmsh
 import numpy as np
@@ -29,6 +29,7 @@ class _GmshAlgorithm(StrEnum):
         member.number = number
         return member
 
+    @override
     @classmethod
     def _missing_(cls, value: object) -> Self | None:
         if isinstance(value, str):

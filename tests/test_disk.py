@@ -1,3 +1,5 @@
+import json
+
 import gmsh
 import numpy as np
 import pytest
@@ -5,8 +7,19 @@ import SimpleITK as sitk
 from vtkmodules.util.numpy_support import vtk_to_numpy
 
 from kneemesh.brep import BRep, gmsh_session
-from kneemesh.disk import read_brep, read_label_map, read_poly_data, write_brep, write_label_map, write_mesh, write_poly_data
+from kneemesh.disk import (
+    read_brep,
+    read_label_map,
+    read_poly_data,
+    read_segmentation,
+    write_brep,
+    write_label_map,
+    write_mesh,
+    write_poly_data,
+    write_segmentation,
+)
 from kneemesh.mesh.meniscus import hexahedral_mesh
+from kneemesh.segmentation import Segmentation
 from kneemesh.tet_meshing import tetrahedral_mesh
 
 
@@ -206,3 +219,29 @@ def test_write_mesh_rejects_unknown_format(tmp_path, small_tetrahedra, filename)
 def test_write_mesh_raises_when_it_cannot_write(tmp_path, small_tetrahedra):
     with pytest.raises(OSError, match="Could not write mesh"):
         write_mesh(small_tetrahedra, tmp_path / "missing_directory" / "mesh.msh")
+
+
+@pytest.mark.parametrize("filename", ["knee.nii", "knee.nrrd", "knee.mhd"])
+def test_segmentation_round_trips_with_its_labels(tmp_path, meniscus_label, filename):
+    segmentation = Segmentation(meniscus_label * 3, {"meniscus": 3})
+
+    write_segmentation(segmentation, tmp_path / filename)
+    result = read_segmentation(tmp_path / filename)
+
+    assert json.loads((tmp_path / "knee_labels.json").read_text()) == {"meniscus": 3}
+    assert result.labels == {"meniscus": 3}
+    assert np.array_equal(sitk.GetArrayFromImage(result.image), sitk.GetArrayFromImage(segmentation.image))
+
+
+def test_segmentation_rejects_unsupported_format_before_writing_labels(tmp_path, meniscus_label):
+    with pytest.raises(ValueError):
+        write_segmentation(Segmentation(meniscus_label, {"meniscus": 1}), tmp_path / "knee.nii.gz")
+
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_reading_a_segmentation_needs_its_labels_file(tmp_path, meniscus_label):
+    write_label_map(meniscus_label, tmp_path / "knee.nii")
+
+    with pytest.raises(OSError):
+        read_segmentation(tmp_path / "knee.nii")

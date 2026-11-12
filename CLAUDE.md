@@ -4,13 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Commands
 
-The project is managed with uv and requires Python 3.13 or newer. No linter or formatter is configured.
+The project is managed with uv and requires Python 3.13 or newer. Type checking uses basedpyright, a dev dependency configured under `[tool.basedpyright]` in `pyproject.toml`; keep it at 0 errors and 0 warnings. No formatter is configured.
 
 ```sh
 uv sync                                        # install dependencies
 uv run pytest                                  # run all tests
 uv run pytest tests/test_vol.py                # run one test file
 uv run pytest tests/test_vol.py::test_name     # run one test
+uv run basedpyright                            # type check src and tests
 uv add <package>                               # add a runtime dependency
 uv add --dev <package>                         # add a dev dependency
 uv build                                       # build sdist and wheel
@@ -23,12 +24,27 @@ uv run --group docs sphinx-build -W -b html docs docs/_build/html   # build the 
 
 `docs/` is a Sphinx project with the Furo theme. Pages are Markdown through MyST, with `$...$` and `$$...$$` math rendered by MathJax. Napoleon reads the Google-style docstrings, and `autodoc_pydantic` renders config models with each field's type, default, `description`, and constraints, so document a config option in its `Field(description=...)`. The build treats warnings as errors.
 
+## Type checking
+
+basedpyright runs in `recommended` mode with these exceptions:
+
+- SimpleITK, VTK, and gmsh ship without type information, so the rules about `Any` and unknown types and missing stubs are off. Annotate our own functions fully anyway.
+- `reportUnusedCallResult` is off because gmsh and VTK calls return tags and status values that are often not needed.
+- Under `tests/`, unannotated fixture parameters and private helper use are allowed.
+
+Keep these points when writing code it checks:
+
+- Pydantic coerces inputs such as `str` to `Path` or JSON text to a dict, but constructor signatures use the parsed types. Tests of coercion go through `Model.model_validate({...})`, and other code passes the parsed types.
+- A fixture used only for its side effect, such as `in_tmp_path` changing directory, is requested with `@pytest.mark.usefixtures(...)` rather than an unused parameter.
+- Narrow optionals before use, for example `assert saved is not None` in tests.
+- A runtime check of a value its type already rules out, kept for untyped callers, takes `# pyright: ignore[reportUnreachable]` on the unreachable line.
+
 ## Architecture
 
 The package converts segmented knee images into B-rep geometry and meshes, as a pipeline across `src/kneemesh/`. Only the meniscus is implemented; tibial (lateral and medial), femoral, and patellar cartilage and the three bones are planned. Root modules apply to every structure; the `geo/` and `mesh/` subpackages hold one module per structure (`meniscus.py`, `tibia.py`, `femur.py`, `patella.py`). The tibia, femur, and patella modules are docstring-only placeholders.
 
 - `disk.py` reads and writes LabelMaps, `.vtp` poly data, and `.brep` files, and writes meshes in any volume format gmsh infers from the extension.
-- `segmentation.py` defines `Segmentation`, a LabelMap with a `{name: value}` dict of its structures, and `assemble_label_maps`, which resamples named single-label LabelMaps onto one padded grid. Every B-rep pipeline reads a `Segmentation`, so cartilage can be oriented against its bone and anatomical neighbors can define surface and node sets.
+- `segmentation.py` defines `Segmentation`, a LabelMap with a `{name: value}` dict of its structures, and `assemble_label_maps`, which resamples named single-label LabelMaps onto one padded grid. `disk.write_segmentation` writes one as a LabelMap plus `<stem>_labels.json`, which `read_segmentation` reads back; the pipelines write it to `assembled_label_map` when that is set. Every B-rep pipeline reads a `Segmentation`, so cartilage can be oriented against its bone and anatomical neighbors can define surface and node sets.
 - `vol.py` operates on LabelMaps: the signed distance field, isocontour extraction and smoothing, `require_3d_label_map`, and the `ContourSlice` value.
 - `brep.py` holds the `BRep` value, `gmsh_session`, `export_brep`, the B-spline helpers that structure modules build geometry from (chord parameters, periodic and clamped fits, splitting, adding curves, wires, and swept surfaces to gmsh), and `contours_to_polydata`.
 - `tet_meshing.py` meshes any solid B-rep with tetrahedra and defines the `Mesh` it returns: node coordinates, per-type connectivity in gmsh's node ordering, and gmsh element type numbers. Its `gmsh_options`, `import_solid`, `volume_mesh`, and `require_element_order` are shared with structure meshers. `write_mesh` rebuilds a `Mesh` as a discrete gmsh volume to write it.
@@ -109,6 +125,6 @@ Test files mirror the package: root modules have `tests/test_<module>.py`, and s
 - `meniscus_label` is a synthetic meniscus: a triangular cross-section swept 270° about the z axis, with the gap facing -x.
 - `meniscus_centerline` is `centerline(meniscus_label)`. Use it instead of calling `centerline` on the same image again.
 - `meniscus_distance_field`, `meniscus_mesh`, `meniscus_smoothed_mesh`, `meniscus_slices`, `meniscus_contours`, `meniscus_surface`, `meniscus_solid`, `meniscus_domed_solid`, `meniscus_hex_slices`, `meniscus_hex_blocks`, `meniscus_tetrahedra`, and `meniscus_hexahedra` are the later pipeline stages for the same label.
-- `real_label` is the real meniscus in `tests/dat/mns_l.nii`, a single label. There is no multilabel test data yet; `tests/test_segmentation.py` builds multilabel cases from the fixture.
+- `real_label` is the real lateral meniscus in `tests/dat/mns_l.nii`, and `real_medial_label` the medial meniscus of the same knee in `tests/dat/mns_m.nii`. Each is a single label on its own grid; the grids share spacing and orientation and are offset by whole voxels, so nearest-neighbor assembly reproduces both exactly. `tests/dat` is stored in Git LFS.
 
 The fixture's voxelized cross-section centroid is r = 16.43, z = -1.67, not the ideal triangle's r = 16.67, z = -1.33. Its bottom slice lies exactly on the triangle's base and counts as a whole voxel layer, which also makes its voxel volume about 12% above the analytic value. Compare against the voxelized values or use a suitable tolerance.

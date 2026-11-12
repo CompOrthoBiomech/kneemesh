@@ -3,7 +3,7 @@
 import json
 from os import PathLike
 from pathlib import Path
-from typing import Annotated, Any, Literal, Self
+from typing import Annotated, Any, ClassVar, Literal, Self
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, model_validator
 
@@ -19,7 +19,7 @@ class BaseConfig(BaseModel):
     instead of being silently ignored.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config: ClassVar[ConfigDict] = ConfigDict(extra="forbid")
 
     @classmethod
     def from_json(cls, path: str | PathLike[str]) -> Self:
@@ -56,17 +56,22 @@ class LabelMapBrep(BaseConfig):
     labels: LabelValues = Field(
         default=None,
         description='Label value of each structure in label_map by name, as JSON such as {"tibia": 1, "medial_tibial_cartilage": 2}. '
-        "None reads label_map as holding only this structure, with value 1",
+        + "None reads label_map as holding only this structure, with value 1",
     )
     label_maps: LabelPaths = Field(
         default=None,
         description='Single-label LabelMaps to assemble instead of label_map, by structure name, as JSON such as {"tibia": "tibia.nii"}. '
-        "Each file's nonzero voxels are its structure",
+        + "Each file's nonzero voxels are its structure",
     )
     interpolator: Interpolator = Field(
         default="label_gaussian", description="Resampling interpolator for assembling label_maps: label_gaussian or nearest_neighbor"
     )
     padding: int = Field(default=DEFAULT_PADDING_VOXELS, ge=0, description="Background voxels around the assembled label_maps on each side")
+    assembled_label_map: OptionalPath = Field(
+        default=None,
+        description="Where to write the multilabel LabelMap assembled from label_maps, with its labels in <stem>_labels.json beside it. "
+        + "None does not write it",
+    )
     name: str = Field(default="structure", description="Name of the structure to build, a key of labels or label_maps")
     output: Path = Field(default=Path("structure.brep"), description="B-rep file to write")
 
@@ -76,6 +81,8 @@ class LabelMapBrep(BaseConfig):
             raise ValueError("Give label_map or label_maps, not both")
         if self.labels is not None and self.label_maps is not None:
             raise ValueError("labels names the values in label_map; label_maps are named by their keys")
+        if self.assembled_label_map is not None and self.label_maps is None:
+            raise ValueError("assembled_label_map is written only when assembling label_maps")
         self.require_label(self.name)
         return self
 

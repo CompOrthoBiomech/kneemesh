@@ -197,7 +197,8 @@ def contours_to_brep(
             unknown, or cap_offset is not positive.
     """
     if cap not in ("none", "planar", "smooth"):
-        raise ValueError(f"cap must be 'none', 'planar', or 'smooth', got {cap!r}")
+        # Unreachable for type-checked callers, but configs and scripts can pass any string.
+        raise ValueError(f"cap must be 'none', 'planar', or 'smooth', got {cap!r}")  # pyright: ignore[reportUnreachable]
     if cap_offset is not None and cap_offset <= 0:
         raise ValueError(f"cap_offset must be positive, got {cap_offset}")
     _require_loftable(slices, spline_order)

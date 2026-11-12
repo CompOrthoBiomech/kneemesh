@@ -29,6 +29,7 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
+    "basedpyright>=1.40.2",
     "pytest>=9.2.0",
     "pytest-cov>=7.1.0",
 ]
@@ -42,3 +43,25 @@ docs = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = ["--import-mode=importlib"]
+
+[tool.basedpyright]
+include = ["src", "tests"]
+venvPath = "."
+venv = ".venv"
+pythonVersion = "3.13"
+typeCheckingMode = "recommended"
+# SimpleITK, VTK, and gmsh ship without type information, so values from them are Any or unknown.
+reportMissingTypeStubs = false
+reportAny = false
+reportExplicitAny = false
+reportUnknownMemberType = false
+reportUnknownArgumentType = false
+reportUnknownVariableType = false
+reportUnknownLambdaType = false
+# gmsh and VTK calls return tags and status values that are often not needed.
+reportUnusedCallResult = false
+executionEnvironments = [
+    # pytest fixtures and parametrized arguments are left unannotated, and tests exercise private helpers.
+    { root = "tests", reportMissingParameterType = false, reportUnknownParameterType = false, reportPrivateUsage = false },
+    { root = "src" },
+]

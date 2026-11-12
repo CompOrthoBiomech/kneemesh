@@ -17,13 +17,14 @@ For a hexahedral mesh, build the B-rep with `--hex-blocks true --points-per-slic
 Every B-rep pipeline reads a segmentation and builds the structure that `--name` names in it. Give the segmentation one of two ways:
 
 - **A multilabel LabelMap** with `--label-map`, and `--labels` naming its values as JSON, such as `'{"tibia": 1, "medial_tibial_cartilage": 2, "medial_meniscus": 3}'`. Without `--labels`, the LabelMap is read as holding only the structure, with value 1.
-- **Single-label LabelMaps** with `--label-maps`, one file per structure by name, such as `'{"tibia": "tibia.nii", "medial_meniscus": "meniscus.nii"}'`. Every nonzero voxel of a file is its structure. {py:func}`~kneemesh.segmentation.assemble_label_maps` resamples them onto one grid, in the first file's orientation, with the smallest voxel spacing along each axis and a background margin of `--padding` voxels. `--interpolator` chooses `label_gaussian` (the default) or `nearest_neighbor`. Where structures overlap after resampling, the one listed later wins.
+- **Single-label LabelMaps** with `--label-maps`, one file per structure by name, such as `'{"tibia": "tibia.nii", "medial_meniscus": "meniscus.nii"}'`. Every nonzero voxel of a file is its structure. {py:func}`~kneemesh.segmentation.assemble_label_maps` resamples them onto one grid, in the first file's orientation, with the smallest voxel spacing along each axis and a background margin of `--padding` voxels. `--interpolator` chooses `label_gaussian` (the default) or `nearest_neighbor`. Where structures overlap after resampling, the one listed later wins. `--assembled-label-map knee.nrrd` also writes the assembled LabelMap, with its labels in `knee_labels.json` beside it, so later runs can read it with `--label-map knee.nrrd --labels "$(cat knee_labels.json)"` or {py:func}`~kneemesh.disk.read_segmentation`.
 
 Cartilage structures also name the bone beneath them with `--bone`, which must be in the segmentation too.
 
 ```json
 {
   "label_maps": {"tibia": "tibia.nii", "medial_meniscus": "medial_meniscus.nii"},
+  "assembled_label_map": "knee.nrrd",
   "name": "medial_meniscus",
   "output": "medial_meniscus.brep"
 }
