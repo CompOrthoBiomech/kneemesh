@@ -1,0 +1,14 @@
+{
+  "breps": {
+    "lateral_meniscus": "examples/lateral_meniscus_hex.brep",
+    "medial_meniscus": "examples/medial_meniscus_hex.brep"
+  },
+  "element_type": "hex20",
+  "output": "_{element_type}.vtk",
+  "output_directory": "examples",
+  "meniscus": {
+    "elements_per_edge": 4,
+    "elements_along": 40,
+    "optimize": true
+  }
+}

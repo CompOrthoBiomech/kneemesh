@@ -1,0 +1,13 @@
+{
+  "breps": {
+    "lateral_meniscus": "examples/lateral_meniscus.brep",
+    "medial_meniscus": "examples/medial_meniscus.brep"
+  },
+  "element_type": "tet10",
+  "output": "_{element_type}.vtk",
+  "output_directory": "examples",
+  "meniscus": {
+    "max_size": 2.0,
+    "elements_per_circle": 8
+  }
+}

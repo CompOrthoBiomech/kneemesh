@@ -155,10 +155,14 @@ class MeniscusMesh(BaseConfig):
 
     min_size: OptionalFloat = Field(
         default=None,
-        description="Smallest tetrahedron size in physical units. None is 1/20 of the longest side of the B-rep's bounding box, "
+        description="Smallest tetrahedron size in physical units. None is 1/20 of the shortest side of the B-rep's oriented bounding box, "
         + "but no more than max_size. 0 sets no limit",
     )
-    max_size: OptionalFloat = Field(default=None, description="Largest tetrahedron size in physical units. None lets gmsh choose")
+    max_size: OptionalFloat = Field(
+        default=None,
+        description="Largest tetrahedron size in physical units. None is 1/4 of the shortest side of the B-rep's oriented bounding box, "
+        + "but no less than min_size",
+    )
     elements_per_circle: int = Field(default=0, description="Tetrahedra per circle of surface curvature; 0 disables curvature sizing")
     algorithm_2d: Algorithm2D = Field(default=Algorithm2D.FRONTAL_DELAUNAY, description="gmsh surface algorithm for tetrahedral meshing")
     algorithm_3d: Algorithm3D = Field(default=Algorithm3D.DELAUNAY, description="gmsh volume algorithm for tetrahedral meshing")

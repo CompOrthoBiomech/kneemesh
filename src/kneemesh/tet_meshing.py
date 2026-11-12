@@ -64,7 +64,13 @@ class Algorithm3D(_GmshAlgorithm):
 
 
 DEFAULT_MIN_SIZE_FRACTION = 1 / 20
-"""Default smallest element size as a fraction of the longest side of the shape's bounding box."""
+"""Default smallest element size as a fraction of the shortest side of the shape's oriented bounding box."""
+
+DEFAULT_MAX_SIZE_FRACTION = 1 / 4
+"""Default largest element size as a fraction of the shortest side of the shape's oriented bounding box."""
+
+_CURVE_SAMPLES = 100
+_SURFACE_SAMPLES = 30
 
 
 @dataclass(frozen=True, eq=False)
@@ -99,12 +105,15 @@ def tetrahedral_mesh(
     Args:
         brep: A solid, such as contours_to_brep with a cap.
         min_size: Smallest element size, in physical units. By default
-            DEFAULT_MIN_SIZE_FRACTION of the longest side of the shape's
-            bounding box, but no more than max_size, which keeps small
+            DEFAULT_MIN_SIZE_FRACTION of the shortest side of the shape's
+            oriented bounding box, but no more than max_size, which keeps small
             geometric features and curvature sizing from producing
             excessively small elements. 0 sets no limit.
-        max_size: Largest element size, in physical units. By default gmsh's
-            size from the shape's extent applies.
+        max_size: Largest element size, in physical units. By default
+            DEFAULT_MAX_SIZE_FRACTION of the shortest side of the shape's
+            oriented bounding box, but no less than min_size. gmsh's own
+            default, from the shape's overall extent, is too coarse for thin
+            shapes and can leave them with no tetrahedra at all.
         elements_per_circle: Size elements so that a full circle of the local
             surface curvature would hold this many. 0 disables curvature sizing.
         algorithm_2d: Algorithm for the boundary triangles.
@@ -118,7 +127,8 @@ def tetrahedral_mesh(
         The tetrahedral mesh.
 
     Raises:
-        ValueError: If a size or count is out of range or brep has no volume.
+        ValueError: If a size or count is out of range, brep has no volume,
+            or gmsh fails or produces no tetrahedra.
     """
     if max_size is not None and max_size <= 0:
         raise ValueError(f"max_size must be positive, got {max_size}")
@@ -137,20 +147,29 @@ def tetrahedral_mesh(
         "Mesh.ElementOrder": element_order,
         "Mesh.SecondOrderIncomplete": second_order_incomplete,
     }
-    if max_size is not None:
-        options["Mesh.MeshSizeMax"] = max_size
 
     with gmsh_session():
         import_solid(brep)
-        if min_size is None:
-            min_size = DEFAULT_MIN_SIZE_FRACTION * longest_extent()
-            if max_size is not None:
-                min_size = min(min_size, max_size)
-            logger.debug("Default smallest element size is {:.4g}", min_size)
+        if min_size is None or max_size is None:
+            shortest = float(oriented_extents()[0])
+            if min_size is None:
+                min_size = DEFAULT_MIN_SIZE_FRACTION * shortest if max_size is None else min(DEFAULT_MIN_SIZE_FRACTION * shortest, max_size)
+            if max_size is None:
+                max_size = max(DEFAULT_MAX_SIZE_FRACTION * shortest, min_size)
+            logger.debug("Element sizes from {:.4g} to {:.4g}, with the oriented bounding box's shortest side {:.4g}", min_size, max_size, shortest)
         options["Mesh.MeshSizeMin"] = min_size
+        options["Mesh.MeshSizeMax"] = max_size
+        sizes = f"element sizes from {min_size:.4g} to {max_size:.4g}; try a smaller max_size"
         with gmsh_options(options):
-            gmsh.model.mesh.generate(3)
-        return volume_mesh()
+            try:
+                gmsh.model.mesh.generate(3)
+            except Exception as error:
+                # gmsh reports every failure as a bare Exception.
+                raise ValueError(f"gmsh could not mesh the solid with {sizes}: {error}") from error
+        mesh = volume_mesh()
+    if not mesh.elements:
+        raise ValueError(f"gmsh produced no tetrahedra with {sizes}")
+    return mesh
 
 
 def require_element_order(element_order: int) -> None:
@@ -187,10 +206,28 @@ def import_solid(brep: BRep) -> None:
         raise ValueError("Meshing needs a solid B-rep, such as contours_to_brep with a cap")
 
 
-def longest_extent() -> float:
-    """Return the longest side of the current gmsh model's bounding box."""
-    x_min, y_min, z_min, x_max, y_max, z_max = gmsh.model.getBoundingBox(-1, -1)
-    return float(max(x_max - x_min, y_max - y_min, z_max - z_min))
+def oriented_extents() -> np.ndarray:
+    """Return the side lengths of the current gmsh model's oriented bounding box, shortest first.
+
+    The box's axes are the principal axes of points sampled on every curve
+    and every non-planar surface. A planar face lies within the convex hull
+    of its boundary, so its curves bound it along any axis, while sampling
+    its parametric rectangle would also take points outside its trimmed region.
+    """
+    samples = []
+    for dim, tag in gmsh.model.getEntities(1):
+        (start,), (end,) = gmsh.model.getParametrizationBounds(dim, tag)
+        samples.append(gmsh.model.getValue(dim, tag, np.linspace(start, end, _CURVE_SAMPLES).tolist()))
+    for dim, tag in gmsh.model.getEntities(2):
+        if gmsh.model.getType(dim, tag) == "Plane":
+            continue
+        (u_low, v_low), (u_high, v_high) = gmsh.model.getParametrizationBounds(dim, tag)
+        u, v = np.meshgrid(np.linspace(u_low, u_high, _SURFACE_SAMPLES), np.linspace(v_low, v_high, _SURFACE_SAMPLES))
+        samples.append(gmsh.model.getValue(dim, tag, np.column_stack((u.ravel(), v.ravel())).ravel().tolist()))
+    points = np.concatenate([np.asarray(sample) for sample in samples]).reshape(-1, 3)
+    offsets = points - points.mean(axis=0)
+    axes = np.linalg.eigh(offsets.T @ offsets)[1]
+    return np.sort(np.ptp(offsets @ axes, axis=0))
 
 
 def volume_mesh() -> Mesh:

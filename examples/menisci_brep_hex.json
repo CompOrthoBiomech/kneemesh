@@ -4,6 +4,10 @@
     "medial_meniscus": "tests/dat/mns_m.nii"
   },
   "assembled_label_map": "examples/menisci.nrrd",
-  "output": "_tet4.brep",
-  "output_directory": "examples"
+  "output": "_hex.brep",
+  "output_directory": "examples",
+  "meniscus": {
+    "points_per_slice": 10,
+    "hex_blocks": true
+  }
 }

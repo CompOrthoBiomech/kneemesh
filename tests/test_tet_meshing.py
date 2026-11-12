@@ -4,7 +4,11 @@ import numpy as np
 import pytest
 
 from kneemesh.disk import write_brep
-from kneemesh.tet_meshing import Algorithm2D, Algorithm3D, Mesh, tetrahedral_mesh
+from kneemesh.geo.meniscus import centerline, contours_to_brep, slice_isocontour
+from kneemesh.segmentation import assemble_label_maps
+from kneemesh.brep import gmsh_session
+from kneemesh.tet_meshing import Algorithm2D, Algorithm3D, Mesh, import_solid, oriented_extents, tetrahedral_mesh
+from kneemesh.vol import extract_isocontour, signed_distance_field, smooth_isocontour
 
 
 def tetrahedron_volumes(nodes, corners):
@@ -107,14 +111,53 @@ def test_tetrahedral_mesh_restores_options_of_running_gmsh(meniscus_solid):
 def test_default_min_size_limits_curvature_refinement(meniscus_solid):
     unlimited = tetrahedral_mesh(meniscus_solid, min_size=0.0, max_size=4.0, elements_per_circle=24)
     default = tetrahedral_mesh(meniscus_solid, max_size=4.0, elements_per_circle=24)
-    span = np.ptp(default.nodes, axis=0).max()
+    offsets = default.nodes - default.nodes.mean(axis=0)
+    thickness = np.ptp(offsets @ np.linalg.eigh(offsets.T @ offsets)[1], axis=0).min()
 
     assert len(default.elements["Tetrahedron 4"]) < len(unlimited.elements["Tetrahedron 4"])
-    assert median_edge_length(default) > 0.8 * span / 20
+    assert median_edge_length(default) > 0.8 * thickness / 20
+
+
+def test_oriented_extents_ignore_the_shapes_orientation(meniscus_solid):
+    with gmsh_session():
+        import_solid(meniscus_solid)
+        aligned = oriented_extents()
+        volumes = gmsh.model.getEntities(3)
+        gmsh.model.occ.rotate(volumes, 0, 0, 0, 1, 1, 0, 0.7)
+        gmsh.model.occ.synchronize()
+        rotated = oriented_extents()
+        x_min, y_min, z_min, x_max, y_max, z_max = gmsh.model.getBoundingBox(-1, -1)
+
+    # The fixture's section is 8 high, swept about the z axis; tilted, no axis-aligned side is that thin.
+    assert rotated == pytest.approx(aligned, rel=1e-6)
+    assert aligned[0] == pytest.approx(8.0, rel=0.1)
+    assert min(x_max - x_min, y_max - y_min, z_max - z_min) > 3 * aligned[0]
 
 
 def test_default_min_size_yields_to_a_smaller_max_size(meniscus_solid):
     assert median_edge_length(tetrahedral_mesh(meniscus_solid, max_size=1.0)) == pytest.approx(1.0, rel=0.25)
+
+
+def test_default_max_size_is_a_quarter_of_the_thickness(meniscus_solid):
+    # The fixture's section is 8 high, so elements are about 2 across.
+    assert median_edge_length(tetrahedral_mesh(meniscus_solid)) == pytest.approx(2.0, rel=0.25)
+
+
+def test_default_max_size_gives_a_larger_min_size_room(meniscus_solid):
+    assert median_edge_length(tetrahedral_mesh(meniscus_solid, min_size=3.0)) == pytest.approx(3.0, rel=0.25)
+
+
+@pytest.mark.parametrize(("assembled", "failure"), [(True, "produced no tetrahedra"), (False, "could not mesh")])
+def test_default_sizes_mesh_the_thin_real_medial_meniscus(real_medial_label, assembled, failure):
+    label = assemble_label_maps({"medial_meniscus": real_medial_label}).image if assembled else real_medial_label
+    surface = smooth_isocontour(extract_isocontour(signed_distance_field(label)))
+    solid = contours_to_brep(slice_isocontour(surface, centerline(label), spacing=5.0), cap="planar")
+
+    assert len(tetrahedral_mesh(solid).elements["Tetrahedron 4"]) > 0
+    # gmsh's own default sizes, from the overall extent, are too coarse for it.
+    # Depending on the grid, gmsh then fails or silently makes no tetrahedra.
+    with pytest.raises(ValueError, match=failure):
+        tetrahedral_mesh(solid, max_size=1e3)
 
 
 def test_tetrahedral_mesh_rejects_open_surface(meniscus_surface):
