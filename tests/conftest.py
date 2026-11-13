@@ -117,7 +117,7 @@ def meniscus_hex_blocks(meniscus_hex_slices: list[ContourSlice]) -> BRep:
 @pytest.fixture(scope="session")
 def real_label() -> sitk.Image:
     """A real lateral meniscus LabelMap (label 1) whose arc touches the edge of the image."""
-    return read_label_map(Path(__file__).parent / "dat" / "mns_l.nii")
+    return read_label_map(Path(__file__).parent / "dat" / "lateral_meniscus.nii")
 
 
 @pytest.fixture(scope="session")
@@ -135,4 +135,4 @@ def meniscus_hexahedra(meniscus_hex_blocks: BRep) -> Mesh:
 @pytest.fixture(scope="session")
 def real_medial_label() -> sitk.Image:
     """A real medial meniscus LabelMap (label 1) from the same knee as real_label, on its own grid."""
-    return read_label_map(Path(__file__).parent / "dat" / "mns_m.nii")
+    return read_label_map(Path(__file__).parent / "dat" / "medial_meniscus.nii")

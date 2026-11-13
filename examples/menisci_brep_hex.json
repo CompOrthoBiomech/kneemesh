@@ -1,7 +1,7 @@
 {
   "label_maps": {
-    "lateral_meniscus": "tests/dat/mns_l.nii",
-    "medial_meniscus": "tests/dat/mns_m.nii"
+    "lateral_meniscus": "tests/dat/lateral_meniscus.nii",
+    "medial_meniscus": "tests/dat/medial_meniscus.nii"
   },
   "assembled_label_map": "examples/menisci.nrrd",
   "output": "_hex.brep",
