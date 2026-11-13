@@ -3,7 +3,7 @@ import numpy as np
 import pytest
 
 from kneemesh.brep import gmsh_session
-from kneemesh.mesh.sheet import hexahedral_mesh
+from kneemesh.mesh.sheet import hexahedral_mesh, sized_hexahedral_mesh
 from kneemesh.mesh_optimization import mesh_quality, optimize_hexahedral_mesh, scaled_jacobians
 from kneemesh.tet_meshing import import_solid, tetrahedral_mesh
 
@@ -104,3 +104,18 @@ def test_scaled_jacobian_alone_stretches_real_cartilage_elements(real_cartilage_
     combined = mesh_quality(optimize_hexahedral_mesh(mesh, aspect_weight=0.5))
 
     assert alone.max_aspect > 3 * combined.max_aspect
+
+
+def test_sized_hexahedral_mesh_sizes_every_class_but_the_thickness(cartilage_hex_blocks):
+    coarse = sized_hexahedral_mesh(cartilage_hex_blocks, 4.0, 2)
+    fine = sized_hexahedral_mesh(cartilage_hex_blocks, 2.0, 2)
+
+    assert scaled_jacobians(fine).min() > 0
+    # Halving the size about quadruples the elements along the sheet, give or take rounding each class's count.
+    ratio = len(fine.elements["Hexahedron 8"]) / len(coarse.elements["Hexahedron 8"])
+    assert 3 < ratio < 6.5
+
+
+def test_sized_hexahedral_mesh_needs_blocks(cartilage_solid):
+    with pytest.raises(ValueError, match="six-sided blocks"):
+        sized_hexahedral_mesh(cartilage_solid, 2.0)

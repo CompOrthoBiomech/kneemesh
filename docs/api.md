@@ -38,18 +38,22 @@ Modules at the package root apply to every structure. The `geo` and `mesh` subpa
 .. automodule:: kneemesh.mesh.sheet
 ```
 
+## Femoral cartilage
+
+```{eval-rst}
+.. automodule:: kneemesh.geo.femur
+
+.. automodule:: kneemesh.mesh.femur
+```
+
 ## Planned structures
 
 ```{eval-rst}
 .. automodule:: kneemesh.geo.tibia
 
-.. automodule:: kneemesh.geo.femur
-
 .. automodule:: kneemesh.geo.patella
 
 .. automodule:: kneemesh.mesh.tibia
-
-.. automodule:: kneemesh.mesh.femur
 
 .. automodule:: kneemesh.mesh.patella
 ```

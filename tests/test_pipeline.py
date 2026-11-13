@@ -291,7 +291,14 @@ def test_pipeline_disables_package_logging_when_done(meniscus_label):
     assert messages == []
 
 
-IMPLEMENTED = ("lateral_meniscus", "medial_meniscus", "lateral_tibial_cartilage", "medial_tibial_cartilage", "patellar_cartilage")
+IMPLEMENTED = (
+    "lateral_meniscus",
+    "medial_meniscus",
+    "lateral_tibial_cartilage",
+    "medial_tibial_cartilage",
+    "patellar_cartilage",
+    "femoral_cartilage",
+)
 
 
 @pytest.mark.parametrize("structure", [structure for structure in STRUCTURES if structure not in IMPLEMENTED])
@@ -417,3 +424,20 @@ def test_pipeline_builds_and_meshes_cartilage_against_its_bone(in_tmp_path, cart
     assert "Optimized minimum scaled Jacobian" in stderr and "maximum Frobenius aspect ratio" in stderr
     assert sorted(path.name for path in in_tmp_path.glob("*.msh")) == ["lateral_tibial_cartilage_hex8.msh", "lateral_tibial_cartilage_tet4.msh"]
     assert not list(in_tmp_path.glob("tibia*.brep"))
+
+
+def test_pipeline_builds_and_meshes_femoral_cartilage_against_the_femur(in_tmp_path, femoral_segmentation, capsys):
+    write_label_map(femoral_segmentation.image, in_tmp_path / "knee.nii")
+    labels = json.dumps(femoral_segmentation.labels)
+
+    assert brep_main(["--label-map", "knee.nii", "--labels", labels, "--output", "_hex.brep", "--femoral-cartilage.hex-blocks", "true"]) == 0
+    assert brep_main(["--label-map", "knee.nii", "--labels", labels, "--output", "_tet.brep"]) == 0
+    hex_breps = json.dumps({"femoral_cartilage": "femoral_cartilage_hex.brep"})
+    argv = ["--breps", hex_breps, "--element-type", "hex8", "--femoral-cartilage.element-size", "4", "--femoral-cartilage.optimize", "true"]
+    assert mesh_main(argv) == 0
+    assert mesh_main(["--breps", json.dumps({"femoral_cartilage": "femoral_cartilage_tet.brep"}), "--femoral-cartilage.element-size", "4"]) == 0
+
+    stderr = capsys.readouterr().err
+    assert "Using femur only to orient its cartilage" in stderr
+    assert "Optimized minimum scaled Jacobian" in stderr
+    assert sorted(path.name for path in in_tmp_path.glob("*.msh")) == ["femoral_cartilage_hex8.msh", "femoral_cartilage_tet4.msh"]

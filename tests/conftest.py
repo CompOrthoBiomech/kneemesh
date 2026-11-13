@@ -10,9 +10,10 @@ from vtkmodules.vtkCommonDataModel import vtkPolyData
 from kneemesh.brep import BRep, contours_to_polydata
 from kneemesh.cartilage import CartilageSides, classify_sides
 from kneemesh.disk import read_label_map
+from kneemesh.geo.femur import femoral_sheet_to_brep, femoral_sheet_to_hex_blocks, fit_femoral_sheet
 from kneemesh.geo.meniscus import centerline, contours_to_brep, contours_to_hex_blocks, slice_isocontour
 from kneemesh.geo.sheet import CartilageSheet, fit_sheet, sheet_to_brep, sheet_to_hex_blocks
-from kneemesh.mesh import sheet
+from kneemesh.mesh import femur, sheet
 from kneemesh.mesh.meniscus import hexahedral_mesh
 from kneemesh.segmentation import Segmentation, assemble_label_maps
 from kneemesh.tet_meshing import Mesh, tetrahedral_mesh
@@ -29,6 +30,13 @@ CARTILAGE_SEMI_AXES = (15.0, 10.0)
 THIN_CENTER = (-6.0, 0.0)
 DEFECT_CENTER = (6.0, 0.0)
 DEFECT_RADIUS = 2.5
+
+FEMUR_RADIUS = 20.0
+FEMORAL_THICKNESS = 2.0
+TROCHLEA_DEGREES = 68.0
+CONDYLE_DEGREES = 136.0
+NOTCH_HALF_WIDTH = 6.0
+FEMORAL_HALF_WIDTH = 18.0
 
 
 @pytest.fixture(scope="session")
@@ -246,3 +254,90 @@ def real_cartilage() -> dict[str, CartilageSides]:
 def real_cartilage_hex_blocks(real_cartilage: dict[str, CartilageSides]) -> dict[str, BRep]:
     """The five-block solid of each real cartilage's sheet with the defaults for hexahedra."""
     return {structure: sheet_to_hex_blocks(fit_sheet(sides)) for structure, sides in real_cartilage.items()}
+
+
+def _femoral_on_bone() -> Segmentation:
+    """A synthetic femoral cartilage (label 2) on a cylindrical femur (label 1), physical units mm.
+
+    The femur is a cylinder of radius FEMUR_RADIUS along x. The cartilage is
+    a shell FEMORAL_THICKNESS thick on it: a trochlea over TROCHLEA_DEGREES
+    from the +y axis toward +z across |x| <= FEMORAL_HALF_WIDTH, continued
+    by two condyles over a further CONDYLE_DEGREES where NOTCH_HALF_WIDTH <=
+    |x| <= FEMORAL_HALF_WIDTH, so unrolled it is a U around the notch.
+    """
+    spacing, origin, size = 0.5, (-22.0, -24.0, -24.0), (89, 97, 97)
+    z, y, x = (
+        origin[axis] + spacing * np.arange(size[axis])[shape]
+        for axis, shape in ((2, np.s_[:, None, None]), (1, np.s_[None, :, None]), (0, np.s_[None, None, :]))
+    )
+    radius = np.sqrt(y**2 + z**2)
+    angle = np.degrees(np.arctan2(z, y)) % 360
+    across = np.abs(x)
+    trochlea = (angle <= TROCHLEA_DEGREES) & (across <= FEMORAL_HALF_WIDTH)
+    condyles = (
+        (angle > TROCHLEA_DEGREES) & (angle <= TROCHLEA_DEGREES + CONDYLE_DEGREES) & (across >= NOTCH_HALF_WIDTH) & (across <= FEMORAL_HALF_WIDTH)
+    )
+    cartilage = (radius >= FEMUR_RADIUS) & (radius <= FEMUR_RADIUS + FEMORAL_THICKNESS) & (trochlea | condyles)
+    bone = (radius < FEMUR_RADIUS) & (across <= FEMORAL_HALF_WIDTH + 4.0)
+    image = sitk.GetImageFromArray(np.where(cartilage, 2, np.where(bone, 1, 0)).astype(np.uint8))
+    image.SetSpacing((spacing,) * 3)
+    image.SetOrigin(origin)
+    return Segmentation(image, {"femur": 1, "femoral_cartilage": 2})
+
+
+@pytest.fixture(scope="session")
+def femoral_segmentation() -> Segmentation:
+    """A synthetic femoral cartilage on its femur; see femoral_on_bone."""
+    return _femoral_on_bone()
+
+
+@pytest.fixture(scope="session")
+def femoral_sides(femoral_segmentation: Segmentation) -> CartilageSides:
+    """The articular and bone sides of femoral_segmentation's smoothed surface."""
+    return _sides(femoral_segmentation)
+
+
+@pytest.fixture(scope="session")
+def femoral_sheet(femoral_sides: CartilageSides) -> CartilageSheet:
+    """The sheet of femoral_sides over its cylinder, with the defaults for hexahedra."""
+    return fit_femoral_sheet(femoral_sides)
+
+
+@pytest.fixture(scope="session")
+def femoral_hex_blocks(femoral_sheet: CartilageSheet) -> BRep:
+    """The seventeen-block solid of femoral_sheet."""
+    return femoral_sheet_to_hex_blocks(femoral_sheet)
+
+
+@pytest.fixture(scope="session")
+def femoral_hexahedra(femoral_hex_blocks: BRep) -> Mesh:
+    """Linear hexahedral mesh of femoral_hex_blocks at the default size."""
+    return femur.hexahedral_mesh(femoral_hex_blocks)
+
+
+@pytest.fixture(scope="session")
+def femoral_solid(femoral_sides: CartilageSides) -> BRep:
+    """The solid of femoral_sides's sheet with the defaults for tetrahedra."""
+    return femoral_sheet_to_brep(fit_femoral_sheet(femoral_sides, perimeter_radius=1.0, min_thickness=0.1, hole_thickness=0.05))
+
+
+@pytest.fixture(scope="session")
+def real_femoral_sides() -> CartilageSides:
+    """The articular and bone sides of the real femoral cartilage, assembled with the femur by nearest neighbor."""
+    data = Path(__file__).parent / "dat"
+    images = {"femur": read_label_map(data / "femur.nii"), "femoral_cartilage": read_label_map(data / "femoral_cartilage.nii")}
+    segmentation = assemble_label_maps(images, "nearest_neighbor")
+    surface = smooth_isocontour(extract_isocontour(signed_distance_field(segmentation.image, segmentation.value("femoral_cartilage"))))
+    return classify_sides(surface, signed_distance_field(segmentation.image, segmentation.value("femur")))
+
+
+@pytest.fixture(scope="session")
+def real_femoral_sheet(real_femoral_sides: CartilageSides) -> CartilageSheet:
+    """The real femoral cartilage's sheet with the defaults for hexahedra."""
+    return fit_femoral_sheet(real_femoral_sides)
+
+
+@pytest.fixture(scope="session")
+def real_femoral_hex_blocks(real_femoral_sheet: CartilageSheet) -> BRep:
+    """The real femoral cartilage's seventeen-block solid at the defaults for hexahedra. Fragmenting it takes about 10 s."""
+    return femoral_sheet_to_hex_blocks(real_femoral_sheet)

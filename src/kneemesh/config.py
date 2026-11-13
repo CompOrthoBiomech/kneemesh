@@ -9,6 +9,7 @@ from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, model_valida
 
 from kneemesh.cartilage import DEFAULT_SIDE_COSINE
 from kneemesh.disk import BREP_SUFFIXES
+from kneemesh.geo.femur import DEFAULT_RING_WIDTH
 from kneemesh.geo.sheet import (
     DEFAULT_HOLE_THICKNESS,
     DEFAULT_MIN_THICKNESS_HEXAHEDRAL,
@@ -227,6 +228,24 @@ class CartilageBrep(SurfaceBrep):
         return 0.0 if self.hex_blocks else self.hole_thickness
 
 
+class FemoralCartilageBrep(CartilageBrep):
+    """Settings for building the femoral cartilage's B-rep, with the defaults of each step.
+
+    It is a sheet over the cylinder its bone side wraps, unrolled into a
+    U-shaped domain, between its articular side and the side against the
+    femur. Defaults left as None depend on hex_blocks, as for the other cartilage.
+    """
+
+    ring_width: float = Field(
+        default=DEFAULT_RING_WIDTH,
+        gt=0,
+        lt=1,
+        description="Width of the ring of blocks along the perimeter, as a fraction of the condylar legs' half-width. "
+        + "Between about 0.4 and 0.6 on the real femoral cartilage; wider rings fold the trochlea's narrow side",
+    )
+    hex_blocks: bool = Field(default=False, description="Build the seventeen-block solid that hexahedral meshing needs")
+
+
 class StructureMesh(BaseConfig):
     """Settings shared by every structure for tetrahedral meshing and for optimizing hexahedral meshes."""
 
@@ -304,6 +323,40 @@ class CartilageMesh(StructureMesh):
     )
 
 
+DEFAULT_FEMORAL_ELEMENT_SIZE = 2.5
+"""Default size of the femoral cartilage's elements along the sheet, in physical units."""
+
+
+class FemoralCartilageMesh(StructureMesh):
+    """Settings for meshing the femoral cartilage's B-rep.
+
+    Hexahedral element types need B-reps built with hex_blocks. Its blocks
+    have no fixed counts, so hexahedra are sized by element_size along the
+    sheet and elements_through across it, and tetrahedra default to the same size.
+    """
+
+    element_size: float = Field(
+        default=DEFAULT_FEMORAL_ELEMENT_SIZE, gt=0, description="Target size of the elements along the sheet, in physical units"
+    )
+    elements_through: int = Field(default=3, ge=1, description="Hexahedra through the thickness")
+    max_size: OptionalFloat = Field(
+        default=None,
+        description="Largest tetrahedron size in physical units. None is element_size: the default from the oriented bounding box, "
+        + "which the wrapped cartilage makes about 30 mm across, gave nearly flat tetrahedra",
+    )
+    aspect_weight: float = Field(
+        default=DEFAULT_CARTILAGE_ASPECT_WEIGHT,
+        ge=0,
+        description="Weight of the elements' squared Frobenius aspect ratios against 1 / scaled Jacobian when optimizing. "
+        + "0 optimizes the scaled Jacobian alone, which left the real femoral cartilage's largest aspect ratio near 9.5",
+    )
+
+    @property
+    def resolved_max_size(self) -> float:
+        """max_size, or element_size."""
+        return self.max_size if self.max_size is not None else self.element_size
+
+
 class LabelMapBrep(BaseConfig):
     """Settings for building a B-rep of every structure in a segmented LabelMap.
 
@@ -336,6 +389,7 @@ class LabelMapBrep(BaseConfig):
     cartilage: CartilageBrep = Field(
         default_factory=CartilageBrep, description="Settings for the lateral and medial tibial and the patellar cartilage"
     )
+    femoral_cartilage: FemoralCartilageBrep = Field(default_factory=FemoralCartilageBrep, description="Settings for the femoral cartilage")
 
     @model_validator(mode="after")
     def _check_sources(self) -> Self:
@@ -402,6 +456,7 @@ class BrepMesh(BaseConfig):
     cartilage: CartilageMesh = Field(
         default_factory=CartilageMesh, description="Settings for the lateral and medial tibial and the patellar cartilage"
     )
+    femoral_cartilage: FemoralCartilageMesh = Field(default_factory=FemoralCartilageMesh, description="Settings for the femoral cartilage")
 
     @model_validator(mode="after")
     def _check_mesh(self) -> Self:
@@ -410,7 +465,7 @@ class BrepMesh(BaseConfig):
         except (KeyError, IndexError, ValueError) as error:
             raise ValueError(f"The output suffix may hold only the {{element_type}} placeholder, got {self.output!r}") from error
         _check_suffix(suffix)
-        if (self.meniscus.optimize or self.cartilage.optimize) and self.element_shape != "hexahedral":
+        if (self.meniscus.optimize or self.cartilage.optimize or self.femoral_cartilage.optimize) and self.element_shape != "hexahedral":
             raise ValueError("optimize applies only to hexahedral meshes")
         return self
 

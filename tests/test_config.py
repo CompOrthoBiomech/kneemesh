@@ -3,7 +3,18 @@ from pathlib import Path
 import pydantic
 import pytest
 
-from kneemesh.config import STRUCTURES, BaseConfig, BrepMesh, CartilageBrep, CartilageMesh, LabelMapBrep, MeniscusBrep, MeniscusMesh
+from kneemesh.config import (
+    STRUCTURES,
+    BaseConfig,
+    BrepMesh,
+    CartilageBrep,
+    CartilageMesh,
+    FemoralCartilageBrep,
+    FemoralCartilageMesh,
+    LabelMapBrep,
+    MeniscusBrep,
+    MeniscusMesh,
+)
 
 
 class ExampleConfig(BaseConfig):
@@ -190,3 +201,21 @@ def test_only_cartilage_optimizes_aspect_ratios_by_default():
     assert CartilageMesh().aspect_weight == 0.5
     with pytest.raises(pydantic.ValidationError):
         CartilageMesh(aspect_weight=-1.0)
+
+
+def test_femoral_cartilage_sections_extend_the_cartilage_settings():
+    brep = LabelMapBrep(labels={"femur": 1, "femoral_cartilage": 2}, femoral_cartilage=FemoralCartilageBrep(hex_blocks=True))
+
+    assert brep.femoral_cartilage.resolved_perimeter_radius == 3.0
+    assert brep.femoral_cartilage.ring_width == 0.5
+    with pytest.raises(pydantic.ValidationError):
+        FemoralCartilageBrep(ring_width=1.0)
+
+
+def test_femoral_tetrahedra_default_to_the_element_size():
+    assert FemoralCartilageMesh().resolved_max_size == 2.5
+    assert FemoralCartilageMesh(element_size=2.0).resolved_max_size == 2.0
+    assert FemoralCartilageMesh(element_size=2.0, max_size=3.0).resolved_max_size == 3.0
+    assert FemoralCartilageMesh().aspect_weight == 0.5
+    with pytest.raises(pydantic.ValidationError, match="only to hexahedral"):
+        BrepMesh(femoral_cartilage=FemoralCartilageMesh(optimize=True))

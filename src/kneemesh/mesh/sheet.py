@@ -1,12 +1,15 @@
-"""Hexahedral meshing of a cartilage sheet's five-block butterfly solid."""
+"""Hexahedral meshing of cartilage sheets built as blocks: the five-block butterfly solid, or any partition of a sheet into blocks."""
 
 import gmsh
+import numpy as np
+from loguru import logger
 
 from kneemesh.brep import BRep, gmsh_session
 from kneemesh.tet_meshing import Mesh, gmsh_options, import_solid, require_element_order, volume_mesh
 
 _BLOCKS = 5
 _SHAPE_ERROR = "Hexahedral meshing needs the five-block butterfly solid of a cartilage sheet, such as sheet_to_hex_blocks gives"
+_BLOCK_SHAPE_ERROR = "Hexahedral meshing needs a sheet built as six-sided blocks, such as blocks_to_hex_brep gives"
 
 
 def hexahedral_mesh(
@@ -50,38 +53,90 @@ def hexahedral_mesh(
     options: dict[str, float | bool] = {"Mesh.ElementOrder": element_order, "Mesh.SecondOrderIncomplete": second_order_incomplete}
     with gmsh_session(), gmsh_options(options):
         import_solid(brep)
-        counts = {"around": elements_around, "radial": elements_radial, "through": elements_through}
-        for curve, kind in _edge_classes().items():
-            gmsh.model.mesh.setTransfiniteCurve(curve, counts[kind] + 1)
-        for _, face in gmsh.model.getEntities(2):
-            gmsh.model.mesh.setTransfiniteSurface(face)
-            gmsh.model.mesh.setRecombine(2, face)
-        volumes = [tag for _, tag in gmsh.model.getEntities(3)]
-        for volume in volumes:
-            gmsh.model.mesh.setTransfiniteVolume(volume)
-        gmsh.model.add_physical_group(3, volumes, name="solid")
-
-        gmsh.model.mesh.generate(3)
+        names = {"around": elements_around, "radial": elements_radial, "through": elements_through}
+        classes = _edge_classes()
+        _transfinite({curve: curve for curve in classes}, {curve: names[kind] for curve, kind in classes.items()})
         return volume_mesh()
 
 
-def _edge_classes() -> dict[int, str]:
-    """Return "around", "radial", or "through" for every curve of the current model's five-block sheet solid.
+def sized_hexahedral_mesh(
+    brep: BRep,
+    element_size: float,
+    elements_through: int = 3,
+    element_order: int = 1,
+    second_order_incomplete: bool = False,
+) -> Mesh:
+    """Mesh a sheet built as six-sided blocks with hexahedra of about element_size across, using transfinite surfaces and volumes.
+
+    Opposite edges of each four-sided face must have equal counts, so edges
+    joined through faces form classes. The class that every block has runs
+    through the thickness and gets elements_through. Every other class gets
+    its mean edge length over element_size, rounded, and at least 1.
+
+    Args:
+        brep: A sheet's blocks, such as blocks_to_hex_brep gives.
+        element_size: Target length of the elements' edges along the sheet.
+        elements_through: Elements through the thickness.
+        element_order: Polynomial order of the elements. 2 gives 27-node hexahedra.
+        second_order_incomplete: Omit face and interior nodes from high-order
+            elements, giving 20-node instead of 27-node second-order hexahedra.
 
     Raises:
-        ValueError: If the model is not five six-sided blocks of four-sided faces in four edge classes.
+        ValueError: If element_size is not positive, elements_through is below
+            1, or brep is not six-sided blocks of four-sided faces with one
+            class through the thickness.
     """
+    if element_size <= 0:
+        raise ValueError(f"element_size must be positive, got {element_size}")
+    if elements_through < 1:
+        raise ValueError(f"elements_through must be at least 1, got {elements_through}")
+    require_element_order(element_order)
+
+    options: dict[str, float | bool] = {"Mesh.ElementOrder": element_order, "Mesh.SecondOrderIncomplete": second_order_incomplete}
+    with gmsh_session(), gmsh_options(options):
+        import_solid(brep)
+        classes, through = _block_classes(_BLOCK_SHAPE_ERROR)
+        lengths: dict[int, list[float]] = {}
+        for curve, kind in classes.items():
+            lengths.setdefault(kind, []).append(gmsh.model.occ.getMass(1, curve))
+        counts = {kind: max(1, round(float(np.mean(values)) / element_size)) for kind, values in lengths.items()}
+        counts[through] = elements_through
+        logger.debug("Edge classes: {} with element counts {}", len(counts), sorted(counts.values()))
+        _transfinite(classes, counts)
+        return volume_mesh()
+
+
+def _transfinite(classes: dict[int, int], counts: dict[int, int]) -> None:
+    """Make every curve, surface, and volume of the current model transfinite, with each curve's class's count, and mesh it."""
+    for curve, kind in classes.items():
+        gmsh.model.mesh.setTransfiniteCurve(curve, counts[kind] + 1)
+    for _, face in gmsh.model.getEntities(2):
+        gmsh.model.mesh.setTransfiniteSurface(face)
+        gmsh.model.mesh.setRecombine(2, face)
     volumes = [tag for _, tag in gmsh.model.getEntities(3)]
-    if len(volumes) != _BLOCKS:
-        raise ValueError(f"{_SHAPE_ERROR}; got {len(volumes)} volumes")
+    for volume in volumes:
+        gmsh.model.mesh.setTransfiniteVolume(volume)
+    gmsh.model.add_physical_group(3, volumes, name="solid")
+    gmsh.model.mesh.generate(3)
+
+
+def _block_classes(shape_error: str) -> tuple[dict[int, int], int]:
+    """Return the edge class of every curve of the current model's blocks, and the class running through the thickness.
+
+    Raises:
+        ValueError: If a face does not have four sides, a volume six faces,
+            or not exactly one class is in every volume.
+    """
     sides: dict[int, list[int]] = {}
     for _, face in gmsh.model.getEntities(2):
         sides[face] = [abs(tag) for _, tag in gmsh.model.getBoundary([(2, face)], combined=False, oriented=True)]
         if len(sides[face]) != 4:
-            raise ValueError(f"{_SHAPE_ERROR}; face {face} has {len(sides[face])} sides")
-    for volume in volumes:
-        if len(gmsh.model.getBoundary([(3, volume)], oriented=False)) != 6:
-            raise ValueError(f"{_SHAPE_ERROR}; volume {volume} does not have six faces")
+            raise ValueError(f"{shape_error}; face {face} has {len(sides[face])} sides")
+    volumes = [tag for _, tag in gmsh.model.getEntities(3)]
+    faces_of = {volume: [abs(tag) for _, tag in gmsh.model.getBoundary([(3, volume)], oriented=False)] for volume in volumes}
+    for volume, faces in faces_of.items():
+        if len(faces) != 6:
+            raise ValueError(f"{shape_error}; volume {volume} does not have six faces")
 
     curves = [tag for _, tag in gmsh.model.getEntities(1)]
     parent = {curve: curve for curve in curves}
@@ -97,22 +152,38 @@ def _edge_classes() -> dict[int, str]:
         for first, second in ((edges[0], edges[2]), (edges[1], edges[3])):
             parent[root(first)] = root(second)
     classes = {curve: root(curve) for curve in curves}
+    # Every block's four walls stand on the sheet's two sides, so the through class is in every block; any other class is in only some.
+    in_every = set.intersection(*({classes[edge] for face in faces for edge in sides[face]} for faces in faces_of.values()))
+    if len(in_every) != 1:
+        raise ValueError(f"{shape_error}; {len(in_every)} edge classes are in every block instead of one through the thickness")
+    return classes, in_every.pop()
+
+
+def _edge_classes() -> dict[int, str]:
+    """Return "around", "radial", or "through" for every curve of the current model's five-block sheet solid.
+
+    Raises:
+        ValueError: If the model is not five six-sided blocks of four-sided faces in four edge classes.
+    """
+    volumes = [tag for _, tag in gmsh.model.getEntities(3)]
+    if len(volumes) != _BLOCKS:
+        raise ValueError(f"{_SHAPE_ERROR}; got {len(volumes)} volumes")
+    classes, through = _block_classes(_SHAPE_ERROR)
     if len(set(classes.values())) != 4:
         raise ValueError(f"{_SHAPE_ERROR}; its edges fall in {len(set(classes.values()))} classes instead of 4")
 
     # The inner block shares all four of its walls with the outer blocks,
-    # which share three each. The class common to those walls runs through the
-    # thickness, and its other classes run around: arcs 0 and 2 with the inner
-    # sides opposite them, and arcs 1 and 3 with theirs.
-    shared = {face for face in sides if len(gmsh.model.getAdjacencies(2, face)[0]) == 2}
+    # which share three each. Its classes other than the through-thickness
+    # one run around: arcs 0 and 2 with the inner sides opposite them, and
+    # arcs 1 and 3 with theirs. The remaining class runs along the spokes.
+    shared = {face for _, face in gmsh.model.getEntities(2) if len(gmsh.model.getAdjacencies(2, face)[0]) == 2}
     inner = [volume for volume in volumes if sum(abs(tag) in shared for _, tag in gmsh.model.getBoundary([(3, volume)], oriented=False)) == 4]
     if len(inner) != 1:
         raise ValueError(f"{_SHAPE_ERROR}; {len(inner)} blocks share four faces instead of one")
-    inner_faces = [abs(tag) for _, tag in gmsh.model.getBoundary([(3, inner[0])], oriented=False)]
-    walls = [{classes[edge] for edge in sides[face]} for face in inner_faces if face in shared]
-    through = set.intersection(*walls)
-    around = {classes[edge] for face in inner_faces for edge in sides[face]} - through
-    if len(through) != 1 or len(around) != 2:
+    inner_faces = gmsh.model.getBoundary([(3, inner[0])], oriented=False)
+    inner_edges = {abs(tag) for _, tag in gmsh.model.getBoundary(inner_faces, combined=False, oriented=False)}
+    around = {classes[edge] for edge in inner_edges} - {through}
+    if len(around) != 2:
         raise ValueError(f"{_SHAPE_ERROR}; the inner block's edges are not in one through-thickness and two around classes")
-    names = {kind: "around" for kind in around} | {through.pop(): "through"}
+    names = {kind: "around" for kind in around} | {through: "through"}
     return {curve: names.get(kind, "radial") for curve, kind in classes.items()}

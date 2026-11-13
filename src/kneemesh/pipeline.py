@@ -14,11 +14,13 @@ from pydantic import ValidationError
 from pydantic.fields import FieldInfo
 
 from kneemesh.brep import BRep
-from kneemesh.cartilage import classify_sides
-from kneemesh.config import BONES, BaseConfig, BrepMesh, LabelMapAssembly, LabelMapBrep, Structure, StructureMesh
+from kneemesh.cartilage import CartilageSides, classify_sides
+from kneemesh.config import BONES, BaseConfig, BrepMesh, CartilageBrep, LabelMapAssembly, LabelMapBrep, Structure, StructureMesh
 from kneemesh.disk import read_brep, read_label_map, segmentation_labels_path, write_brep, write_mesh, write_segmentation
+from kneemesh.geo.femur import femoral_sheet_to_brep, femoral_sheet_to_hex_blocks, fit_femoral_sheet
 from kneemesh.geo.meniscus import centerline, contours_to_brep, contours_to_hex_blocks, slice_isocontour
-from kneemesh.geo.sheet import fit_sheet, sheet_to_brep, sheet_to_hex_blocks
+from kneemesh.geo.sheet import CartilageSheet, fit_sheet, sheet_to_brep, sheet_to_hex_blocks
+from kneemesh.mesh import femur as femur_mesh
 from kneemesh.mesh import meniscus as meniscus_mesh
 from kneemesh.mesh import sheet as sheet_mesh
 from kneemesh.mesh_optimization import mesh_quality, optimize_hexahedral_mesh
@@ -170,8 +172,7 @@ def _meniscus_brep(segmentation: Segmentation, structure: Structure, brep_config
     return contours_to_brep(slices, config.spline_order, config.cap, config.cap_offset)
 
 
-def _cartilage_brep(segmentation: Segmentation, structure: Structure, brep_config: LabelMapBrep) -> BRep:
-    config = brep_config.cartilage
+def _cartilage_sides(segmentation: Segmentation, structure: Structure, config: CartilageBrep) -> CartilageSides:
     bone = BONES[structure]
     label_map, label, bone_label = segmentation.image, segmentation.value(structure), segmentation.value(bone)
     logger.info("Computing the signed distance fields of {} (label {}) and {} (label {})", structure, label, bone, bone_label)
@@ -182,8 +183,10 @@ def _cartilage_brep(segmentation: Segmentation, structure: Structure, brep_confi
     logger.info("Smoothing the surface with {} iterations and pass band {}", config.smoothing_iterations, config.smoothing_pass_band)
     surface = smooth_isocontour(surface, config.smoothing_iterations, config.smoothing_pass_band)
     logger.info("Classifying the articular side and the side against the {} at cosine {}", bone, config.side_cosine)
-    sides = classify_sides(surface, bone_distance_field, config.side_cosine)
-    sheet = fit_sheet(sides, config.resolved_perimeter_radius, config.perimeter_inset, config.resolved_min_thickness, config.resolved_hole_thickness)
+    return classify_sides(surface, bone_distance_field, config.side_cosine)
+
+
+def _log_sheet(sheet: CartilageSheet) -> None:
     logger.info(
         "Fitted a sheet of area {:.4g} and mean thickness {:.3g}, thickened to at least {:.3g}, with {} holes",
         sheet.area,
@@ -191,11 +194,33 @@ def _cartilage_brep(segmentation: Segmentation, structure: Structure, brep_confi
         sheet.min_thickness,
         len(sheet.holes),
     )
+
+
+def _cartilage_brep(segmentation: Segmentation, structure: Structure, brep_config: LabelMapBrep) -> BRep:
+    config = brep_config.cartilage
+    sides = _cartilage_sides(segmentation, structure, config)
+    sheet = fit_sheet(sides, config.resolved_perimeter_radius, config.perimeter_inset, config.resolved_min_thickness, config.resolved_hole_thickness)
+    _log_sheet(sheet)
     if config.hex_blocks:
         logger.info("Building hexahedral blocks")
         return sheet_to_hex_blocks(sheet)
     logger.info("Building the solid")
     return sheet_to_brep(sheet)
+
+
+def _femoral_cartilage_brep(segmentation: Segmentation, structure: Structure, brep_config: LabelMapBrep) -> BRep:
+    config = brep_config.femoral_cartilage
+    sides = _cartilage_sides(segmentation, structure, config)
+    logger.info("Fitting a sheet over the cylinder the femur's side wraps")
+    sheet = fit_femoral_sheet(
+        sides, config.resolved_perimeter_radius, config.perimeter_inset, config.resolved_min_thickness, config.resolved_hole_thickness
+    )
+    _log_sheet(sheet)
+    if config.hex_blocks:
+        logger.info("Building hexahedral blocks with a ring {} of the legs' half-width", config.ring_width)
+        return femoral_sheet_to_hex_blocks(sheet, config.ring_width)
+    logger.info("Building the solid")
+    return femoral_sheet_to_brep(sheet, config.ring_width)
 
 
 def _meniscus_mesh(brep: BRep, mesh_config: BrepMesh) -> Mesh:
@@ -225,11 +250,22 @@ def _cartilage_mesh(brep: BRep, mesh_config: BrepMesh) -> Mesh:
     return _tetrahedral_mesh(brep, config, mesh_config)
 
 
-def _tetrahedral_mesh(brep: BRep, config: StructureMesh, mesh_config: BrepMesh) -> Mesh:
+def _femoral_cartilage_mesh(brep: BRep, mesh_config: BrepMesh) -> Mesh:
+    config = mesh_config.femoral_cartilage
+    logger.info("Meshing with {} elements of size {}", mesh_config.element_type, config.element_size)
+    if mesh_config.element_shape == "hexahedral":
+        mesh = femur_mesh.hexahedral_mesh(
+            brep, config.element_size, config.elements_through, mesh_config.element_order, mesh_config.second_order_incomplete
+        )
+        return _optimize(mesh, config) if config.optimize else mesh
+    return _tetrahedral_mesh(brep, config, mesh_config, config.resolved_max_size)
+
+
+def _tetrahedral_mesh(brep: BRep, config: StructureMesh, mesh_config: BrepMesh, max_size: float | None = None) -> Mesh:
     return tetrahedral_mesh(
         brep,
         config.min_size,
-        config.max_size,
+        config.max_size if max_size is None else max_size,
         config.elements_per_circle,
         config.algorithm_2d,
         config.algorithm_3d,
@@ -275,6 +311,7 @@ _BREP_BUILDERS: dict[Structure, _BrepBuilder] = {
     "lateral_tibial_cartilage": _cartilage_brep,
     "medial_tibial_cartilage": _cartilage_brep,
     "patellar_cartilage": _cartilage_brep,
+    "femoral_cartilage": _femoral_cartilage_brep,
 }
 
 # The pipeline that meshes each implemented structure's B-rep.
@@ -284,6 +321,7 @@ _MESHERS: dict[Structure, _Mesher] = {
     "lateral_tibial_cartilage": _cartilage_mesh,
     "medial_tibial_cartilage": _cartilage_mesh,
     "patellar_cartilage": _cartilage_mesh,
+    "femoral_cartilage": _femoral_cartilage_mesh,
 }
 
 

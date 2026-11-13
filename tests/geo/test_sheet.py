@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 
 from kneemesh.brep import gmsh_session
-from kneemesh.geo.sheet import _butterfly_blocks, _signed_turning_angles, fit_sheet, sheet_to_brep, sheet_to_hex_blocks
+from kneemesh.geo.sheet import _butterfly_blocks, _signed_turning_angles, coons_block, fit_sheet, sheet_to_brep, sheet_to_hex_blocks
 from kneemesh.tet_meshing import import_solid
 
 # The cartilage_segmentation fixture's ellipse semi-axes and the centers of its thin dip and defect, in mm.
@@ -15,7 +15,7 @@ DEFECT_CENTER = np.array([6.0, 0.0, 0.0])
 
 
 def plane_point(sheet, physical):
-    return (physical - sheet.origin) @ sheet.axes[:2].T
+    return (physical - sheet.frame.origin) @ sheet.frame.axes[:2].T
 
 
 def thickness(sheet, plane_points):
@@ -38,7 +38,7 @@ def radii_of_curvature(loop):
 
 
 def test_sheet_normal_points_from_the_bone_to_the_articular_side(cartilage_sheet):
-    axes = cartilage_sheet.axes
+    axes = cartilage_sheet.frame.axes
 
     assert axes @ axes.T == pytest.approx(np.eye(3), abs=1e-12)
     assert np.linalg.det(axes) == pytest.approx(1.0)
@@ -48,7 +48,7 @@ def test_sheet_normal_points_from_the_bone_to_the_articular_side(cartilage_sheet
 
 def test_sheet_perimeter_lies_inside_the_cartilage_counterclockwise(cartilage_sheet):
     perimeter = cartilage_sheet.perimeter
-    physical = cartilage_sheet.origin + perimeter @ cartilage_sheet.axes[:2]
+    physical = cartilage_sheet.frame.physical(perimeter, np.zeros(len(perimeter)))
     ellipse_area = math.pi * SEMI_AXES[0] * SEMI_AXES[1]
 
     assert np.hypot(physical[:, 0] / SEMI_AXES[0], physical[:, 1] / SEMI_AXES[1]).max() < 1.0
@@ -200,3 +200,24 @@ def test_butterfly_columns_leave_the_perimeter_at_right_angles(real_cartilage):
         cosines = np.einsum("ij,ij->i", tangents, columns) / (np.linalg.norm(tangents, axis=1) * np.linalg.norm(columns, axis=1))
         # The B-spline arc's samples and the polygon's normals differ slightly.
         assert np.abs(cosines).max() < 0.05
+
+
+def test_plane_frame_round_trips(cartilage_sheet):
+    frame = cartilage_sheet.frame
+    points = np.random.default_rng(0).uniform(-10, 10, (20, 3))
+
+    assert frame.physical(*frame.local(points)) == pytest.approx(points, abs=1e-12)
+
+
+def test_coons_block_keeps_its_sides_and_fills_a_square_evenly():
+    samples = np.linspace(0.0, 1.0, 5)[:, np.newaxis]
+    bottom, top = samples * [1.0, 0.0], samples * [1.0, 0.0] + [0.0, 1.0]
+    left, right = samples * [0.0, 1.0], samples * [0.0, 1.0] + [1.0, 0.0]
+    curved = bottom + np.column_stack((np.zeros(5), 0.1 * np.sin(np.pi * samples[:, 0])))
+
+    square = coons_block([bottom, top, left, right])
+    bent = coons_block([curved, top, left, right])
+
+    assert square[2, 3] == pytest.approx([0.75, 0.5])
+    assert bent[0] == pytest.approx(curved)
+    assert bent[:, -1] == pytest.approx(right)

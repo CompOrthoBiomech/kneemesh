@@ -2,7 +2,7 @@
 
 `kneemesh-assemble` combines single-label LabelMaps into one multilabel LabelMap. `kneemesh-brep` builds a B-rep of every structure in a segmentation, and `kneemesh-mesh` meshes each structure's B-rep. Each takes a JSON configuration, `--option value` overrides, or both, and `--help` lists every option and its default. Every option is a field of the command's model, {py:class}`~kneemesh.config.LabelMapAssembly`, {py:class}`~kneemesh.config.LabelMapBrep`, or {py:class}`~kneemesh.config.BrepMesh`, with underscores written as dashes. Settings for one kind of structure sit in a section, such as `meniscus`, and are given on the command line as `--meniscus.points-per-slice 10`.
 
-The structure names, keys of `labels`, `label_maps`, and `breps`, pick each structure's pipeline: `lateral_meniscus`, `medial_meniscus`, `patellar_cartilage`, `femoral_cartilage`, `lateral_tibial_cartilage`, `medial_tibial_cartilage`, `femur`, `tibia`, and `patella`. The menisci and the tibial and patellar cartilage are implemented so far; naming any other structure fails before any work starts, except a bone named only for its cartilage.
+The structure names, keys of `labels`, `label_maps`, and `breps`, pick each structure's pipeline: `lateral_meniscus`, `medial_meniscus`, `patellar_cartilage`, `femoral_cartilage`, `lateral_tibial_cartilage`, `medial_tibial_cartilage`, `femur`, `tibia`, and `patella`. The menisci and the cartilage are implemented so far; naming any other structure fails before any work starts, except a bone named only for its cartilage.
 
 Each structure's output is written to `<output-directory>/<structure><output>`, where `--output` is a suffix. B-rep suffixes end in `.brep`, `.brep` by default. Mesh suffixes default to `_{element_type}.msh`, with `{element_type}` replaced by `--element-type`: `hex8`, `hex20`, `hex27`, `tet4` (the default), or `tet10`. gmsh infers the mesh format from the extension.
 
@@ -14,7 +14,7 @@ kneemesh-mesh --breps '{"medial_meniscus": "medial_meniscus.brep"}' --meniscus.m
 
 The last command writes `medial_meniscus_tet4.msh`. Each run saves the configuration it used, so it can be repeated with `--config`. Without `--config` it is saved as `settings<timestamp>.json` in the working directory. With `--config` and overrides, the changed configuration is saved beside the original as `<name>_modified.json`. Section overrides change only the fields given, leaving the section's other values from `--config`.
 
-For a hexahedral mesh, build the B-reps with `--meniscus.hex-blocks true --meniscus.points-per-slice 10` or `--cartilage.hex-blocks true` and mesh them with `--element-type hex8`, `hex20`, or `hex27`. Add `--meniscus.optimize true` to move the nodes afterward for better scaled Jacobians with {py:func}`~kneemesh.mesh_optimization.optimize_hexahedral_mesh`. Boundary nodes may then leave the B-rep's surface by up to `--meniscus.surface-deviation` times the local element size, 0.1 by default, without changing the volume overall; `--meniscus.surface-deviation 0` keeps them on its tangent planes.
+For a hexahedral mesh, build the B-reps with `--meniscus.hex-blocks true --meniscus.points-per-slice 10` or `--cartilage.hex-blocks true` (`--femoral-cartilage.hex-blocks true` for the femoral cartilage) and mesh them with `--element-type hex8`, `hex20`, or `hex27`. Add `--meniscus.optimize true` to move the nodes afterward for better scaled Jacobians with {py:func}`~kneemesh.mesh_optimization.optimize_hexahedral_mesh`. Boundary nodes may then leave the B-rep's surface by up to `--meniscus.surface-deviation` times the local element size, 0.1 by default, without changing the volume overall; `--meniscus.surface-deviation 0` keeps them on its tangent planes.
 
 ## Segmentations
 
@@ -52,3 +52,14 @@ kneemesh-mesh --breps '{"lateral_tibial_cartilage": "lateral_tibial_cartilage_he
 ```
 
 `--cartilage.elements-around`, `--cartilage.elements-radial`, and `--cartilage.elements-through` set the hexahedra along each quarter of the perimeter, along each spoke toward the inner block, and through the thickness. Optimizing cartilage hexahedra also weighs their Frobenius aspect ratios, by `--cartilage.aspect-weight`, 0.5 by default: optimizing the scaled Jacobian alone squares up corners by stretching elements, up to 75 times their thickness on the real medial tibial cartilage. The thinnest stretches of the rim hold the worst elements; `--cartilage.perimeter-inset` cuts them off at the cost of area.
+
+## Femoral cartilage
+
+The femoral cartilage wraps the condyles, so it is built as a sheet over the cylinder its side against the femur wraps, unrolled into a U: the trochlea joining the two condyles around the intercondylar notch. Its `femoral_cartilage` settings extend the `cartilage` settings, with the same defaults by `hex_blocks`. For hexahedra, the U is split into seventeen blocks, a core of five quadrilaterals inside a ring along the perimeter `ring_width` of the condyles' half-width wide, 0.5 by default.
+
+```sh
+kneemesh-brep --label-maps '{"femur": "femur.nii", "femoral_cartilage": "femoral.nii"}' --femoral-cartilage.hex-blocks true --output _hex.brep
+kneemesh-mesh --breps '{"femoral_cartilage": "femoral_cartilage_hex.brep"}' --element-type hex8 --femoral-cartilage.optimize true
+```
+
+Its blocks have too many edge classes for a count per class, so `--femoral-cartilage.element-size` sets the elements' size along the sheet, 2.5 mm by default, and `--femoral-cartilage.elements-through` their count through it. Tetrahedra default to the same size, since the default from the oriented bounding box, about 30 mm across for the wrapped cartilage, gives nearly flat tetrahedra. On the real femoral cartilage at the defaults, optimizing with the default aspect weight of 0.5 raises the minimum scaled Jacobian from about 0.1 to 0.45-0.5 and lowers the largest Frobenius aspect ratio from about 12 to 4-4.5; two elements through the thickness instead of three give 0.49 and 3.2.

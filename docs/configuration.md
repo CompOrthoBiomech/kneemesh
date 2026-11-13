@@ -48,3 +48,15 @@ The `cartilage` sections apply to `lateral_tibial_cartilage`, `medial_tibial_car
 .. autopydantic_model:: kneemesh.config.CartilageMesh
    :noindex:
 ```
+
+## Femoral cartilage
+
+The `femoral_cartilage` sections apply to `femoral_cartilage`. Its B-rep settings extend the other cartilage's.
+
+```{eval-rst}
+.. autopydantic_model:: kneemesh.config.FemoralCartilageBrep
+   :noindex:
+
+.. autopydantic_model:: kneemesh.config.FemoralCartilageMesh
+   :noindex:
+```
