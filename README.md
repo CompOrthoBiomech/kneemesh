@@ -4,11 +4,17 @@
 [![Coverage](https://img.shields.io/endpoint?url=https://comporthobiomech.github.io/kneemesh/coverage.json)](https://github.com/CompOrthoBiomech/kneemesh/actions/workflows/release.yml)
 [![Docs](https://img.shields.io/badge/docs-gh--pages-blue)](https://comporthobiomech.github.io/kneemesh/)
 
-Generate B-rep geometry of knee structures from a segmentation LabelMap, and mesh it with high-quality elements. The meniscus is supported now; lateral and medial tibial, femoral, and patellar cartilage and the bones are planned. For the meniscus:
+Generate B-rep geometry of knee structures from a segmentation LabelMap, and mesh it with high-quality elements. The menisci and the lateral and medial tibial and patellar cartilage are supported now; femoral cartilage and the bones are planned. For the meniscus:
 
 - **B-rep from segmentation labels.** Reads a LabelMap (`.nii`, `.nrrd`, or `.mhd`), fits a centerline through the labeled meniscus, slices its smoothed surface into cross-section contours, and lofts them into a solid B-spline B-rep (`.brep`) with planar or smooth end caps.
 - **Tetrahedral meshing** with linear 4-node or quadratic 10-node tetrahedra.
 - **Hexahedral meshing** with block-structured 8-node, 20-node, or 27-node hexahedra. The solid is split into a butterfly (O-grid) of five blocks, so elements stay well shaped at the meniscus's sharp corners. Optional node optimization (`--optimize true`) then raises the scaled Jacobians further, roughly doubling the worst element's on the real test menisci.
+
+For the tibial and patellar cartilage:
+
+- **B-rep from segmentation labels.** Tells the cartilage's articular side from the side against its bone, which must be in the segmentation, and fits both as heights over a plane within a smoothed perimeter. Thin regions are thickened on the bone side, and for tetrahedra, the thinnest regions and gaps in the label become holes.
+- **Tetrahedral meshing** as for the meniscus.
+- **Hexahedral meshing** of a five-block butterfly over the perimeter, with transfinite elements through the thickness. The perimeter is rounded so that elements can follow its concave notches.
 
 Meshes are written in any format gmsh infers from the file extension, such as `.msh`, `.vtk`, or `.inp`.
 
@@ -44,6 +50,8 @@ Each run saves the configuration it used, so it can be repeated with `--config`.
 | 8-node hexahedra | `--meniscus.hex-blocks true --meniscus.points-per-slice 10` | `--element-type hex8` |
 | 20-node hexahedra | `--meniscus.hex-blocks true --meniscus.points-per-slice 10` | `--element-type hex20` |
 | 27-node hexahedra | `--meniscus.hex-blocks true --meniscus.points-per-slice 10` | `--element-type hex27` |
+
+For the cartilage, the hexahedral B-rep option is `--cartilage.hex-blocks true`.
 
 ## Development
 

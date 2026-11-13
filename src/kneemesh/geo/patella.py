@@ -1,1 +1,1 @@
-"""B-rep generation for the patellar cartilage and the patella. Not implemented yet."""
+"""B-rep generation for the patella. Not implemented yet; kneemesh.geo.sheet builds the patellar cartilage."""

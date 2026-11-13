@@ -14,10 +14,13 @@ from pydantic import ValidationError
 from pydantic.fields import FieldInfo
 
 from kneemesh.brep import BRep
-from kneemesh.config import BaseConfig, BrepMesh, LabelMapAssembly, LabelMapBrep, MeniscusMesh, Structure
+from kneemesh.cartilage import classify_sides
+from kneemesh.config import BONES, BaseConfig, BrepMesh, LabelMapAssembly, LabelMapBrep, Structure, StructureMesh
 from kneemesh.disk import read_brep, read_label_map, segmentation_labels_path, write_brep, write_mesh, write_segmentation
 from kneemesh.geo.meniscus import centerline, contours_to_brep, contours_to_hex_blocks, slice_isocontour
-from kneemesh.mesh.meniscus import hexahedral_mesh
+from kneemesh.geo.sheet import fit_sheet, sheet_to_brep, sheet_to_hex_blocks
+from kneemesh.mesh import meniscus as meniscus_mesh
+from kneemesh.mesh import sheet as sheet_mesh
 from kneemesh.mesh_optimization import mesh_quality, optimize_hexahedral_mesh
 from kneemesh.segmentation import Interpolator, Segmentation, assemble_label_maps
 from kneemesh.tet_meshing import Mesh, tetrahedral_mesh
@@ -30,8 +33,10 @@ type _Mesher = Callable[[BRep, BrepMesh], Mesh]
 def run_brep(config: LabelMapBrep) -> dict[Structure, BRep]:
     """Build a B-rep of every structure in config's segmentation and write each to config.output_path(structure).
 
-    Each structure's name picks its pipeline. Every structure is checked
-    before any work starts, and each B-rep is written as soon as it is built.
+    Each structure's name picks its pipeline. A bone without a pipeline is
+    not built when it is named only as the bone under a cartilage, which
+    uses it to tell its sides apart. Every structure is checked before any
+    work starts, and each B-rep is written as soon as it is built.
 
     Returns:
         The B-rep of each structure.
@@ -43,10 +48,15 @@ def run_brep(config: LabelMapBrep) -> dict[Structure, BRep]:
     structures = config.structures
     if not structures:
         raise ValueError("Give a multilabel label_map with labels or single-label label_maps to read")
-    builders: dict[Structure, _BrepBuilder | None] = {structure: _BREP_BUILDERS.get(structure) for structure in structures}
+    references = {BONES[structure] for structure in structures if structure in BONES}
+    builders: dict[Structure, _BrepBuilder | None] = {
+        structure: _BREP_BUILDERS.get(structure) for structure in structures if structure in _BREP_BUILDERS or structure not in references
+    }
     missing = [structure for structure, builder in builders.items() if builder is None]
     if missing:
         raise NotImplementedError(f"B-rep generation is not implemented for {', '.join(missing)}")
+    for bone in sorted(references - set(builders)):
+        logger.info("Using {} only to orient its cartilage; bone B-reps are not implemented", bone)
     segmentation = load_segmentation(config)
     breps: dict[Structure, BRep] = {}
     for structure, builder in builders.items():
@@ -160,12 +170,62 @@ def _meniscus_brep(segmentation: Segmentation, structure: Structure, brep_config
     return contours_to_brep(slices, config.spline_order, config.cap, config.cap_offset)
 
 
+def _cartilage_brep(segmentation: Segmentation, structure: Structure, brep_config: LabelMapBrep) -> BRep:
+    config = brep_config.cartilage
+    bone = BONES[structure]
+    label_map, label, bone_label = segmentation.image, segmentation.value(structure), segmentation.value(bone)
+    logger.info("Computing the signed distance fields of {} (label {}) and {} (label {})", structure, label, bone, bone_label)
+    distance_field = signed_distance_field(label_map, label, config.sigma)
+    bone_distance_field = signed_distance_field(label_map, bone_label, config.sigma)
+    logger.info("Extracting the surface at level {}", config.level)
+    surface = extract_isocontour(distance_field, config.level)
+    logger.info("Smoothing the surface with {} iterations and pass band {}", config.smoothing_iterations, config.smoothing_pass_band)
+    surface = smooth_isocontour(surface, config.smoothing_iterations, config.smoothing_pass_band)
+    logger.info("Classifying the articular side and the side against the {} at cosine {}", bone, config.side_cosine)
+    sides = classify_sides(surface, bone_distance_field, config.side_cosine)
+    sheet = fit_sheet(sides, config.resolved_perimeter_radius, config.perimeter_inset, config.resolved_min_thickness, config.resolved_hole_thickness)
+    logger.info(
+        "Fitted a sheet of area {:.4g} and mean thickness {:.3g}, thickened to at least {:.3g}, with {} holes",
+        sheet.area,
+        sheet.mean_thickness,
+        sheet.min_thickness,
+        len(sheet.holes),
+    )
+    if config.hex_blocks:
+        logger.info("Building hexahedral blocks")
+        return sheet_to_hex_blocks(sheet)
+    logger.info("Building the solid")
+    return sheet_to_brep(sheet)
+
+
 def _meniscus_mesh(brep: BRep, mesh_config: BrepMesh) -> Mesh:
     config = mesh_config.meniscus
     logger.info("Meshing with {} elements", mesh_config.element_type)
     if mesh_config.element_shape == "hexahedral":
-        mesh = hexahedral_mesh(brep, config.elements_per_edge, config.elements_along, mesh_config.element_order, mesh_config.second_order_incomplete)
+        mesh = meniscus_mesh.hexahedral_mesh(
+            brep, config.elements_per_edge, config.elements_along, mesh_config.element_order, mesh_config.second_order_incomplete
+        )
         return _optimize(mesh, config) if config.optimize else mesh
+    return _tetrahedral_mesh(brep, config, mesh_config)
+
+
+def _cartilage_mesh(brep: BRep, mesh_config: BrepMesh) -> Mesh:
+    config = mesh_config.cartilage
+    logger.info("Meshing with {} elements", mesh_config.element_type)
+    if mesh_config.element_shape == "hexahedral":
+        mesh = sheet_mesh.hexahedral_mesh(
+            brep,
+            config.elements_around,
+            config.elements_radial,
+            config.elements_through,
+            mesh_config.element_order,
+            mesh_config.second_order_incomplete,
+        )
+        return _optimize(mesh, config) if config.optimize else mesh
+    return _tetrahedral_mesh(brep, config, mesh_config)
+
+
+def _tetrahedral_mesh(brep: BRep, config: StructureMesh, mesh_config: BrepMesh) -> Mesh:
     return tetrahedral_mesh(
         brep,
         config.min_size,
@@ -178,7 +238,7 @@ def _meniscus_mesh(brep: BRep, mesh_config: BrepMesh) -> Mesh:
     )
 
 
-def _optimize(mesh: Mesh, config: MeniscusMesh) -> Mesh:
+def _optimize(mesh: Mesh, config: StructureMesh) -> Mesh:
     before = mesh_quality(mesh)
     count = sum(len(connectivity) for connectivity in mesh.elements.values())
     logger.info("Optimizing {} hexahedra with minimum scaled Jacobian {:.3f} and mean {:.3f}", count, before.minimum, before.mean)
@@ -200,12 +260,18 @@ def _optimize(mesh: Mesh, config: MeniscusMesh) -> Mesh:
 _BREP_BUILDERS: dict[Structure, _BrepBuilder] = {
     "lateral_meniscus": _meniscus_brep,
     "medial_meniscus": _meniscus_brep,
+    "lateral_tibial_cartilage": _cartilage_brep,
+    "medial_tibial_cartilage": _cartilage_brep,
+    "patellar_cartilage": _cartilage_brep,
 }
 
 # The pipeline that meshes each implemented structure's B-rep.
 _MESHERS: dict[Structure, _Mesher] = {
     "lateral_meniscus": _meniscus_mesh,
     "medial_meniscus": _meniscus_mesh,
+    "lateral_tibial_cartilage": _cartilage_mesh,
+    "medial_tibial_cartilage": _cartilage_mesh,
+    "patellar_cartilage": _cartilage_mesh,
 }
 
 

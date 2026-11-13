@@ -1,1 +1,1 @@
-"""Meshing for the lateral and medial tibial cartilage and the tibia. Not implemented yet."""
+"""Meshing of the tibia. Not implemented yet; kneemesh.mesh.sheet meshes the lateral and medial tibial cartilage."""

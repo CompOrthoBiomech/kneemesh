@@ -3,7 +3,7 @@ from pathlib import Path
 import pydantic
 import pytest
 
-from kneemesh.config import STRUCTURES, BaseConfig, BrepMesh, LabelMapBrep, MeniscusBrep, MeniscusMesh
+from kneemesh.config import STRUCTURES, BaseConfig, BrepMesh, CartilageBrep, CartilageMesh, LabelMapBrep, MeniscusBrep, MeniscusMesh
 
 
 class ExampleConfig(BaseConfig):
@@ -145,3 +145,41 @@ def test_structures_list_every_name():
         "tibia",
         "patella",
     )
+
+
+def test_cartilage_defaults_depend_on_hex_blocks():
+    tetrahedral, hexahedral = CartilageBrep(), CartilageBrep(hex_blocks=True)
+
+    assert (tetrahedral.resolved_perimeter_radius, tetrahedral.resolved_min_thickness, tetrahedral.resolved_hole_thickness) == (1.0, 0.1, 0.05)
+    assert (hexahedral.resolved_perimeter_radius, hexahedral.resolved_min_thickness, hexahedral.resolved_hole_thickness) == (3.0, 0.2, 0.0)
+    assert CartilageBrep(hex_blocks=True, perimeter_radius=2.0, min_thickness=0.3).resolved_perimeter_radius == 2.0
+
+
+def test_cartilage_holes_must_be_thinner_than_the_minimum():
+    with pytest.raises(pydantic.ValidationError, match="must be below min_thickness"):
+        CartilageBrep(min_thickness=0.1, hole_thickness=0.1)
+    # Hexahedral blocks ignore hole_thickness.
+    assert CartilageBrep(hex_blocks=True, min_thickness=0.1, hole_thickness=0.2).resolved_hole_thickness == 0.0
+
+
+@pytest.mark.parametrize("values", [{"side_cosine": 1.0}, {"perimeter_radius": 0.0}, {"min_thickness": 1.0}, {"perimeter_inset": -1.0}])
+def test_cartilage_config_rejects_out_of_range_values(values):
+    with pytest.raises(pydantic.ValidationError):
+        CartilageBrep.model_validate(values)
+
+
+def test_cartilage_optimization_applies_only_to_hexahedra():
+    assert BrepMesh(element_type="hex8", cartilage=CartilageMesh(optimize=True)).cartilage.optimize
+    with pytest.raises(pydantic.ValidationError, match="only to hexahedral"):
+        BrepMesh(cartilage=CartilageMesh(optimize=True))
+
+
+def test_sections_share_surface_and_meshing_settings():
+    assert set(MeniscusBrep.model_fields) & set(CartilageBrep.model_fields) == {
+        "sigma",
+        "level",
+        "smoothing_iterations",
+        "smoothing_pass_band",
+        "hex_blocks",
+    }
+    assert {"min_size", "max_size", "optimize", "preserve_volume"} <= set(MeniscusMesh.model_fields) & set(CartilageMesh.model_fields)

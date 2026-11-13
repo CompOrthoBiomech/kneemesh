@@ -1,15 +1,20 @@
 import math
 from pathlib import Path
 
+import numpy as np
 import pytest
 import SimpleITK as sitk
 from scipy.interpolate import BSpline
 from vtkmodules.vtkCommonDataModel import vtkPolyData
 
 from kneemesh.brep import BRep, contours_to_polydata
+from kneemesh.cartilage import CartilageSides, classify_sides
 from kneemesh.disk import read_label_map
 from kneemesh.geo.meniscus import centerline, contours_to_brep, contours_to_hex_blocks, slice_isocontour
+from kneemesh.geo.sheet import CartilageSheet, fit_sheet, sheet_to_brep, sheet_to_hex_blocks
+from kneemesh.mesh import sheet
 from kneemesh.mesh.meniscus import hexahedral_mesh
+from kneemesh.segmentation import Segmentation, assemble_label_maps
 from kneemesh.tet_meshing import Mesh, tetrahedral_mesh
 from kneemesh.vol import ContourSlice, extract_isocontour, signed_distance_field, smooth_isocontour
 
@@ -17,6 +22,13 @@ INNER_RADIUS = 10.0
 OUTER_RADIUS = 20.0
 HEIGHT = 8.0
 SWEEP_DEGREES = 270.0
+
+BONE_RADIUS = 40.0
+CARTILAGE_THICKNESS = 3.0
+CARTILAGE_SEMI_AXES = (15.0, 10.0)
+THIN_CENTER = (-6.0, 0.0)
+DEFECT_CENTER = (6.0, 0.0)
+DEFECT_RADIUS = 2.5
 
 
 @pytest.fixture(scope="session")
@@ -136,3 +148,101 @@ def meniscus_hexahedra(meniscus_hex_blocks: BRep) -> Mesh:
 def real_medial_label() -> sitk.Image:
     """A real medial meniscus LabelMap (label 1) from the same knee as real_label, on its own grid."""
     return read_label_map(Path(__file__).parent / "dat" / "medial_meniscus.nii")
+
+
+def _cartilage_on_bone(defect: bool) -> Segmentation:
+    """A synthetic tibial cartilage cap (label 2) on a spherical bone (label 1), physical units mm.
+
+    The bone is a sphere of radius BONE_RADIUS whose top touches z = 0. The
+    cartilage lies on it, over an ellipse with CARTILAGE_SEMI_AXES in x and
+    y, with a thickness of CARTILAGE_THICKNESS at its center tapering to 0 at
+    its rim like an ellipsoid's. A Gaussian dip of sigma 2.5 mm around
+    THIN_CENTER thins it to 15% there, and with defect a cylinder of DEFECT_RADIUS around
+    DEFECT_CENTER has no cartilage at all.
+    """
+    spacing, origin, size = 0.5, (-18.75, -13.75, -6.0), (76, 56, 22)
+    z, y, x = (
+        origin[axis] + spacing * np.arange(size[axis])[shape]
+        for axis, shape in ((2, np.s_[:, None, None]), (1, np.s_[None, :, None]), (0, np.s_[None, None, :]))
+    )
+    radius = np.sqrt(x**2 + y**2 + (z + BONE_RADIUS) ** 2)
+    semi_x, semi_y = CARTILAGE_SEMI_AXES
+    taper = np.sqrt(np.clip(1 - (x / semi_x) ** 2 - (y / semi_y) ** 2, 0, None))
+    dip = 1 - 0.85 * np.exp(-((x - THIN_CENTER[0]) ** 2 + (y - THIN_CENTER[1]) ** 2) / (2 * 2.5**2))
+    cartilage = (radius >= BONE_RADIUS) & (radius <= BONE_RADIUS + CARTILAGE_THICKNESS * taper * dip)
+    if defect:
+        cartilage &= (x - DEFECT_CENTER[0]) ** 2 + (y - DEFECT_CENTER[1]) ** 2 > DEFECT_RADIUS**2
+    image = sitk.GetImageFromArray(np.where(cartilage, 2, np.where(radius < BONE_RADIUS, 1, 0)).astype(np.uint8))
+    image.SetSpacing((spacing,) * 3)
+    image.SetOrigin(origin)
+    return Segmentation(image, {"tibia": 1, "lateral_tibial_cartilage": 2})
+
+
+def _sides(segmentation: Segmentation) -> CartilageSides:
+    surface = smooth_isocontour(extract_isocontour(signed_distance_field(segmentation.image, 2)))
+    return classify_sides(surface, signed_distance_field(segmentation.image, 1))
+
+
+@pytest.fixture(scope="session")
+def cartilage_segmentation() -> Segmentation:
+    """A synthetic tibial cartilage on its bone, with a thin dip; see _cartilage_on_bone."""
+    return _cartilage_on_bone(defect=False)
+
+
+@pytest.fixture(scope="session")
+def cartilage_defect_segmentation() -> Segmentation:
+    """cartilage_segmentation with a full-thickness defect."""
+    return _cartilage_on_bone(defect=True)
+
+
+@pytest.fixture(scope="session")
+def cartilage_sides(cartilage_segmentation: Segmentation) -> CartilageSides:
+    """The articular and bone sides of cartilage_segmentation's smoothed surface."""
+    return _sides(cartilage_segmentation)
+
+
+@pytest.fixture(scope="session")
+def cartilage_defect_sides(cartilage_defect_segmentation: Segmentation) -> CartilageSides:
+    """The articular and bone sides of cartilage_defect_segmentation's smoothed surface."""
+    return _sides(cartilage_defect_segmentation)
+
+
+@pytest.fixture(scope="session")
+def cartilage_sheet(cartilage_sides: CartilageSides) -> CartilageSheet:
+    """The sheet of cartilage_sides with the defaults for hexahedra."""
+    return fit_sheet(cartilage_sides)
+
+
+@pytest.fixture(scope="session")
+def cartilage_hex_blocks(cartilage_sheet: CartilageSheet) -> BRep:
+    """The five-block solid of cartilage_sheet."""
+    return sheet_to_hex_blocks(cartilage_sheet)
+
+
+@pytest.fixture(scope="session")
+def cartilage_hexahedra(cartilage_hex_blocks: BRep) -> Mesh:
+    """Linear hexahedral mesh of cartilage_hex_blocks with the default counts."""
+    return sheet.hexahedral_mesh(cartilage_hex_blocks)
+
+
+@pytest.fixture(scope="session")
+def cartilage_solid(cartilage_sides: CartilageSides) -> BRep:
+    """The solid of cartilage_sides's sheet with the defaults for tetrahedra."""
+    return sheet_to_brep(fit_sheet(cartilage_sides, perimeter_radius=1.0, min_thickness=0.1))
+
+
+@pytest.fixture(scope="session")
+def real_cartilage() -> dict[str, CartilageSides]:
+    """The articular and bone sides of each real tibial and patellar cartilage, assembled with its bone by nearest neighbor."""
+    data = Path(__file__).parent / "dat"
+    sides = {}
+    for cartilage, bone in (("lateral_tibial_cartilage", "tibia"), ("medial_tibial_cartilage", "tibia"), ("patellar_cartilage", "patella")):
+        images = {bone: read_label_map(data / f"{bone}.nii"), cartilage: read_label_map(data / f"{cartilage}.nii")}
+        sides[cartilage] = _sides(assemble_label_maps(images, "nearest_neighbor"))
+    return sides
+
+
+@pytest.fixture(scope="session")
+def real_cartilage_hex_blocks(real_cartilage: dict[str, CartilageSides]) -> dict[str, BRep]:
+    """The five-block solid of each real cartilage's sheet with the defaults for hexahedra."""
+    return {structure: sheet_to_hex_blocks(fit_sheet(sides)) for structure, sides in real_cartilage.items()}

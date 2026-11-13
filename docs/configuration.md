@@ -13,6 +13,18 @@ Each pipeline reads one of these models from JSON with {py:meth}`~kneemesh.confi
    :noindex:
 ```
 
+## Shared section settings
+
+Every structure's B-rep section extends {py:class}`~kneemesh.config.SurfaceBrep`, and every mesh section extends {py:class}`~kneemesh.config.StructureMesh`.
+
+```{eval-rst}
+.. autopydantic_model:: kneemesh.config.SurfaceBrep
+   :noindex:
+
+.. autopydantic_model:: kneemesh.config.StructureMesh
+   :noindex:
+```
+
 ## Meniscus
 
 The `meniscus` sections apply to both `lateral_meniscus` and `medial_meniscus`.
@@ -22,5 +34,17 @@ The `meniscus` sections apply to both `lateral_meniscus` and `medial_meniscus`.
    :noindex:
 
 .. autopydantic_model:: kneemesh.config.MeniscusMesh
+   :noindex:
+```
+
+## Tibial and patellar cartilage
+
+The `cartilage` sections apply to `lateral_tibial_cartilage`, `medial_tibial_cartilage`, and `patellar_cartilage`.
+
+```{eval-rst}
+.. autopydantic_model:: kneemesh.config.CartilageBrep
+   :noindex:
+
+.. autopydantic_model:: kneemesh.config.CartilageMesh
    :noindex:
 ```

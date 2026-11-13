@@ -1,0 +1,12 @@
+{
+  "label_maps": {
+    "tibia": "tests/dat/tibia.nii",
+    "patella": "tests/dat/patella.nii",
+    "lateral_tibial_cartilage": "tests/dat/lateral_tibial_cartilage.nii",
+    "medial_tibial_cartilage": "tests/dat/medial_tibial_cartilage.nii",
+    "patellar_cartilage": "tests/dat/patellar_cartilage.nii"
+  },
+  "assembled_label_map": "examples/cartilage.nrrd",
+  "output": "_tet.brep",
+  "output_directory": "examples"
+}

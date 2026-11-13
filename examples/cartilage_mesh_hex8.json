@@ -1,0 +1,16 @@
+{
+  "breps": {
+    "lateral_tibial_cartilage": "examples/lateral_tibial_cartilage_hex.brep",
+    "medial_tibial_cartilage": "examples/medial_tibial_cartilage_hex.brep",
+    "patellar_cartilage": "examples/patellar_cartilage_hex.brep"
+  },
+  "element_type": "hex8",
+  "output": "_{element_type}.vtk",
+  "output_directory": "examples",
+  "cartilage": {
+    "elements_around": 24,
+    "elements_radial": 6,
+    "elements_through": 3,
+    "optimize": true
+  }
+}

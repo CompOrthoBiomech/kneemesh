@@ -4,7 +4,7 @@ import pytest
 from vtkmodules.util.numpy_support import vtk_to_numpy
 from vtkmodules.vtkCommonDataModel import VTK_POLY_LINE
 
-from kneemesh.brep import contours_to_polydata, gmsh_session
+from kneemesh.brep import butterfly_split_indices, contours_to_polydata, gmsh_session, resample_closed
 from kneemesh.vol import ContourSlice
 
 
@@ -63,3 +63,28 @@ def test_gmsh_session_leaves_existing_gmsh_running():
         assert gmsh.model.getCurrent() == "existing"
     finally:
         gmsh.finalize()
+
+
+def test_resample_closed_keeps_the_dimension_and_spacing():
+    angles = np.linspace(0, 2 * np.pi, 50, endpoint=False)
+    circle = np.column_stack((3 * np.cos(angles), 3 * np.sin(angles)))
+
+    points = resample_closed(circle, 20)
+
+    assert points.shape == (20, 2)
+    assert np.linalg.norm(points, axis=1) == pytest.approx(np.full(20, 3.0), rel=1e-3)
+    gaps = np.linalg.norm(np.roll(points, -1, axis=0) - points, axis=1)
+    assert gaps == pytest.approx(np.full(20, gaps.mean()), rel=1e-2)
+
+
+def test_butterfly_splits_follow_given_costs():
+    angles = np.linspace(0, 2 * np.pi, 40, endpoint=False)
+    circle = np.column_stack((np.cos(angles), np.sin(angles)))
+    costs = np.zeros(40)
+    costs[7] = -1.0
+
+    splits = butterfly_split_indices([circle], costs)
+
+    # A negative cost draws a split onto its point; the others follow a quarter turn apart.
+    assert splits[0] == 7
+    assert np.diff(splits) == pytest.approx(np.full(3, 10.0))

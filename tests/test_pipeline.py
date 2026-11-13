@@ -291,7 +291,10 @@ def test_pipeline_disables_package_logging_when_done(meniscus_label):
     assert messages == []
 
 
-@pytest.mark.parametrize("structure", [structure for structure in STRUCTURES if not structure.endswith("meniscus")])
+IMPLEMENTED = ("lateral_meniscus", "medial_meniscus", "lateral_tibial_cartilage", "medial_tibial_cartilage", "patellar_cartilage")
+
+
+@pytest.mark.parametrize("structure", [structure for structure in STRUCTURES if structure not in IMPLEMENTED])
 def test_unimplemented_structures_report_an_error_before_any_work(in_tmp_path, structure, capsys):
     labels = {"femur": 1, "tibia": 2, "patella": 3, structure: 4}
     assert brep_main(["--label-map", "missing.nii", "--labels", json.dumps(labels)]) == 1
@@ -396,3 +399,21 @@ def test_mesh_pipeline_optimizes_hexahedra(in_tmp_path, meniscus_hex_blocks, cap
     stderr = capsys.readouterr().err
     assert "Optimized minimum scaled Jacobian" in stderr
     assert (in_tmp_path / "lateral_meniscus.vtk").stat().st_size > 0
+
+
+def test_pipeline_builds_and_meshes_cartilage_against_its_bone(in_tmp_path, cartilage_segmentation, capsys):
+    write_label_map(cartilage_segmentation.image, in_tmp_path / "knee.nii")
+    labels = json.dumps(cartilage_segmentation.labels)
+
+    assert brep_main(["--label-map", "knee.nii", "--labels", labels, "--output", "_hex.brep", "--cartilage.hex-blocks", "true"]) == 0
+    assert brep_main(["--label-map", "knee.nii", "--labels", labels, "--output", "_tet.brep"]) == 0
+    hex_breps = json.dumps({"lateral_tibial_cartilage": "lateral_tibial_cartilage_hex.brep"})
+    argv = ["--breps", hex_breps, "--element-type", "hex8", "--cartilage.elements-around", "6", "--cartilage.optimize", "true"]
+    assert mesh_main(argv) == 0
+    assert mesh_main(["--breps", json.dumps({"lateral_tibial_cartilage": "lateral_tibial_cartilage_tet.brep"})]) == 0
+
+    stderr = capsys.readouterr().err
+    assert "Using tibia only to orient its cartilage" in stderr
+    assert "Optimized minimum scaled Jacobian" in stderr
+    assert sorted(path.name for path in in_tmp_path.glob("*.msh")) == ["lateral_tibial_cartilage_hex8.msh", "lateral_tibial_cartilage_tet4.msh"]
+    assert not list(in_tmp_path.glob("tibia*.brep"))

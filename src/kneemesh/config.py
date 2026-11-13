@@ -7,7 +7,15 @@ from typing import Annotated, Any, ClassVar, Literal, Self, get_args
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, model_validator
 
+from kneemesh.cartilage import DEFAULT_SIDE_COSINE
 from kneemesh.disk import BREP_SUFFIXES
+from kneemesh.geo.sheet import (
+    DEFAULT_HOLE_THICKNESS,
+    DEFAULT_MIN_THICKNESS_HEXAHEDRAL,
+    DEFAULT_MIN_THICKNESS_TETRAHEDRAL,
+    DEFAULT_PERIMETER_RADIUS_HEXAHEDRAL,
+    DEFAULT_PERIMETER_RADIUS_TETRAHEDRAL,
+)
 from kneemesh.mesh_optimization import (
     DEFAULT_FEATURE_ANGLE,
     DEFAULT_LAPLACIAN_ITERATIONS,
@@ -123,8 +131,8 @@ class LabelMapAssembly(BaseConfig):
     )
 
 
-class MeniscusBrep(BaseConfig):
-    """Settings for building the lateral and medial meniscus B-reps, with the defaults of each step."""
+class SurfaceBrep(BaseConfig):
+    """Settings shared by every structure for extracting a smooth surface from its label."""
 
     sigma: OptionalFloat = Field(
         default=None,
@@ -137,6 +145,11 @@ class MeniscusBrep(BaseConfig):
     smoothing_pass_band: float = Field(
         default=DEFAULT_SMOOTHING_PASS_BAND, gt=0, le=2, description="Windowed sinc pass band in (0, 2]; lower smooths and shrinks more"
     )
+
+
+class MeniscusBrep(SurfaceBrep):
+    """Settings for building the lateral and medial meniscus B-reps, with the defaults of each step."""
+
     spacing: float = Field(default=5.0, description="Arc-length distance between slices along the centerline, in physical units")
     points_per_slice: int = Field(default=32, description="Points on each slice contour. Use about 10 for hexahedral blocks")
     spline_order: int = Field(default=3, description="Polynomial degree of the B-spline geometry")
@@ -147,11 +160,75 @@ class MeniscusBrep(BaseConfig):
     hex_blocks: bool = Field(default=False, description="Build the five-block butterfly solid with planar caps that hexahedral meshing needs")
 
 
-class MeniscusMesh(BaseConfig):
-    """Settings for meshing the lateral and medial meniscus B-reps, with the defaults of each meshing function.
+class CartilageBrep(SurfaceBrep):
+    """Settings for building the B-reps of the lateral and medial tibial and the patellar cartilage, with the defaults of each step.
 
-    Hexahedral element types need B-reps built with hex_blocks.
+    Each is a sheet over the plane normal to its thinnest direction, between
+    its articular side and the side against its bone, within a smooth
+    perimeter. Defaults left as None depend on hex_blocks.
     """
+
+    side_cosine: float = Field(
+        default=DEFAULT_SIDE_COSINE,
+        gt=0,
+        lt=1,
+        description="Cosine between a surface normal and the direction away from the bone beyond which a point is on the articular "
+        + "or bone side. Higher values cut off more of the steep rim between them",
+    )
+    perimeter_radius: OptionalFloat = Field(
+        default=None,
+        gt=0,
+        description="Smallest radius of curvature of the perimeter and hole outlines, in physical units. None is "
+        + f"{DEFAULT_PERIMETER_RADIUS_HEXAHEDRAL} for hex_blocks, enough for hexahedra to follow the real lateral tibial cartilage's "
+        + f"notch, and {DEFAULT_PERIMETER_RADIUS_TETRAHEDRAL} otherwise",
+    )
+    perimeter_inset: float = Field(
+        default=0.0, ge=0, description="How far inside the overlap of the two sides to put the perimeter, in physical units"
+    )
+    min_thickness: OptionalFloat = Field(
+        default=None,
+        gt=0,
+        lt=1,
+        description="Minimum thickness as a fraction of the mean; thinner regions are thickened by lowering the bone side. None is "
+        + f"{DEFAULT_MIN_THICKNESS_HEXAHEDRAL} for hex_blocks and {DEFAULT_MIN_THICKNESS_TETRAHEDRAL} otherwise",
+    )
+    hole_thickness: float = Field(
+        default=DEFAULT_HOLE_THICKNESS,
+        ge=0,
+        lt=1,
+        description="Thickness as a fraction of the mean below which the sheet gets a hole, as do regions with no cartilage. "
+        + "Ignored for hex_blocks, which are only thickened; 0 makes no holes",
+    )
+    hex_blocks: bool = Field(default=False, description="Build the five-block butterfly solid that hexahedral meshing needs")
+
+    @model_validator(mode="after")
+    def _check_thicknesses(self) -> Self:
+        if not self.hex_blocks and self.hole_thickness >= self.resolved_min_thickness:
+            raise ValueError(f"hole_thickness {self.hole_thickness} must be below min_thickness {self.resolved_min_thickness}")
+        return self
+
+    @property
+    def resolved_perimeter_radius(self) -> float:
+        """perimeter_radius, or its default for hex_blocks."""
+        if self.perimeter_radius is not None:
+            return self.perimeter_radius
+        return DEFAULT_PERIMETER_RADIUS_HEXAHEDRAL if self.hex_blocks else DEFAULT_PERIMETER_RADIUS_TETRAHEDRAL
+
+    @property
+    def resolved_min_thickness(self) -> float:
+        """min_thickness, or its default for hex_blocks."""
+        if self.min_thickness is not None:
+            return self.min_thickness
+        return DEFAULT_MIN_THICKNESS_HEXAHEDRAL if self.hex_blocks else DEFAULT_MIN_THICKNESS_TETRAHEDRAL
+
+    @property
+    def resolved_hole_thickness(self) -> float:
+        """hole_thickness, or 0 for hex_blocks."""
+        return 0.0 if self.hex_blocks else self.hole_thickness
+
+
+class StructureMesh(BaseConfig):
+    """Settings shared by every structure for tetrahedral meshing and for optimizing hexahedral meshes."""
 
     min_size: OptionalFloat = Field(
         default=None,
@@ -166,8 +243,6 @@ class MeniscusMesh(BaseConfig):
     elements_per_circle: int = Field(default=0, description="Tetrahedra per circle of surface curvature; 0 disables curvature sizing")
     algorithm_2d: Algorithm2D = Field(default=Algorithm2D.FRONTAL_DELAUNAY, description="gmsh surface algorithm for tetrahedral meshing")
     algorithm_3d: Algorithm3D = Field(default=Algorithm3D.DELAUNAY, description="gmsh volume algorithm for tetrahedral meshing")
-    elements_per_edge: int = Field(default=4, description="Hexahedra along each edge of a cap")
-    elements_along: int = Field(default=20, description="Hexahedra along the solid between the caps")
     optimize: bool = Field(default=False, description="Move hexahedral mesh nodes to raise the elements' scaled Jacobians after meshing")
     laplacian_iterations: int = Field(default=DEFAULT_LAPLACIAN_ITERATIONS, ge=0, description="Smart Laplacian sweeps when optimizing")
     optimization_iterations: int = Field(
@@ -190,6 +265,27 @@ class MeniscusMesh(BaseConfig):
         description="Angle in degrees between boundary faces above which their shared edge is kept as a feature when optimizing",
     )
     preserve_volume: bool = Field(default=True, description="Keep the mesh's volume when optimizing by cancelling the net outward surface offset")
+
+
+class MeniscusMesh(StructureMesh):
+    """Settings for meshing the lateral and medial meniscus B-reps, with the defaults of each meshing function.
+
+    Hexahedral element types need B-reps built with hex_blocks.
+    """
+
+    elements_per_edge: int = Field(default=4, description="Hexahedra along each edge of a cap")
+    elements_along: int = Field(default=20, description="Hexahedra along the solid between the caps")
+
+
+class CartilageMesh(StructureMesh):
+    """Settings for meshing the B-reps of the lateral and medial tibial and the patellar cartilage.
+
+    Hexahedral element types need B-reps built with hex_blocks.
+    """
+
+    elements_around: int = Field(default=8, description="Hexahedra along each quarter of the perimeter and each side of the inner block")
+    elements_radial: int = Field(default=4, description="Hexahedra along each spoke from the perimeter to the inner block")
+    elements_through: int = Field(default=3, description="Hexahedra through the thickness")
 
 
 class LabelMapBrep(BaseConfig):
@@ -221,6 +317,9 @@ class LabelMapBrep(BaseConfig):
     )
     output_directory: Path = _output_directory_field()
     meniscus: MeniscusBrep = Field(default_factory=MeniscusBrep, description="Settings for the lateral and medial menisci")
+    cartilage: CartilageBrep = Field(
+        default_factory=CartilageBrep, description="Settings for the lateral and medial tibial and the patellar cartilage"
+    )
 
     @model_validator(mode="after")
     def _check_sources(self) -> Self:
@@ -284,6 +383,9 @@ class BrepMesh(BaseConfig):
     )
     output_directory: Path = _output_directory_field()
     meniscus: MeniscusMesh = Field(default_factory=MeniscusMesh, description="Settings for the lateral and medial menisci")
+    cartilage: CartilageMesh = Field(
+        default_factory=CartilageMesh, description="Settings for the lateral and medial tibial and the patellar cartilage"
+    )
 
     @model_validator(mode="after")
     def _check_mesh(self) -> Self:
@@ -292,7 +394,7 @@ class BrepMesh(BaseConfig):
         except (KeyError, IndexError, ValueError) as error:
             raise ValueError(f"The output suffix may hold only the {{element_type}} placeholder, got {self.output!r}") from error
         _check_suffix(suffix)
-        if self.meniscus.optimize and self.element_shape != "hexahedral":
+        if (self.meniscus.optimize or self.cartilage.optimize) and self.element_shape != "hexahedral":
             raise ValueError("optimize applies only to hexahedral meshes")
         return self
 

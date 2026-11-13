@@ -2,7 +2,7 @@
 
 import tempfile
 import uuid
-from collections.abc import Generator
+from collections.abc import Generator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from itertools import pairwise
@@ -13,12 +13,16 @@ import numpy as np
 from loguru import logger
 from scipy.interpolate import BSpline, make_interp_spline
 from vtkmodules.util.numpy_support import numpy_to_vtk
+from vtkmodules.vtkCommonComputationalGeometry import vtkKochanekSpline, vtkParametricSpline
 from vtkmodules.vtkCommonCore import vtkPoints
 from vtkmodules.vtkCommonDataModel import vtkCellArray, vtkPolyData, vtkPolyLine
 
 from kneemesh.vol import ContourSlice
 
 MAX_SPLINE_ORDER = 25  # Open Cascade's limit on B-spline degree.
+
+# Width, as a fraction of a loop's length, of the Gaussian weighting turns near butterfly splits.
+_SPLIT_TURN_WIDTH = 1 / 16
 
 
 @dataclass(frozen=True)
@@ -258,3 +262,75 @@ def contours_to_polydata(slices: list[ContourSlice]) -> vtkPolyData:
     poly_data.SetPoints(points)
     poly_data.SetLines(lines)
     return poly_data
+
+
+def resample_closed(loop: np.ndarray, count: int) -> np.ndarray:
+    """Return count points evenly spaced in length around a closed Kochanek spline through a loop.
+
+    Args:
+        loop: (N, D) points around a closed loop, without the first repeated, with D of 2 or 3.
+        count: Number of points to return.
+
+    Returns:
+        (count, D) points, starting at the loop's first point.
+    """
+    dimension = loop.shape[1]
+    points = vtkPoints()
+    points.SetData(numpy_to_vtk(np.pad(loop, ((0, 0), (0, 3 - dimension))), deep=True))
+
+    spline = vtkParametricSpline()
+    spline.SetXSpline(vtkKochanekSpline())
+    spline.SetYSpline(vtkKochanekSpline())
+    spline.SetZSpline(vtkKochanekSpline())
+    spline.SetPoints(points)
+    spline.ClosedOn()
+    spline.ParameterizeByLengthOn()
+
+    result = np.empty((count, 3))
+    point = [0.0, 0.0, 0.0]
+    derivatives = [0.0] * 9
+    for index in range(count):
+        spline.Evaluate([index / count, 0.0, 0.0], point, derivatives)
+        result[index] = point
+    return result[:, :dimension]
+
+
+def butterfly_split_indices(loops: Sequence[np.ndarray], turns: np.ndarray | None = None) -> np.ndarray:
+    """Return four sorted point indices splitting every loop into the arcs of a butterfly partition.
+
+    The splits divide the loop into arcs of equal length, by chord length
+    averaged over all loops. Their rotation minimizes the turning angle,
+    averaged over all loops, near them: each point's turn is weighted by a
+    Gaussian of its distance from the nearest split. The first split is a
+    point index and the others may fall between points.
+
+    Args:
+        loops: (N, D) points around closed loops, all with the same N, without the first repeated.
+        turns: Cost of a split near each point, by default the turning angle
+            averaged over all loops. Negative costs draw splits toward a point.
+    """
+    if turns is None:
+        turns = np.mean([turning_angles(points) for points in loops], axis=0)
+    positions = np.mean([chord_parameters(points) for points in loops], axis=0)
+    count = len(turns)
+    offsets = np.arange(4) / 4
+
+    def cost(start: int) -> float:
+        distances = np.abs(positions[:count, None] - (positions[start] + offsets)) % 1.0
+        distances = np.minimum(distances, 1.0 - distances)
+        return float(np.sum(turns[:, None] * np.exp(-0.5 * (distances / _SPLIT_TURN_WIDTH) ** 2)))
+
+    start = min(range(count), key=cost)
+    # Unwrap one turn past the end so splits beyond the last point map to indices above count.
+    unwrapped = np.concatenate((positions[:count], positions[:count] + 1.0, [2.0]))
+    splits = np.interp(positions[start] + offsets, unwrapped, np.arange(2 * count + 1))
+    logger.debug("Butterfly splits at loop indices {}", np.round(splits % count, 2).tolist())
+    return splits
+
+
+def turning_angles(points: np.ndarray) -> np.ndarray:
+    """Return the angle in radians that a closed loop of (N, D) points turns at each point."""
+    incoming = points - np.roll(points, 1, axis=0)
+    outgoing = np.roll(points, -1, axis=0) - points
+    cosines = np.sum(incoming * outgoing, axis=1) / (np.linalg.norm(incoming, axis=1) * np.linalg.norm(outgoing, axis=1))
+    return np.arccos(np.clip(cosines, -1.0, 1.0))

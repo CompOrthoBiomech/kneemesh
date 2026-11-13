@@ -1,0 +1,13 @@
+{
+  "breps": {
+    "lateral_tibial_cartilage": "examples/lateral_tibial_cartilage_tet.brep",
+    "medial_tibial_cartilage": "examples/medial_tibial_cartilage_tet.brep",
+    "patellar_cartilage": "examples/patellar_cartilage_tet.brep"
+  },
+  "element_type": "tet4",
+  "output": "_{element_type}.vtk",
+  "output_directory": "examples",
+  "cartilage": {
+    "max_size": 1.0
+  }
+}

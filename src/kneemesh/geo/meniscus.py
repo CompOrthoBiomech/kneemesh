@@ -13,9 +13,7 @@ from scipy.interpolate import BSpline, make_splprep
 from scipy.sparse import coo_matrix
 from scipy.sparse.csgraph import connected_components, dijkstra
 from scipy.spatial import KDTree
-from vtkmodules.util.numpy_support import numpy_to_vtk, vtk_to_numpy
-from vtkmodules.vtkCommonComputationalGeometry import vtkKochanekSpline, vtkParametricSpline
-from vtkmodules.vtkCommonCore import vtkPoints
+from vtkmodules.util.numpy_support import vtk_to_numpy
 from vtkmodules.vtkCommonDataModel import vtkPlane, vtkPolyData
 from vtkmodules.vtkFiltersCore import vtkCutter, vtkStripper
 
@@ -27,6 +25,7 @@ from kneemesh.brep import (
     add_closed_wire,
     add_periodic_swept_surface,
     add_swept_surface,
+    butterfly_split_indices,
     chord_parameters,
     clamped_interpolation,
     export_brep,
@@ -34,6 +33,7 @@ from kneemesh.brep import (
     open_chord_parameters,
     periodic_poles_and_knots,
     periodic_spline,
+    resample_closed,
     split_periodic_spline,
 )
 from kneemesh.vol import ContourSlice, require_3d_label_map
@@ -55,8 +55,6 @@ _PIECE_SAMPLES = 20
 _MIN_HEX_POINTS = 8
 # Inner block corners lie this fraction of the way from the section's centroid to the split points.
 _INNER_BLOCK_SCALE = 0.5
-# Width, as a fraction of the contour's length, of the Gaussian weighting turns near butterfly splits.
-_SPLIT_TURN_WIDTH = 1 / 16
 
 
 def centerline(label_map: sitk.Image, label: int = 1) -> BSpline:
@@ -275,7 +273,7 @@ def contours_to_hex_blocks(slices: list[ContourSlice], spline_order: int = 3) ->
     if len(slices[0].points) < _MIN_HEX_POINTS:
         raise ValueError(f"Hexahedral blocks need at least {_MIN_HEX_POINTS} points on each contour")
 
-    splits = _butterfly_split_indices(slices)
+    splits = butterfly_split_indices([contour.points for contour in slices])
     samples = np.linspace(0.0, 1.0, _PIECE_SAMPLES)
     # pieces[slice][arc] holds points along the four boundary arcs; arc i runs from split i to split i + 1.
     pieces, inner_corners = [], []
@@ -348,7 +346,7 @@ def _slice_at(
         loop, u, v = loop[::-1], u[::-1], v[::-1]
     loop = np.roll(loop, -int(np.argmin(np.abs(np.arctan2(v, u)))), axis=0)
 
-    return ContourSlice(_resample_closed(loop, point_count), center, u_axis, v_axis, normal, abs(signed_area))
+    return ContourSlice(resample_closed(loop, point_count), center, u_axis, v_axis, normal, abs(signed_area))
 
 
 def _align_with_previous(slices: list[ContourSlice]) -> list[ContourSlice]:
@@ -400,28 +398,6 @@ def _closed_loops(mesh: vtkPolyData, origin: np.ndarray, normal: np.ndarray) -> 
         if len(ids) > 3 and ids[0] == ids[-1]:
             loops.append(points[ids[:-1]])
     return loops
-
-
-def _resample_closed(loop: np.ndarray, count: int) -> np.ndarray:
-    """Return count points evenly spaced in length around a closed Kochanek spline."""
-    points = vtkPoints()
-    points.SetData(numpy_to_vtk(loop, deep=True))
-
-    spline = vtkParametricSpline()
-    spline.SetXSpline(vtkKochanekSpline())
-    spline.SetYSpline(vtkKochanekSpline())
-    spline.SetZSpline(vtkKochanekSpline())
-    spline.SetPoints(points)
-    spline.ClosedOn()
-    spline.ParameterizeByLengthOn()
-
-    result = np.empty((count, 3))
-    point = [0.0, 0.0, 0.0]
-    derivatives = [0.0] * 9
-    for index in range(count):
-        spline.Evaluate([index / count, 0.0, 0.0], point, derivatives)
-        result[index] = point
-    return result
 
 
 def _physical_points(image: sitk.Image, zyx_indices: np.ndarray) -> np.ndarray:
@@ -590,33 +566,6 @@ def _project_onto_plane(contour: ContourSlice) -> np.ndarray:
     return contour.points - np.outer(heights, contour.normal)
 
 
-def _butterfly_split_indices(slices: list[ContourSlice]) -> np.ndarray:
-    """Return four sorted point indices splitting every contour into the butterfly's boundary arcs.
-
-    The splits divide the contour into arcs of equal length, by chord length
-    averaged over all slices. Their rotation minimizes the turning angle,
-    averaged over all slices, near them: each point's turn is weighted by a
-    Gaussian of its distance from the nearest split. The first split is a
-    point index and the others may fall between points.
-    """
-    turns = np.mean([_turning_angles(contour.points) for contour in slices], axis=0)
-    positions = np.mean([chord_parameters(contour.points) for contour in slices], axis=0)
-    count = len(turns)
-    offsets = np.arange(4) / 4
-
-    def cost(start: int) -> float:
-        distances = np.abs(positions[:count, None] - (positions[start] + offsets)) % 1.0
-        distances = np.minimum(distances, 1.0 - distances)
-        return float(np.sum(turns[:, None] * np.exp(-0.5 * (distances / _SPLIT_TURN_WIDTH) ** 2)))
-
-    start = min(range(count), key=cost)
-    # Unwrap one turn past the end so splits beyond the last point map to indices above count.
-    unwrapped = np.concatenate((positions[:count], positions[:count] + 1.0, [2.0]))
-    splits = np.interp(positions[start] + offsets, unwrapped, np.arange(2 * count + 1))
-    logger.debug("Butterfly splits at contour indices {}", np.round(splits % count, 2).tolist())
-    return splits
-
-
 def _section_centroid(contour: ContourSlice) -> np.ndarray:
     """Return the area centroid of a contour's polygon, in physical coordinates."""
     offsets = contour.points - contour.center
@@ -626,13 +575,6 @@ def _section_centroid(contour: ContourSlice) -> np.ndarray:
     centroid_u = np.sum((u + np.roll(u, -1)) * cross) / (6 * area)
     centroid_v = np.sum((v + np.roll(v, -1)) * cross) / (6 * area)
     return contour.center + centroid_u * contour.u_axis + centroid_v * contour.v_axis
-
-
-def _turning_angles(points: np.ndarray) -> np.ndarray:
-    incoming = points - np.roll(points, 1, axis=0)
-    outgoing = np.roll(points, -1, axis=0) - points
-    cosines = np.sum(incoming * outgoing, axis=1) / (np.linalg.norm(incoming, axis=1) * np.linalg.norm(outgoing, axis=1))
-    return np.arccos(np.clip(cosines, -1.0, 1.0))
 
 
 def _add_smooth_cap(

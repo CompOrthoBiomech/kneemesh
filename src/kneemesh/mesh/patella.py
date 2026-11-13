@@ -1,1 +1,1 @@
-"""Meshing for the patellar cartilage and the patella. Not implemented yet."""
+"""Meshing of the patella. Not implemented yet; kneemesh.mesh.sheet meshes the patellar cartilage."""

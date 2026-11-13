@@ -514,10 +514,10 @@ def test_hex_blocks_surround_one_inner_block(meniscus_hex_blocks, tmp_path):
 
 
 def test_hex_blocks_split_contours_away_from_sharp_corners(meniscus_slices):
-    from kneemesh.geo.meniscus import _butterfly_split_indices, _turning_angles
+    from kneemesh.brep import butterfly_split_indices, turning_angles
 
-    turns = np.mean([_turning_angles(contour.points) for contour in meniscus_slices], axis=0)
-    splits = _butterfly_split_indices(meniscus_slices)
+    turns = np.mean([turning_angles(contour.points) for contour in meniscus_slices], axis=0)
+    splits = butterfly_split_indices([contour.points for contour in meniscus_slices])
 
     nearest = np.rint(splits).astype(int) % len(turns)
     assert np.all(turns[nearest] < 0.25 * turns.max())

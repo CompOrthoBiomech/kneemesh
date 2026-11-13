@@ -5,6 +5,8 @@ Modules at the package root apply to every structure. The `geo` and `mesh` subpa
 ```{eval-rst}
 .. automodule:: kneemesh.vol
 
+.. automodule:: kneemesh.cartilage
+
 .. automodule:: kneemesh.segmentation
 
 .. automodule:: kneemesh.brep
@@ -26,6 +28,14 @@ Modules at the package root apply to every structure. The `geo` and `mesh` subpa
 .. automodule:: kneemesh.geo.meniscus
 
 .. automodule:: kneemesh.mesh.meniscus
+```
+
+## Tibial and patellar cartilage
+
+```{eval-rst}
+.. automodule:: kneemesh.geo.sheet
+
+.. automodule:: kneemesh.mesh.sheet
 ```
 
 ## Planned structures
