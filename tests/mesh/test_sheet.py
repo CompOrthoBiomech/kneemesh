@@ -13,6 +13,16 @@ def element_count(around, radial, through):
     return (4 * radial + around) * around * through
 
 
+def max_bend(mesh):
+    """The largest distance of a straight line's node from the segment between its ends, relative to its length."""
+    points = mesh.nodes[mesh.straight_lines]
+    first, last = points[:, :1], points[:, -1:]
+    direction = (last - first) / np.linalg.norm(last - first, axis=-1, keepdims=True)
+    offsets = points - first
+    across = offsets - np.sum(offsets * direction, axis=-1, keepdims=True) * direction
+    return float((np.linalg.norm(across, axis=-1).max(axis=1) / np.linalg.norm(last - first, axis=-1)[:, 0]).max())
+
+
 def brep_volume(brep):
     with gmsh_session():
         import_solid(brep)
@@ -88,13 +98,15 @@ def test_real_cartilage_hexahedra_are_valid_and_optimize(real_cartilage_hex_bloc
     mesh = hexahedral_mesh(real_cartilage_hex_blocks[structure])
 
     before = mesh_quality(mesh)
-    after = mesh_quality(optimize_hexahedral_mesh(mesh, aspect_weight=0.5))
+    optimized = optimize_hexahedral_mesh(mesh, aspect_weight=0.5)
+    after = mesh_quality(optimized)
 
     # Without perimeter rounding, the real lateral tibial cartilage's notch inverts elements at these counts.
-    assert before.minimum > 0.1
+    assert before.minimum > 0.05
     assert after.minimum > 0.35
     assert after.mean > before.mean
-    assert after.max_aspect < min(before.max_aspect, 6.0)
+    assert after.max_aspect < min(before.max_aspect, 7.0)
+    assert max_bend(optimized) < 1e-9
 
 
 def test_scaled_jacobian_alone_stretches_real_cartilage_elements(real_cartilage_hex_blocks):
@@ -103,7 +115,17 @@ def test_scaled_jacobian_alone_stretches_real_cartilage_elements(real_cartilage_
     alone = mesh_quality(optimize_hexahedral_mesh(mesh))
     combined = mesh_quality(optimize_hexahedral_mesh(mesh, aspect_weight=0.5))
 
-    assert alone.max_aspect > 3 * combined.max_aspect
+    # Straight walls keep it from stretching elements along the rim nearly as far as without them, 42 times their thickness.
+    assert alone.max_aspect > 1.5 * combined.max_aspect
+
+
+def test_hexahedral_mesh_keeps_a_column_through_the_wall_at_every_perimeter_node(cartilage_hexahedra):
+    lines = cartilage_hexahedra.straight_lines
+
+    # 4 arcs of 8 elements around, 3 elements through.
+    assert lines.shape == (32, 4)
+    assert len(np.unique(lines)) == lines.size
+    assert max_bend(cartilage_hexahedra) < 0.05
 
 
 def test_sized_hexahedral_mesh_sizes_every_class_but_the_thickness(cartilage_hex_blocks):

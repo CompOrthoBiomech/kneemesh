@@ -44,14 +44,14 @@ Every structure in the segmentation is built, so name only implemented structure
 
 ## Cartilage
 
-The tibial and patellar cartilage are built as sheets between their articular side and the side against their bone. Their `cartilage` settings pick defaults by `hex_blocks`. For hexahedra, the perimeter curves no more tightly than a 3 mm radius, so elements can follow the real lateral tibial cartilage's notch, and regions thinner than 0.2 of the mean thickness are thickened by lowering the bone side. For tetrahedra, the perimeter follows the label more closely, with a 1 mm radius, regions thinner than 0.1 of the mean are thickened, and those thinner than 0.05 of the mean, or missing from the label, become holes. Thickened cartilage may overlap its bone.
+The tibial and patellar cartilage are built as sheets between their articular side and the side against their bone. Their `cartilage` settings pick defaults by `hex_blocks`. For hexahedra, the perimeter curves no more tightly than a 3 mm radius, so elements can follow the real lateral tibial cartilage's notch, and regions thinner than 0.2 of the mean thickness are thickened by lowering the bone side. For tetrahedra, the perimeter follows the label more closely, with a 1 mm radius, regions thinner than 0.1 of the mean are thickened, and those thinner than 0.05 of the mean, or missing from the label, become holes. Thickened cartilage may overlap its bone. The straight wall around the perimeter is tilted so it meets the two sides at about equal angles, where a wall along the sheet's normal met the articular side, which curves down at the rim, at up to 130 degrees or more.
 
 ```sh
 kneemesh-brep --label-maps '{"tibia": "tibia.nii", "lateral_tibial_cartilage": "lateral.nii"}' --cartilage.hex-blocks true --output _hex.brep
 kneemesh-mesh --breps '{"lateral_tibial_cartilage": "lateral_tibial_cartilage_hex.brep"}' --element-type hex8 --cartilage.optimize true
 ```
 
-`--cartilage.elements-around`, `--cartilage.elements-radial`, and `--cartilage.elements-through` set the hexahedra along each quarter of the perimeter, along each spoke toward the inner block, and through the thickness. Optimizing cartilage hexahedra also weighs their Frobenius aspect ratios, by `--cartilage.aspect-weight`, 0.5 by default: optimizing the scaled Jacobian alone squares up corners by stretching elements, up to 75 times their thickness on the real medial tibial cartilage. The thinnest stretches of the rim hold the worst elements; `--cartilage.perimeter-inset` cuts them off at the cost of area.
+`--cartilage.elements-around`, `--cartilage.elements-radial`, and `--cartilage.elements-through` set the hexahedra along each quarter of the perimeter, along each spoke toward the inner block, and through the thickness. Optimizing cartilage hexahedra also weighs their Frobenius aspect ratios, by `--cartilage.aspect-weight`, 0.5 by default: optimizing the scaled Jacobian alone squares up corners by stretching elements, to a largest aspect ratio of 11 on the real medial tibial cartilage against 6.4 at 0.5. Optimizing keeps each column of nodes through the walls at the perimeter straight. The thinnest stretches of the rim hold the worst elements; `--cartilage.perimeter-inset` cuts them off at the cost of area.
 
 ## Femoral cartilage
 

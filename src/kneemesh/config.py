@@ -319,7 +319,7 @@ class CartilageMesh(StructureMesh):
         default=DEFAULT_CARTILAGE_ASPECT_WEIGHT,
         ge=0,
         description="Weight of the elements' squared Frobenius aspect ratios against 1 / scaled Jacobian when optimizing. "
-        + "0 optimizes the scaled Jacobian alone, which stretched the real cartilage's elements up to 75 times their thickness",
+        + "0 optimizes the scaled Jacobian alone, which raised the real medial tibial cartilage's largest aspect ratio to 11, against 6.4 at 0.5",
     )
 
 

@@ -1,5 +1,8 @@
 """Hexahedral meshing of cartilage sheets built as blocks: the five-block butterfly solid, or any partition of a sheet into blocks."""
 
+from collections import deque
+from dataclasses import replace
+
 import gmsh
 import numpy as np
 from loguru import logger
@@ -56,7 +59,7 @@ def hexahedral_mesh(
         names = {"around": elements_around, "radial": elements_radial, "through": elements_through}
         classes = _edge_classes()
         _transfinite({curve: curve for curve in classes}, {curve: names[kind] for curve, kind in classes.items()})
-        return volume_mesh()
+        return _with_wall_lines(volume_mesh(), {curve for curve, kind in classes.items() if kind == "through"})
 
 
 def sized_hexahedral_mesh(
@@ -103,7 +106,7 @@ def sized_hexahedral_mesh(
         counts[through] = elements_through
         logger.debug("Edge classes: {} with element counts {}", len(counts), sorted(counts.values()))
         _transfinite(classes, counts)
-        return volume_mesh()
+        return _with_wall_lines(volume_mesh(), {curve for curve, kind in classes.items() if kind == through})
 
 
 def _transfinite(classes: dict[int, int], counts: dict[int, int]) -> None:
@@ -118,6 +121,52 @@ def _transfinite(classes: dict[int, int], counts: dict[int, int]) -> None:
         gmsh.model.mesh.setTransfiniteVolume(volume)
     gmsh.model.add_physical_group(3, volumes, name="solid")
     gmsh.model.mesh.generate(3)
+
+
+def _with_wall_lines(mesh: Mesh, through: set[int]) -> Mesh:
+    """Return mesh with the node columns through the current model's walls as its straight_lines.
+
+    Walls are the boundary faces with edges through the thickness. On each
+    wall's structured quadrilaterals, a node's level is its number of edges
+    from one of the wall's other two sides, so edges between levels run
+    through the thickness, and chains of them from that side are its columns.
+    Columns on the edges two walls share are kept once.
+    """
+    node_tags = np.asarray(gmsh.model.mesh.getNodes()[0], dtype=np.int64)
+    index = np.zeros(int(node_tags.max()) + 1, dtype=np.int64)
+    index[node_tags] = np.arange(len(node_tags))
+    columns: dict[frozenset[int], list[int]] = {}
+    for _, face in gmsh.model.getEntities(2):
+        if len(gmsh.model.getAdjacencies(2, face)[0]) != 1:
+            continue
+        curves = [abs(tag) for _, tag in gmsh.model.getBoundary([(2, face)], combined=False, oriented=False)]
+        rims = [curve for curve in curves if curve not in through]
+        if len(rims) == len(curves):
+            continue
+        neighbors: dict[int, set[int]] = {}
+        for element_type, _, element_nodes in zip(*gmsh.model.mesh.getElements(2, face), strict=True):
+            quads = np.asarray(element_nodes, dtype=np.int64).reshape(len(element_nodes) // gmsh.model.mesh.getElementProperties(element_type)[3], -1)
+            for quad in quads[:, :4].tolist():
+                for a, b in zip(quad, quad[1:] + quad[:1], strict=True):
+                    neighbors.setdefault(a, set()).add(b)
+                    neighbors.setdefault(b, set()).add(a)
+        rim = [int(tag) for tag in gmsh.model.mesh.getNodes(1, rims[0], includeBoundary=True)[0] if int(tag) in neighbors]
+        level = dict.fromkeys(rim, 0)
+        queue = deque(rim)
+        while queue:
+            node = queue.popleft()
+            for neighbor in neighbors[node]:
+                if neighbor not in level:
+                    level[neighbor] = level[node] + 1
+                    queue.append(neighbor)
+        for start in rim:
+            column = [start]
+            while up := [neighbor for neighbor in neighbors[column[-1]] if level[neighbor] == level[column[-1]] + 1]:
+                column.append(up[0])
+            columns.setdefault(frozenset(column), column)
+    lines = np.array([index[column] for column in columns.values()], dtype=np.int64)
+    logger.debug("Keeping {} node columns through the walls straight", len(lines))
+    return replace(mesh, straight_lines=lines.reshape(len(lines), -1))
 
 
 def _block_classes(shape_error: str) -> tuple[dict[int, int], int]:

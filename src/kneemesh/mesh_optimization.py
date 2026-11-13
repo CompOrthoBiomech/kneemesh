@@ -17,6 +17,8 @@ Where adjacent boundary faces meet at more than a feature angle, their shared
 edges are feature edges. Surface nodes slide in their tangent plane and may
 leave it by a fraction of the local element size; nodes on a feature edge
 slide along it with the same allowance off it; feature corners stay fixed.
+The inner nodes of a mesh's straight_lines stay at their fractions along the
+segment between the line's ends, which move as their own kind allows.
 By default the surface nodes' net offset off their tangent planes is
 removed, which keeps the mesh's volume.
 Tangential travel is also limited, so the tangent plane stays a good model of
@@ -46,7 +48,7 @@ DEFAULT_SURFACE_DEVIATION = 0.1
 DEFAULT_SURFACE_TRAVEL = 0.5
 DEFAULT_FEATURE_ANGLE = 30.0
 
-_INTERIOR, _SURFACE, _EDGE, _FIXED = 0, 1, 2, 3
+_INTERIOR, _SURFACE, _EDGE, _FIXED, _LINE = 0, 1, 2, 3, 4
 _INITIAL_STEP = 0.01
 _MIN_STEP = 1e-8
 _STEP_GROWTH = 1.5
@@ -77,7 +79,7 @@ class MeshQuality:
 class _Constraints:
     """How each corner node may move from its starting position."""
 
-    kind: np.ndarray  # (N,) one of _INTERIOR, _SURFACE, _EDGE, _FIXED
+    kind: np.ndarray  # (N,) one of _INTERIOR, _SURFACE, _EDGE, _FIXED, _LINE
     origin: np.ndarray  # (N, 3) starting positions
     direction: np.ndarray  # (N, 3) unit surface normal, edge tangent, or zero
     deviation: np.ndarray  # (N,) allowed distance off the tangent plane or edge line
@@ -86,6 +88,28 @@ class _Constraints:
     feature_edges: np.ndarray  # (F, 2) node pairs on feature edges
     areas: np.ndarray  # (N,) boundary area around each surface node, 0 elsewhere
     preserve_volume: bool
+    lines: np.ndarray  # (L, K) chains of nodes kept straight
+    fractions: np.ndarray  # (L, K) each node's fraction of the way from its chain's first node to its last
+
+    def place_lines(self, positions: np.ndarray) -> np.ndarray:
+        """Return positions with each straight line's inner nodes at their fractions between its ends."""
+        if not len(self.lines):
+            return positions
+        placed = positions.copy()
+        first, last = positions[self.lines[:, :1]], positions[self.lines[:, -1:]]
+        placed[self.lines[:, 1:-1]] = ((1 - self.fractions[..., None]) * first + self.fractions[..., None] * last)[:, 1:-1]
+        return placed
+
+    def line_gradient(self, gradient: np.ndarray) -> np.ndarray:
+        """Return the gradient with respect to the free nodes, passing each line's inner nodes' share to its ends."""
+        if not len(self.lines):
+            return gradient
+        inner, fractions = self.lines[:, 1:-1], self.fractions[:, 1:-1, None]
+        reduced = gradient.copy()
+        np.add.at(reduced, self.lines[:, 0], np.sum((1 - fractions) * gradient[inner], axis=1))
+        np.add.at(reduced, self.lines[:, -1], np.sum(fractions * gradient[inner], axis=1))
+        reduced[inner.ravel()] = 0.0
+        return reduced
 
     def project(self, positions: np.ndarray) -> np.ndarray:
         offsets = positions - self.origin
@@ -107,7 +131,7 @@ class _Constraints:
         tangential = np.clip(np.einsum("ij,ij->i", offsets, self.direction), -self.travel, self.travel)
         offsets[edge] = (tangential[:, None] * self.direction + _clip_norm(across, self.deviation))[edge]
         offsets[self.kind == _FIXED] = 0.0
-        return self.origin + offsets
+        return self.place_lines(self.origin + offsets)
 
 
 def scaled_jacobians(mesh: Mesh) -> np.ndarray:
@@ -200,7 +224,8 @@ def optimize_hexahedral_mesh(
         aspect_weight: Weight of the squared Frobenius aspect ratios against
             1 / SJ. 0 optimizes the scaled Jacobian alone, which can stretch
             elements: it raised the real medial tibial cartilage's largest
-            aspect ratio from 20 to 75. The aspect term also penalizes
+            aspect ratio to 42 with its walls free to bend and 11 with them
+            straight, against 6.4 at 0.5. The aspect term also penalizes
             deliberately elongated elements, such as the meniscus's along its
             centerline.
 
@@ -224,8 +249,8 @@ def optimize_hexahedral_mesh(
 
     corners = _hexahedron_corners(mesh)
     before = mesh_quality(mesh)
-    constraints = _constraints(mesh.nodes, corners, surface_deviation, surface_travel, feature_angle, preserve_volume)
-    positions = mesh.nodes.copy()
+    constraints = _constraints(mesh.nodes, corners, surface_deviation, surface_travel, feature_angle, preserve_volume, mesh.straight_lines)
+    positions = constraints.place_lines(mesh.nodes)
     if laplacian_iterations:
         positions = _smart_laplacian(positions, corners, constraints, laplacian_iterations)
     if optimization_iterations:
@@ -320,8 +345,9 @@ def _optimize(positions: np.ndarray, corners: np.ndarray, constraints: _Constrai
     energy, gradient = _objective(positions, corners, aspect_weight)
     step = _INITIAL_STEP
     for iteration in range(iterations):
+        direction = scale * constraints.line_gradient(gradient)
         while step >= _MIN_STEP:
-            trial = constraints.project(positions - step * scale * gradient)
+            trial = constraints.project(positions - step * direction)
             trial_energy, trial_gradient = _objective(trial, corners, aspect_weight)
             if trial_energy < energy:
                 break
@@ -361,10 +387,15 @@ def _smart_laplacian(positions: np.ndarray, corners: np.ndarray, constraints: _C
             worse = elements[(trial_quality < quality - 1e-12)[elements]]
             undo = np.zeros(len(positions), dtype=bool)
             undo[corners[np.unique(worse)].ravel()] = True
+            # A line's inner nodes move with its ends, so undo those.
+            if len(constraints.lines):
+                bent = undo[constraints.lines[:, 1:-1]].any(axis=1)
+                undo[constraints.lines[bent][:, [0, -1]].ravel()] = True
             undo &= moved
             if not undo.any():
                 break
             trial[undo] = positions[undo]
+            trial = constraints.place_lines(trial)
             moved &= ~undo
         if not moved.any() or np.allclose(trial, positions):
             break
@@ -401,9 +432,15 @@ def _face_area_vectors(positions: np.ndarray, faces: np.ndarray) -> np.ndarray:
 
 
 def _constraints(
-    nodes: np.ndarray, corners: np.ndarray, deviation: float, travel: float, feature_angle: float, preserve_volume: bool = True
+    nodes: np.ndarray,
+    corners: np.ndarray,
+    deviation: float,
+    travel: float,
+    feature_angle: float,
+    preserve_volume: bool = True,
+    lines: np.ndarray | None = None,
 ) -> _Constraints:
-    """Classify corner nodes as interior, surface, feature edge, or fixed, with their allowances."""
+    """Classify corner nodes as interior, surface, feature edge, fixed, or inner nodes of straight lines, with their allowances."""
     kind = np.full(len(nodes), _FIXED)
     kind[np.unique(corners)] = _INTERIOR
     direction = np.zeros_like(nodes)
@@ -444,16 +481,21 @@ def _constraints(
         kind[node] = _EDGE
         tangent = incoming + outgoing
         direction[node] = tangent / np.linalg.norm(tangent)
-    direction[kind == _FIXED] = 0.0
-    direction[kind == _INTERIOR] = 0.0
+    lines = np.zeros((0, 2), dtype=np.int64) if lines is None else lines
+    kind[lines[:, 1:-1].ravel()] = _LINE
+    direction[(kind == _FIXED) | (kind == _INTERIOR) | (kind == _LINE)] = 0.0
+    lengths = np.concatenate((np.zeros((len(lines), 1)), np.cumsum(np.linalg.norm(np.diff(nodes[lines], axis=1), axis=-1), axis=1)), axis=1)
+    fractions = lengths / np.maximum(lengths[:, -1:], np.finfo(float).tiny)
 
     sizes = _local_sizes(nodes, corners)
     logger.debug(
-        "Optimizing {} interior, {} surface, and {} feature edge nodes with {} fixed",
-        *(int(np.count_nonzero(kind[np.unique(corners)] == value)) for value in (_INTERIOR, _SURFACE, _EDGE, _FIXED)),
+        "Optimizing {} interior, {} surface, and {} feature edge nodes with {} fixed and {} on straight lines",
+        *(int(np.count_nonzero(kind[np.unique(corners)] == value)) for value in (_INTERIOR, _SURFACE, _EDGE, _FIXED, _LINE)),
     )
     node_areas = np.where(kind == _SURFACE, np.linalg.norm(normals, axis=1) / 4, 0.0)
-    return _Constraints(kind, nodes.copy(), direction, deviation * sizes, travel * sizes, boundary_edges, feature_edges, node_areas, preserve_volume)
+    return _Constraints(
+        kind, nodes.copy(), direction, deviation * sizes, travel * sizes, boundary_edges, feature_edges, node_areas, preserve_volume, lines, fractions
+    )
 
 
 def _local_sizes(nodes: np.ndarray, corners: np.ndarray) -> np.ndarray:

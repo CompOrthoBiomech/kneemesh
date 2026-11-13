@@ -1,5 +1,6 @@
 {
   "breps": {
+    "femoral_cartilage": "examples/femoral_cartilage_tet.brep",
     "lateral_tibial_cartilage": "examples/lateral_tibial_cartilage_tet.brep",
     "medial_tibial_cartilage": "examples/medial_tibial_cartilage_tet.brep",
     "patellar_cartilage": "examples/patellar_cartilage_tet.brep"

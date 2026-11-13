@@ -1,3 +1,4 @@
+import numpy as np
 import pytest
 
 from kneemesh.mesh.femur import hexahedral_mesh
@@ -48,10 +49,20 @@ def test_real_femoral_hexahedra_are_valid_and_optimize(real_femoral_hex_blocks):
     assert after.max_aspect < min(before.max_aspect, 5.0)
 
 
+def test_hexahedral_mesh_keeps_its_wall_columns(femoral_hexahedra):
+    lines = femoral_hexahedra.straight_lines
+
+    # One column of four nodes, three elements through, at every node around the U's perimeter.
+    assert lines.shape[1] == 4
+    assert len(lines) > 50
+    assert len(np.unique(lines)) == lines.size
+
+
 def test_scaled_jacobian_alone_stretches_real_femoral_elements(real_femoral_hex_blocks):
     mesh = hexahedral_mesh(real_femoral_hex_blocks)
 
     alone = mesh_quality(optimize_hexahedral_mesh(mesh))
     combined = mesh_quality(optimize_hexahedral_mesh(mesh, aspect_weight=0.5))
 
-    assert alone.max_aspect > 2 * combined.max_aspect
+    # Straight walls keep it from stretching much along the rim, as it did without them.
+    assert alone.max_aspect > 1.4 * combined.max_aspect

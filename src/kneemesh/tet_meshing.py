@@ -3,7 +3,7 @@
 import tempfile
 from collections.abc import Generator
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 from typing import Self, override
@@ -83,11 +83,16 @@ class Mesh:
             "Tetrahedron 4" or "Hexahedron 27". Each array is (M, nodes per
             element) of 0-based indices into nodes, in gmsh's node ordering.
         element_types: gmsh's element type number for each key of elements.
+        straight_lines: (L, K) indices into nodes of chains of corner nodes
+            that must stay straight, such as the columns through a cartilage
+            sheet's walls. optimize_hexahedral_mesh keeps each chain's inner
+            nodes on the segment between its ends. Empty for most meshes.
     """
 
     nodes: np.ndarray
     elements: dict[str, np.ndarray]
     element_types: dict[str, int]
+    straight_lines: np.ndarray = field(default_factory=lambda: np.zeros((0, 2), dtype=np.int64))
 
 
 def tetrahedral_mesh(

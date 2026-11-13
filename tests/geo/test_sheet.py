@@ -5,7 +5,16 @@ import numpy as np
 import pytest
 
 from kneemesh.brep import gmsh_session
-from kneemesh.geo.sheet import _butterfly_blocks, _signed_turning_angles, coons_block, fit_sheet, sheet_to_brep, sheet_to_hex_blocks
+from kneemesh.geo.sheet import (
+    _butterfly_blocks,
+    _outward_normals,
+    _signed_turning_angles,
+    blocks_to_hex_brep,
+    coons_block,
+    fit_sheet,
+    sheet_to_brep,
+    sheet_to_hex_blocks,
+)
 from kneemesh.tet_meshing import import_solid
 
 # The cartilage_segmentation fixture's ellipse semi-axes and the centers of its thin dip and defect, in mm.
@@ -200,6 +209,46 @@ def test_butterfly_columns_leave_the_perimeter_at_right_angles(real_cartilage):
         cosines = np.einsum("ij,ij->i", tangents, columns) / (np.linalg.norm(tangents, axis=1) * np.linalg.norm(columns, axis=1))
         # The B-spline arc's samples and the polygon's normals differ slightly.
         assert np.abs(cosines).max() < 0.05
+
+
+def test_real_lateral_tibial_tetrahedral_solid_builds_around_its_lobe(real_cartilage):
+    # The 1 mm perimeter follows a lobe whose tip's inward normals cross a ring row, which folded the blocks.
+    sheet = fit_sheet(real_cartilage["lateral_tibial_cartilage"], perimeter_radius=1.0, min_thickness=0.1, hole_thickness=0.05)
+
+    volume, sides, _ = solid_summary(sheet_to_brep(sheet))
+
+    assert len(sides) == 1
+    assert volume == pytest.approx(sheet.area * sheet.mean_thickness, rel=0.15)
+
+
+@pytest.mark.parametrize("structure", ["lateral_tibial_cartilage", "medial_tibial_cartilage", "patellar_cartilage"])
+def test_walls_tilt_within_their_limits(real_cartilage, structure):
+    sheet = fit_sheet(real_cartilage[structure])
+    perimeter = sheet.perimeter
+
+    rim = sheet.articular.ev(perimeter[:, 0], perimeter[:, 1]) - sheet.bone.ev(perimeter[:, 0], perimeter[:, 1])
+    assert np.all(np.abs(sheet.tilt) <= 0.25 * rim + 1e-12)
+    assert np.all(np.abs(sheet.tilt) <= 0.25 * 3.0)
+    # The articular sides curve down at the rim, so their walls mostly lean outward at the top.
+    assert np.median(sheet.tilt) > 0
+
+
+def test_tilt_moves_the_sides_apart_along_the_normal_at_the_perimeter_only(real_cartilage):
+    sheet = fit_sheet(real_cartilage["patellar_cartilage"])
+    perimeter = sheet.perimeter
+
+    apart = sheet.tilted(perimeter, "articular") - sheet.tilted(perimeter, "bone")
+    assert apart == pytest.approx(sheet.tilt[:, np.newaxis] * _outward_normals(perimeter), abs=1e-9)
+    center = np.mean(perimeter, axis=0, keepdims=True)
+    assert np.array_equal(sheet.tilted(center, "articular"), center)
+
+
+def test_hex_brep_rejects_overlapping_blocks(cartilage_sheet):
+    inner = _butterfly_blocks(cartilage_sheet)[0]
+    shifted = inner + 0.5 * (inner[-1, -1] - inner[0, 0])
+
+    with pytest.raises(ValueError, match="overlap|four-sided"):
+        blocks_to_hex_brep(cartilage_sheet, [inner, shifted])
 
 
 def test_plane_frame_round_trips(cartilage_sheet):

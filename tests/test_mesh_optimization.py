@@ -147,6 +147,50 @@ def test_objective_gradient_with_aspect_term_matches_finite_differences():
         assert gradient[node, axis] == pytest.approx(difference, rel=1e-5)
 
 
+def z_lines(divisions):
+    """Each column of a cube_grid's nodes along z through its interior, from z = 0 to z = 1."""
+    columns = [
+        [(i * (divisions + 1) + j) * (divisions + 1) + k for k in range(divisions + 1)] for i in range(1, divisions) for j in range(1, divisions)
+    ]
+    return np.array(columns)
+
+
+def test_line_gradient_passes_inner_nodes_shares_to_their_ends():
+    mesh = cube_grid(3, perturbation=0.15)
+    corners = _hexahedron_corners(mesh)
+    lines = z_lines(3)
+    constraints = _constraints(mesh.nodes, corners, 0.1, 0.5, 30.0, lines=lines)
+    placed = constraints.place_lines(mesh.nodes)
+    gradient = constraints.line_gradient(_objective(placed, corners)[1])
+    step = 1e-6
+
+    assert np.all(gradient[lines[:, 1:-1].ravel()] == 0.0)
+    for node, axis in [(lines[0, 0], 0), (lines[1, -1], 2), (lines[2, 0], 1)]:
+        ahead, behind = placed.copy(), placed.copy()
+        ahead[node, axis] += step
+        behind[node, axis] -= step
+        difference = (_objective(constraints.place_lines(ahead), corners)[0] - _objective(constraints.place_lines(behind), corners)[0]) / (2 * step)
+        assert gradient[node, axis] == pytest.approx(difference, rel=1e-5)
+
+
+def test_straight_lines_stay_straight_at_their_fractions():
+    divisions = 4
+    mesh = cube_grid(divisions, perturbation=0.2)
+    lines = z_lines(divisions)
+    straight = Mesh(mesh.nodes, mesh.elements, mesh.element_types, lines)
+
+    optimized = optimize_hexahedral_mesh(straight)
+
+    points = optimized.nodes[lines]
+    fractions = np.linspace(0.0, 1.0, divisions + 1)[None, :, None]
+    lengths = np.linalg.norm(np.diff(mesh.nodes[lines], axis=1), axis=-1)
+    original = np.concatenate((np.zeros((len(lines), 1)), np.cumsum(lengths, axis=1)), axis=1) / lengths.sum(axis=1, keepdims=True)
+    # Inner nodes keep their starting fractions of the way along their lines, which the perturbation made uneven.
+    assert points == pytest.approx(points[:, :1] + original[..., None] * (points[:, -1:] - points[:, :1]), abs=1e-12)
+    assert not np.allclose(original, fractions[..., 0])
+    assert mesh_quality(optimized).minimum > mesh_quality(mesh).minimum
+
+
 def test_aspect_weight_must_not_be_negative():
     with pytest.raises(ValueError, match="aspect_weight"):
         optimize_hexahedral_mesh(cube_grid(2), aspect_weight=-1.0)
@@ -158,6 +202,10 @@ def test_cube_nodes_are_classified_by_their_boundary_features():
 
     # 4^3 interior nodes, 4^2 on each of 6 faces, 4 on each of 12 edges, and 8 corners.
     assert np.bincount(constraints.kind).tolist() == [64, 96, 48, 8]
+
+    # Lines through the interior along z have 4 inner nodes each, all interior.
+    with_lines = _constraints(mesh.nodes, _hexahedron_corners(mesh), 0.1, 0.5, 30.0, lines=z_lines(5))
+    assert np.bincount(with_lines.kind).tolist() == [0, 96, 48, 8, 64]
 
 
 def test_optimization_restores_a_distorted_grid():
