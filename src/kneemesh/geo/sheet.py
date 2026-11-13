@@ -463,7 +463,7 @@ def _butterfly_blocks(sheet: CartilageSheet) -> list[np.ndarray]:
     block's straight sides. The ring's interior starts from a discrete
     harmonic (Laplace) grid, is relaxed by Winslow's equations, and is then
     respaced evenly along each column, so the spokes bend around concavities
-    of the perimeter. Straight spokes with transfinite interpolation fold the
+    of the perimeter and leave it at right angles. Straight spokes with transfinite interpolation fold the
     blocks at the real lateral tibial cartilage's notch. Letting the inner
     block's sides move too rounds its corners to nearly 180 degrees, and a
     Laplace grid alone folds at its corners.
@@ -536,8 +536,16 @@ def _winslow(ring: np.ndarray) -> np.ndarray:
     functions of position, the inverse of a Laplace grid, which keeps grid
     lines from crossing near the inner block's corners, where the ring turns
     through 270 degrees and a Laplace grid folds. Columns wrap around.
+
+    After every sweep the second row is moved onto the perimeter's inward
+    normals, keeping its distance from the perimeter, so columns leave the
+    perimeter at right angles. Winslow alone let them leave the real medial
+    tibial cartilage's perimeter at 150 degrees, which skewed its rim elements.
     """
     grid = ring.copy()
+    tangents = np.roll(ring[0], -1, axis=0) - np.roll(ring[0], 1, axis=0)
+    # The perimeter runs counterclockwise, so its inward normal is its tangent turned left.
+    inward = np.column_stack((-tangents[:, 1], tangents[:, 0])) / np.linalg.norm(tangents, axis=1, keepdims=True)
     for _ in range(_WINSLOW_ITERATIONS):
         east, west = np.roll(grid, -1, axis=1)[1:-1], np.roll(grid, 1, axis=1)[1:-1]
         north, south = grid[2:], grid[:-2]
@@ -551,6 +559,7 @@ def _winslow(ring: np.ndarray) -> np.ndarray:
         updated = (alpha * (east + west) + gamma * (north + south) - 2 * beta * cross) / (2 * (alpha + gamma))
         change = float(np.max(np.abs(updated - grid[1:-1])))
         grid[1:-1] += _WINSLOW_RELAXATION * (updated - grid[1:-1])
+        grid[1] = grid[0] + inward * np.linalg.norm(grid[1] - grid[0], axis=-1, keepdims=True)
         if change < _WINSLOW_TOLERANCE * float(np.max(np.ptp(ring[0], axis=0))):
             break
     return grid

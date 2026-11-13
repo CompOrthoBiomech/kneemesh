@@ -8,13 +8,13 @@ Generate B-rep geometry of knee structures from a segmentation LabelMap, and mes
 
 - **B-rep from segmentation labels.** Reads a LabelMap (`.nii`, `.nrrd`, or `.mhd`), fits a centerline through the labeled meniscus, slices its smoothed surface into cross-section contours, and lofts them into a solid B-spline B-rep (`.brep`) with planar or smooth end caps.
 - **Tetrahedral meshing** with linear 4-node or quadratic 10-node tetrahedra.
-- **Hexahedral meshing** with block-structured 8-node, 20-node, or 27-node hexahedra. The solid is split into a butterfly (O-grid) of five blocks, so elements stay well shaped at the meniscus's sharp corners. Optional node optimization (`--optimize true`) then raises the scaled Jacobians further, roughly doubling the worst element's on the real test menisci.
+- **Hexahedral meshing** with block-structured 8-node, 20-node, or 27-node hexahedra. The solid is split into a butterfly (O-grid) of five blocks, so elements stay well shaped at the meniscus's sharp corners. Optional node optimization (`--meniscus.optimize true`) then raises the scaled Jacobians further, roughly doubling the worst element's on the real test menisci.
 
 For the tibial and patellar cartilage:
 
 - **B-rep from segmentation labels.** Tells the cartilage's articular side from the side against its bone, which must be in the segmentation, and fits both as heights over a plane within a smoothed perimeter. Thin regions are thickened on the bone side, and for tetrahedra, the thinnest regions and gaps in the label become holes.
 - **Tetrahedral meshing** as for the meniscus.
-- **Hexahedral meshing** of a five-block butterfly over the perimeter, with transfinite elements through the thickness. The perimeter is rounded so that elements can follow its concave notches.
+- **Hexahedral meshing** of a five-block butterfly over the perimeter, with transfinite elements through the thickness. The perimeter is rounded so that elements can follow its concave notches. Optional node optimization (`--cartilage.optimize true`) weighs the elements' Frobenius aspect ratios along with their scaled Jacobians, keeping the worst under about 5.5 on the real test cartilage.
 
 Meshes are written in any format gmsh infers from the file extension, such as `.msh`, `.vtk`, or `.inp`.
 

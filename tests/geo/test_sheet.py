@@ -188,3 +188,15 @@ def test_butterfly_blocks_bend_around_the_real_lateral_notch(real_cartilage):
     for grid in blocks:
         along, across = grid[:-1, 1:] - grid[:-1, :-1], grid[1:, :-1] - grid[:-1, :-1]
         assert (along[..., 0] * across[..., 1] - along[..., 1] * across[..., 0]).min() > 0
+
+
+def test_butterfly_columns_leave_the_perimeter_at_right_angles(real_cartilage):
+    blocks = _butterfly_blocks(fit_sheet(real_cartilage["medial_tibial_cartilage"]))
+
+    for grid in blocks[1:]:
+        # Row 0 lies on the perimeter; interior points of the row have central tangents.
+        tangents = grid[0, 2:] - grid[0, :-2]
+        columns = grid[1, 1:-1] - grid[0, 1:-1]
+        cosines = np.einsum("ij,ij->i", tangents, columns) / (np.linalg.norm(tangents, axis=1) * np.linalg.norm(columns, axis=1))
+        # The B-spline arc's samples and the polygon's normals differ slightly.
+        assert np.abs(cosines).max() < 0.05

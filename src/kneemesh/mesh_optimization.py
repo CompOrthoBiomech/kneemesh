@@ -1,14 +1,16 @@
-"""Node optimization of hexahedral meshes for the scaled Jacobian.
+"""Node optimization of hexahedral meshes for the scaled Jacobian and the Frobenius aspect ratio.
 
 Two strategies run in turn on the hexahedra's corner nodes:
 
 1. Smart Laplacian smoothing moves each node toward the average of its edge
    neighbors, keeping a move only if it does not lower the worst scaled
    Jacobian of the elements around the node.
-2. Optimization minimizes the sum of 1 / SJ over every element corner by
-   projected gradient descent. The objective grows without bound as a corner
-   degenerates, so no step can invert an element, and it weighs the worst
-   corners most.
+2. Optimization minimizes the sum of 1 / SJ over every element corner, plus
+   aspect_weight times the sum of each corner's squared Frobenius aspect
+   ratio, by projected gradient descent. Both terms grow without bound as a
+   corner degenerates, so no step can invert an element, and both weigh the
+   worst corners most. 1 / SJ alone squares corners up by stretching
+   elements; the aspect term holds their edge lengths in proportion.
 
 Boundary nodes are classified from the mesh's own boundary quadrilaterals.
 Where adjacent boundary faces meet at more than a feature angle, their shared
@@ -54,17 +56,21 @@ _VOLUME_ROUNDS = 3
 
 @dataclass(frozen=True)
 class MeshQuality:
-    """Scaled Jacobian statistics of a hexahedral mesh.
+    """Scaled Jacobian and Frobenius aspect ratio statistics of a hexahedral mesh.
 
     Attributes:
         minimum: Smallest element scaled Jacobian. Negative means an inverted element.
         mean: Mean element scaled Jacobian.
         inverted: Number of elements with a corner Jacobian determinant at or below zero.
+        max_aspect: Largest element Frobenius aspect ratio, infinite if any element is inverted.
+        mean_aspect: Mean element Frobenius aspect ratio, infinite if any element is inverted.
     """
 
     minimum: float
     mean: float
     inverted: int
+    max_aspect: float
+    mean_aspect: float
 
 
 @dataclass(frozen=True, eq=False)
@@ -118,16 +124,39 @@ def scaled_jacobians(mesh: Mesh) -> np.ndarray:
     return _corner_scaled_jacobians(mesh.nodes, _hexahedron_corners(mesh)).min(axis=1)
 
 
+def frobenius_aspects(mesh: Mesh) -> np.ndarray:
+    """Return each hexahedron's Frobenius aspect ratio, the largest over its eight corners.
+
+    A corner's Frobenius aspect ratio is ``|E|_F^2 / (3 det(E)^(2/3))`` for the
+    matrix E of its three edge vectors, as Verdict's maximum aspect Frobenius
+    measures it: 1 for a cube's corner, and larger as the corner's edges
+    differ in length or leave right angles. It is infinite for a degenerate
+    or inverted corner. High-order elements are measured on their corner nodes.
+
+    Raises:
+        ValueError: If the mesh has elements other than hexahedra.
+    """
+    return _corner_aspects(_corner_edges(mesh.nodes, _hexahedron_corners(mesh))).max(axis=1)
+
+
 def mesh_quality(mesh: Mesh) -> MeshQuality:
-    """Summarize a hexahedral mesh's scaled Jacobians.
+    """Summarize a hexahedral mesh's scaled Jacobians and Frobenius aspect ratios.
 
     Raises:
         ValueError: If the mesh has elements other than hexahedra.
     """
     corners = _hexahedron_corners(mesh)
-    determinants = np.linalg.det(_corner_edges(mesh.nodes, corners))
+    edges = _corner_edges(mesh.nodes, corners)
+    determinants = np.linalg.det(edges)
     quality = _corner_scaled_jacobians(mesh.nodes, corners).min(axis=1)
-    return MeshQuality(float(quality.min()), float(quality.mean()), int(np.count_nonzero((determinants <= 0).any(axis=1))))
+    aspects = _corner_aspects(edges).max(axis=1)
+    return MeshQuality(
+        float(quality.min()),
+        float(quality.mean()),
+        int(np.count_nonzero((determinants <= 0).any(axis=1))),
+        float(aspects.max()),
+        float(aspects.mean()),
+    )
 
 
 def optimize_hexahedral_mesh(
@@ -138,11 +167,13 @@ def optimize_hexahedral_mesh(
     surface_travel: float = DEFAULT_SURFACE_TRAVEL,
     feature_angle: float = DEFAULT_FEATURE_ANGLE,
     preserve_volume: bool = True,
+    aspect_weight: float = 0.0,
 ) -> Mesh:
     """Move a hexahedral mesh's nodes to raise its scaled Jacobians, keeping connectivity.
 
     Smart Laplacian smoothing runs first, then optimization of the sum of
-    1 / SJ over every element corner. Optimization needs every element valid,
+    1 / SJ over every element corner plus aspect_weight times the sum of their
+    squared Frobenius aspect ratios. Optimization needs every element valid,
     so it is skipped with a warning if smoothing leaves one inverted.
 
     Boundary allowances scale with each node's local size, the mean length
@@ -166,6 +197,12 @@ def optimize_hexahedral_mesh(
             places and in at others but not swell or shrink the mesh overall.
             Without it, optimization tends to push the whole surface outward,
             adding about 5% to a meniscus at surface_deviation 0.1.
+        aspect_weight: Weight of the squared Frobenius aspect ratios against
+            1 / SJ. 0 optimizes the scaled Jacobian alone, which can stretch
+            elements: it raised the real medial tibial cartilage's largest
+            aspect ratio from 20 to 75. The aspect term also penalizes
+            deliberately elongated elements, such as the meniscus's along its
+            centerline.
 
     Returns:
         A new Mesh with the same connectivity and moved nodes. High-order
@@ -182,6 +219,8 @@ def optimize_hexahedral_mesh(
         raise ValueError(f"Surface allowances must not be negative, got {surface_deviation} and {surface_travel}")
     if not 0 < feature_angle < 180:
         raise ValueError(f"feature_angle must be between 0 and 180 degrees, got {feature_angle}")
+    if aspect_weight < 0:
+        raise ValueError(f"aspect_weight must not be negative, got {aspect_weight}")
 
     corners = _hexahedron_corners(mesh)
     before = mesh_quality(mesh)
@@ -193,16 +232,18 @@ def optimize_hexahedral_mesh(
         if (np.linalg.det(_corner_edges(positions, corners)) <= 0).any():
             logger.warning("Skipping optimization because the mesh has inverted elements")
         else:
-            positions = _optimize(positions, corners, constraints, optimization_iterations)
+            positions = _optimize(positions, corners, constraints, optimization_iterations, aspect_weight)
 
     result = replace(mesh, nodes=_move_high_order_nodes(mesh, corners, positions))
     after = mesh_quality(result)
     logger.debug(
-        "Scaled Jacobian minimum {:.3f} -> {:.3f}, mean {:.3f} -> {:.3f}, inverted elements {} -> {}",
+        "Scaled Jacobian minimum {:.3f} -> {:.3f}, mean {:.3f} -> {:.3f}; Frobenius aspect maximum {:.3g} -> {:.3g}; inverted elements {} -> {}",
         before.minimum,
         after.minimum,
         before.mean,
         after.mean,
+        before.max_aspect,
+        after.max_aspect,
         before.inverted,
         after.inverted,
     )
@@ -228,14 +269,24 @@ def _corner_scaled_jacobians(nodes: np.ndarray, corners: np.ndarray) -> np.ndarr
     return np.linalg.det(edges) / np.maximum(lengths, np.finfo(float).tiny)
 
 
-def _objective(nodes: np.ndarray, corners: np.ndarray) -> tuple[float, np.ndarray]:
-    """Return the sum of 1 / SJ over all corners and its gradient with respect to the nodes.
+def _corner_aspects(edges: np.ndarray) -> np.ndarray:
+    """Return the Frobenius aspect ratio of each corner's (..., 3, 3) edge matrix, infinite where it is not positive."""
+    determinants = np.linalg.det(edges)
+    squared = np.einsum("...ij,...ij->...", edges, edges)
+    positive = determinants > 0
+    return np.where(positive, squared / (3 * np.where(positive, determinants, 1.0) ** (2 / 3)), np.inf)
+
+
+def _objective(nodes: np.ndarray, corners: np.ndarray, aspect_weight: float = 0.0) -> tuple[float, np.ndarray]:
+    """Return the sum of 1 / SJ plus aspect_weight times the sum of F^2 over all corners, and its gradient.
 
     The sum is infinite, with a zero gradient, if any corner is degenerate or inverted.
 
     log SJ = log det E - sum log |e_k| for the matrix E whose rows are the
     edge vectors e_k, so d log SJ / dE = E^-T - e_k / |e_k|^2 row by row, and
-    d (1 / SJ) = -(1 / SJ) d log SJ.
+    d (1 / SJ) = -(1 / SJ) d log SJ. The Frobenius aspect ratio is
+    F = |E|_F^2 / (3 det(E)^(2/3)), so d log F / dE = 2 E / |E|_F^2 - (2/3) E^-T
+    and d F^2 = 2 F^2 d log F.
     """
     edges = _corner_edges(nodes, corners)
     # For rows r0, r1, r2, the rows of E^-T are (r1 x r2, r2 x r0, r0 x r1) / det E.
@@ -245,26 +296,33 @@ def _objective(nodes: np.ndarray, corners: np.ndarray) -> tuple[float, np.ndarra
         return np.inf, np.zeros_like(nodes)
     squared = np.einsum("...i,...i->...", edges, edges)
     inverse_quality = np.sqrt(squared).prod(axis=-1) / determinants
-    log_gradient = cofactors / determinants[..., None, None] - edges / squared[..., None]
-    edge_gradient = -inverse_quality[..., None, None] * log_gradient
+    inverse_transpose = cofactors / determinants[..., None, None]
+    edge_gradient = -inverse_quality[..., None, None] * (inverse_transpose - edges / squared[..., None])
+    energy = float(inverse_quality.sum())
+    if aspect_weight:
+        frobenius = squared.sum(axis=-1)
+        squared_aspects = (frobenius / (3 * determinants ** (2 / 3))) ** 2
+        energy += aspect_weight * float(squared_aspects.sum())
+        log_aspect = 2 * edges / frobenius[..., None, None] - (2 / 3) * inverse_transpose
+        edge_gradient += 2 * aspect_weight * squared_aspects[..., None, None] * log_aspect
 
     # Each edge vector is its far node minus the corner node.
     indices = np.concatenate((corners[:, _CORNER_NEIGHBORS].ravel(), corners.ravel()))
     values = np.concatenate((edge_gradient.reshape(-1, 3), -edge_gradient.sum(axis=2).reshape(-1, 3)))
     gradient = np.column_stack([np.bincount(indices, weights=values[:, axis], minlength=len(nodes)) for axis in range(3)])
-    return float(inverse_quality.sum()), gradient
+    return energy, gradient
 
 
-def _optimize(positions: np.ndarray, corners: np.ndarray, constraints: _Constraints, iterations: int) -> np.ndarray:
-    """Minimize the sum of 1 / SJ by projected gradient descent with backtracking."""
+def _optimize(positions: np.ndarray, corners: np.ndarray, constraints: _Constraints, iterations: int, aspect_weight: float) -> np.ndarray:
+    """Minimize the objective by projected gradient descent with backtracking."""
     # Scaling each node's step by its local size squared makes the step dimensionless.
     scale = _local_sizes(constraints.origin, corners)[:, None] ** 2
-    energy, gradient = _objective(positions, corners)
+    energy, gradient = _objective(positions, corners, aspect_weight)
     step = _INITIAL_STEP
     for iteration in range(iterations):
         while step >= _MIN_STEP:
             trial = constraints.project(positions - step * scale * gradient)
-            trial_energy, trial_gradient = _objective(trial, corners)
+            trial_energy, trial_gradient = _objective(trial, corners, aspect_weight)
             if trial_energy < energy:
                 break
             step /= 2

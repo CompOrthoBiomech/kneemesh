@@ -265,6 +265,12 @@ class StructureMesh(BaseConfig):
         description="Angle in degrees between boundary faces above which their shared edge is kept as a feature when optimizing",
     )
     preserve_volume: bool = Field(default=True, description="Keep the mesh's volume when optimizing by cancelling the net outward surface offset")
+    aspect_weight: float = Field(
+        default=0.0,
+        ge=0,
+        description="Weight of the elements' squared Frobenius aspect ratios against 1 / scaled Jacobian when optimizing. "
+        + "0 optimizes the scaled Jacobian alone, which can stretch elements",
+    )
 
 
 class MeniscusMesh(StructureMesh):
@@ -277,6 +283,10 @@ class MeniscusMesh(StructureMesh):
     elements_along: int = Field(default=20, description="Hexahedra along the solid between the caps")
 
 
+DEFAULT_CARTILAGE_ASPECT_WEIGHT = 0.5
+"""Default weight of the squared Frobenius aspect ratios when optimizing cartilage hexahedra."""
+
+
 class CartilageMesh(StructureMesh):
     """Settings for meshing the B-reps of the lateral and medial tibial and the patellar cartilage.
 
@@ -286,6 +296,12 @@ class CartilageMesh(StructureMesh):
     elements_around: int = Field(default=8, description="Hexahedra along each quarter of the perimeter and each side of the inner block")
     elements_radial: int = Field(default=4, description="Hexahedra along each spoke from the perimeter to the inner block")
     elements_through: int = Field(default=3, description="Hexahedra through the thickness")
+    aspect_weight: float = Field(
+        default=DEFAULT_CARTILAGE_ASPECT_WEIGHT,
+        ge=0,
+        description="Weight of the elements' squared Frobenius aspect ratios against 1 / scaled Jacobian when optimizing. "
+        + "0 optimizes the scaled Jacobian alone, which stretched the real cartilage's elements up to 75 times their thickness",
+    )
 
 
 class LabelMapBrep(BaseConfig):

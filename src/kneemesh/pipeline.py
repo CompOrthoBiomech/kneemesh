@@ -241,7 +241,13 @@ def _tetrahedral_mesh(brep: BRep, config: StructureMesh, mesh_config: BrepMesh) 
 def _optimize(mesh: Mesh, config: StructureMesh) -> Mesh:
     before = mesh_quality(mesh)
     count = sum(len(connectivity) for connectivity in mesh.elements.values())
-    logger.info("Optimizing {} hexahedra with minimum scaled Jacobian {:.3f} and mean {:.3f}", count, before.minimum, before.mean)
+    logger.info(
+        "Optimizing {} hexahedra with minimum scaled Jacobian {:.3f}, mean {:.3f}, and maximum Frobenius aspect ratio {:.3g}",
+        count,
+        before.minimum,
+        before.mean,
+        before.max_aspect,
+    )
     optimized = optimize_hexahedral_mesh(
         mesh,
         config.laplacian_iterations,
@@ -250,9 +256,15 @@ def _optimize(mesh: Mesh, config: StructureMesh) -> Mesh:
         config.surface_travel,
         config.feature_angle,
         config.preserve_volume,
+        config.aspect_weight,
     )
     after = mesh_quality(optimized)
-    logger.info("Optimized minimum scaled Jacobian to {:.3f} and mean to {:.3f}", after.minimum, after.mean)
+    logger.info(
+        "Optimized minimum scaled Jacobian to {:.3f}, mean to {:.3f}, and maximum Frobenius aspect ratio to {:.3g}",
+        after.minimum,
+        after.mean,
+        after.max_aspect,
+    )
     return optimized
 
 

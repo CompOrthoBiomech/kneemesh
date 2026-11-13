@@ -183,3 +183,10 @@ def test_sections_share_surface_and_meshing_settings():
         "hex_blocks",
     }
     assert {"min_size", "max_size", "optimize", "preserve_volume"} <= set(MeniscusMesh.model_fields) & set(CartilageMesh.model_fields)
+
+
+def test_only_cartilage_optimizes_aspect_ratios_by_default():
+    assert MeniscusMesh().aspect_weight == 0.0
+    assert CartilageMesh().aspect_weight == 0.5
+    with pytest.raises(pydantic.ValidationError):
+        CartilageMesh(aspect_weight=-1.0)

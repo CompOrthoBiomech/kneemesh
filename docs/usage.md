@@ -51,4 +51,4 @@ kneemesh-brep --label-maps '{"tibia": "tibia.nii", "lateral_tibial_cartilage": "
 kneemesh-mesh --breps '{"lateral_tibial_cartilage": "lateral_tibial_cartilage_hex.brep"}' --element-type hex8 --cartilage.optimize true
 ```
 
-`--cartilage.elements-around`, `--cartilage.elements-radial`, and `--cartilage.elements-through` set the hexahedra along each quarter of the perimeter, along each spoke toward the inner block, and through the thickness.
+`--cartilage.elements-around`, `--cartilage.elements-radial`, and `--cartilage.elements-through` set the hexahedra along each quarter of the perimeter, along each spoke toward the inner block, and through the thickness. Optimizing cartilage hexahedra also weighs their Frobenius aspect ratios, by `--cartilage.aspect-weight`, 0.5 by default: optimizing the scaled Jacobian alone squares up corners by stretching elements, up to 75 times their thickness on the real medial tibial cartilage. The thinnest stretches of the rim hold the worst elements; `--cartilage.perimeter-inset` cuts them off at the cost of area.

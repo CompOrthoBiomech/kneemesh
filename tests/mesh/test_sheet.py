@@ -88,9 +88,19 @@ def test_real_cartilage_hexahedra_are_valid_and_optimize(real_cartilage_hex_bloc
     mesh = hexahedral_mesh(real_cartilage_hex_blocks[structure])
 
     before = mesh_quality(mesh)
-    after = mesh_quality(optimize_hexahedral_mesh(mesh))
+    after = mesh_quality(optimize_hexahedral_mesh(mesh, aspect_weight=0.5))
 
     # Without perimeter rounding, the real lateral tibial cartilage's notch inverts elements at these counts.
-    assert before.minimum > 0.05
-    assert after.minimum > 0.3
+    assert before.minimum > 0.1
+    assert after.minimum > 0.35
     assert after.mean > before.mean
+    assert after.max_aspect < min(before.max_aspect, 6.0)
+
+
+def test_scaled_jacobian_alone_stretches_real_cartilage_elements(real_cartilage_hex_blocks):
+    mesh = hexahedral_mesh(real_cartilage_hex_blocks["medial_tibial_cartilage"])
+
+    alone = mesh_quality(optimize_hexahedral_mesh(mesh))
+    combined = mesh_quality(optimize_hexahedral_mesh(mesh, aspect_weight=0.5))
+
+    assert alone.max_aspect > 3 * combined.max_aspect

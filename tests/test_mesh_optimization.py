@@ -9,6 +9,7 @@ from kneemesh.mesh_optimization import (
     _hexahedron_corners,
     _local_sizes,
     _objective,
+    frobenius_aspects,
     mesh_quality,
     optimize_hexahedral_mesh,
     scaled_jacobians,
@@ -111,6 +112,44 @@ def test_objective_gradient_matches_finite_differences():
         behind[node, axis] -= step
         difference = (_objective(ahead, corners)[0] - _objective(behind, corners)[0]) / (2 * step)
         assert gradient[node, axis] == pytest.approx(difference, rel=1e-5)
+
+
+def test_frobenius_aspect_is_one_for_a_cube_and_grows_with_stretching_and_shear():
+    box = UNIT_CUBE * [4.0, 1.0, 1.0]
+    sheared = UNIT_CUBE + np.outer(UNIT_CUBE[:, 2], [1.0, 0.0, 0.0])
+
+    assert frobenius_aspects(hexahedra(UNIT_CUBE, [range(8)])) == pytest.approx([1.0])
+    # (16 + 1 + 1) / (3 * 4^(2/3)) for a 4 x 1 x 1 box.
+    assert frobenius_aspects(hexahedra(box, [range(8)])) == pytest.approx([18 / (3 * 4 ** (2 / 3))])
+    # A unit shear makes one corner's edges 1, 1, and sqrt(2) long with the cube's volume.
+    assert frobenius_aspects(hexahedra(sheared, [range(8)])) == pytest.approx([4 / 3])
+
+
+def test_mesh_quality_reports_aspect_ratios_and_inverted_elements_as_infinite():
+    inverted = UNIT_CUBE.copy()
+    inverted[6] = [0.2, 0.2, -0.5]
+
+    assert mesh_quality(hexahedra(UNIT_CUBE, [range(8)])).max_aspect == pytest.approx(1.0)
+    assert mesh_quality(hexahedra(inverted, [range(8)])).max_aspect == np.inf
+
+
+def test_objective_gradient_with_aspect_term_matches_finite_differences():
+    mesh = cube_grid(3, perturbation=0.15)
+    corners = _hexahedron_corners(mesh)
+    _, gradient = _objective(mesh.nodes, corners, 0.7)
+    step = 1e-6
+
+    for node, axis in [(21, 0), (22, 1), (41, 2)]:
+        ahead, behind = mesh.nodes.copy(), mesh.nodes.copy()
+        ahead[node, axis] += step
+        behind[node, axis] -= step
+        difference = (_objective(ahead, corners, 0.7)[0] - _objective(behind, corners, 0.7)[0]) / (2 * step)
+        assert gradient[node, axis] == pytest.approx(difference, rel=1e-5)
+
+
+def test_aspect_weight_must_not_be_negative():
+    with pytest.raises(ValueError, match="aspect_weight"):
+        optimize_hexahedral_mesh(cube_grid(2), aspect_weight=-1.0)
 
 
 def test_cube_nodes_are_classified_by_their_boundary_features():

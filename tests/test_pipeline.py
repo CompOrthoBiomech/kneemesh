@@ -414,6 +414,6 @@ def test_pipeline_builds_and_meshes_cartilage_against_its_bone(in_tmp_path, cart
 
     stderr = capsys.readouterr().err
     assert "Using tibia only to orient its cartilage" in stderr
-    assert "Optimized minimum scaled Jacobian" in stderr
+    assert "Optimized minimum scaled Jacobian" in stderr and "maximum Frobenius aspect ratio" in stderr
     assert sorted(path.name for path in in_tmp_path.glob("*.msh")) == ["lateral_tibial_cartilage_hex8.msh", "lateral_tibial_cartilage_tet4.msh"]
     assert not list(in_tmp_path.glob("tibia*.brep"))
