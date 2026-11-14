@@ -3,7 +3,14 @@ import numpy as np
 import pytest
 
 from kneemesh.brep import gmsh_session
-from kneemesh.mesh_sets import FACE_ELEMENTS, _face_nodes, boundary_faces, face_groups_of, face_sets, surface_sets
+from kneemesh.mesh_sets import (
+    FACE_ELEMENTS,
+    _face_nodes,
+    boundary_faces,
+    face_groups_of,
+    face_sets,
+    surface_sets,
+)
 from kneemesh.tet_meshing import Mesh
 
 GMSH_TYPES = {"Tetrahedron 4": 4, "Tetrahedron 10": 11, "Hexahedron 8": 5, "Hexahedron 20": 17, "Hexahedron 27": 12}

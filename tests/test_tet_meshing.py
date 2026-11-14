@@ -6,7 +6,14 @@ from kneemesh.brep import gmsh_session
 from kneemesh.disk import write_brep
 from kneemesh.geo.meniscus import centerline, contours_to_brep, slice_isocontour
 from kneemesh.segmentation import assemble_label_maps
-from kneemesh.tet_meshing import Algorithm2D, Algorithm3D, Mesh, import_solid, oriented_extents, tetrahedral_mesh
+from kneemesh.tet_meshing import (
+    Algorithm2D,
+    Algorithm3D,
+    Mesh,
+    import_solid,
+    oriented_extents,
+    tetrahedral_mesh,
+)
 from kneemesh.vol import extract_isocontour, signed_distance_field, smooth_isocontour
 
 

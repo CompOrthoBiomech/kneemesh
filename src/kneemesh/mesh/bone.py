@@ -17,7 +17,14 @@ from vtkmodules.vtkFiltersCore import vtkImplicitPolyDataDistance
 from kneemesh.brep import gmsh_session
 from kneemesh.geo.bone import surface_arrays
 from kneemesh.mesh.sheet import quadrangulate
-from kneemesh.tet_meshing import Algorithm2D, Algorithm3D, Mesh, gmsh_mesh, gmsh_options, require_element_order
+from kneemesh.tet_meshing import (
+    Algorithm2D,
+    Algorithm3D,
+    Mesh,
+    gmsh_mesh,
+    gmsh_options,
+    require_element_order,
+)
 
 DEFAULT_BONE_ELEMENT_SIZE = 2.0
 """Default size of the elements of a bone's surface mesh, in physical units."""

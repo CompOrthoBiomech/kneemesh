@@ -13,7 +13,12 @@ from kneemesh.config import DEFAULT_CARTILAGE_ELEMENT_SIZE
 from kneemesh.disk import read_label_map
 from kneemesh.geo.bone import bone_mask, decimate_surface
 from kneemesh.geo.femur import fit_femoral_sheet
-from kneemesh.geo.meniscus import centerline, contours_to_brep, contours_to_hex_blocks, slice_isocontour
+from kneemesh.geo.meniscus import (
+    centerline,
+    contours_to_brep,
+    contours_to_hex_blocks,
+    slice_isocontour,
+)
 from kneemesh.geo.sheet import CartilageSheet, fit_sheet, sheet_to_brep
 from kneemesh.mesh import sheet
 from kneemesh.mesh.meniscus import hexahedral_mesh

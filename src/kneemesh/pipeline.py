@@ -16,7 +16,17 @@ from vtkmodules.vtkCommonDataModel import vtkPolyData
 
 from kneemesh.brep import BRep
 from kneemesh.cartilage import CartilageSides, classify_sides
-from kneemesh.config import BONES, BaseConfig, BrepMesh, CartilageBrep, CartilageMesh, LabelMapAssembly, LabelMapBrep, Structure, StructureMesh
+from kneemesh.config import (
+    BONES,
+    BaseConfig,
+    BrepMesh,
+    CartilageBrep,
+    CartilageMesh,
+    LabelMapAssembly,
+    LabelMapBrep,
+    Structure,
+    StructureMesh,
+)
 from kneemesh.disk import (
     read_brep,
     read_label_map,
@@ -30,7 +40,12 @@ from kneemesh.disk import (
 )
 from kneemesh.geo.bone import bone_mask, decimate_surface
 from kneemesh.geo.femur import fit_femoral_sheet
-from kneemesh.geo.meniscus import centerline, contours_to_brep, contours_to_hex_blocks, slice_isocontour
+from kneemesh.geo.meniscus import (
+    centerline,
+    contours_to_brep,
+    contours_to_hex_blocks,
+    slice_isocontour,
+)
 from kneemesh.geo.sheet import CartilageSheet, fit_sheet, sheet_to_brep
 from kneemesh.mesh import bone as bone_mesh
 from kneemesh.mesh import meniscus as meniscus_mesh

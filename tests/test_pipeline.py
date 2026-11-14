@@ -7,9 +7,23 @@ import SimpleITK as sitk
 from loguru import logger
 
 from kneemesh.brep import gmsh_session
-from kneemesh.config import STRUCTURES, BrepMesh, LabelMapAssembly, LabelMapBrep, MeniscusBrep, MeniscusMesh
+from kneemesh.config import (
+    STRUCTURES,
+    BrepMesh,
+    LabelMapAssembly,
+    LabelMapBrep,
+    MeniscusBrep,
+    MeniscusMesh,
+)
 from kneemesh.disk import read_brep, read_segmentation, read_surface, write_brep, write_label_map
-from kneemesh.pipeline import _BREP_BUILDERS, _MESHERS, assemble_main, brep_main, configure, mesh_main
+from kneemesh.pipeline import (
+    _BREP_BUILDERS,
+    _MESHERS,
+    assemble_main,
+    brep_main,
+    configure,
+    mesh_main,
+)
 from kneemesh.tet_meshing import Algorithm2D, Algorithm3D
 from kneemesh.vol import signed_distance_field
 

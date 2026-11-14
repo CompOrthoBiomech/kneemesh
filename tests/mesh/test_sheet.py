@@ -4,7 +4,12 @@ import pytest
 
 from kneemesh.brep import gmsh_session
 from kneemesh.geo.sheet import fit_sheet, sheet_to_brep
-from kneemesh.mesh.sheet import _base_complex, hexahedral_mesh, sheet_face_groups, sheet_partition_brep
+from kneemesh.mesh.sheet import (
+    _base_complex,
+    hexahedral_mesh,
+    sheet_face_groups,
+    sheet_partition_brep,
+)
 from kneemesh.mesh_optimization import mesh_quality, optimize_hexahedral_mesh, scaled_jacobians
 from kneemesh.tet_meshing import import_solid, tetrahedral_mesh
 

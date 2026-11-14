@@ -11,9 +11,20 @@ from scipy.spatial import KDTree
 
 from kneemesh.brep import gmsh_session
 from kneemesh.disk import write_brep
-from kneemesh.geo.meniscus import centerline, contours_to_brep, contours_to_hex_blocks, slice_isocontour
+from kneemesh.geo.meniscus import (
+    centerline,
+    contours_to_brep,
+    contours_to_hex_blocks,
+    slice_isocontour,
+)
 from kneemesh.segmentation import assemble_label_maps
-from kneemesh.vol import DEFAULT_SMOOTHING_ITERATIONS, ContourSlice, extract_isocontour, signed_distance_field, smooth_isocontour
+from kneemesh.vol import (
+    DEFAULT_SMOOTHING_ITERATIONS,
+    ContourSlice,
+    extract_isocontour,
+    signed_distance_field,
+    smooth_isocontour,
+)
 
 # Area centroid of the voxelized fixture's cross-section. It differs slightly
 # from the ideal triangle (16.67, -1.33) because the fixture's bottom slice lies

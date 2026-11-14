@@ -4,7 +4,12 @@ import pytest
 from vtkmodules.util.numpy_support import vtk_to_numpy
 from vtkmodules.vtkCommonDataModel import VTK_POLY_LINE
 
-from kneemesh.brep import butterfly_split_indices, contours_to_polydata, gmsh_session, resample_closed
+from kneemesh.brep import (
+    butterfly_split_indices,
+    contours_to_polydata,
+    gmsh_session,
+    resample_closed,
+)
 from kneemesh.vol import ContourSlice
 
 

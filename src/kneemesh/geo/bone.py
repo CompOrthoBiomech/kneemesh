@@ -15,7 +15,12 @@ import SimpleITK as sitk
 from loguru import logger
 from vtkmodules.util.numpy_support import vtk_to_numpy
 from vtkmodules.vtkCommonDataModel import vtkPolyData
-from vtkmodules.vtkFiltersCore import vtkCleanPolyData, vtkMassProperties, vtkQuadricDecimation, vtkTriangleFilter
+from vtkmodules.vtkFiltersCore import (
+    vtkCleanPolyData,
+    vtkMassProperties,
+    vtkQuadricDecimation,
+    vtkTriangleFilter,
+)
 
 from kneemesh.vol import require_3d_label_map
 

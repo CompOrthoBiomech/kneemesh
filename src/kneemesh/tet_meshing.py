@@ -13,7 +13,13 @@ import numpy as np
 from loguru import logger
 
 from kneemesh.brep import BRep, gmsh_session
-from kneemesh.mesh_sets import FACE_ELEMENTS, boundary_faces, face_groups_of, face_sets, surface_sets
+from kneemesh.mesh_sets import (
+    FACE_ELEMENTS,
+    boundary_faces,
+    face_groups_of,
+    face_sets,
+    surface_sets,
+)
 
 
 class _GmshAlgorithm(StrEnum):

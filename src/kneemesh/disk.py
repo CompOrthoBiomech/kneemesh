@@ -23,7 +23,11 @@ from vtkmodules.vtkCommonDataModel import (
 )
 from vtkmodules.vtkIOGeometry import vtkSTLReader, vtkSTLWriter
 from vtkmodules.vtkIOHDF import vtkHDFWriter
-from vtkmodules.vtkIOXML import vtkXMLPolyDataReader, vtkXMLPolyDataWriter, vtkXMLUnstructuredGridWriter
+from vtkmodules.vtkIOXML import (
+    vtkXMLPolyDataReader,
+    vtkXMLPolyDataWriter,
+    vtkXMLUnstructuredGridWriter,
+)
 
 from kneemesh.brep import BRep, gmsh_session
 from kneemesh.segmentation import Segmentation
