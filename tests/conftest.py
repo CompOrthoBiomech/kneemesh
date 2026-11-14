@@ -9,11 +9,12 @@ from vtkmodules.vtkCommonDataModel import vtkPolyData
 
 from kneemesh.brep import BRep, contours_to_polydata
 from kneemesh.cartilage import CartilageSides, classify_sides
+from kneemesh.config import DEFAULT_CARTILAGE_ELEMENT_SIZE
 from kneemesh.disk import read_label_map
-from kneemesh.geo.femur import femoral_sheet_to_brep, femoral_sheet_to_hex_blocks, fit_femoral_sheet
+from kneemesh.geo.femur import fit_femoral_sheet
 from kneemesh.geo.meniscus import centerline, contours_to_brep, contours_to_hex_blocks, slice_isocontour
-from kneemesh.geo.sheet import CartilageSheet, fit_sheet, sheet_to_brep, sheet_to_hex_blocks
-from kneemesh.mesh import femur, sheet
+from kneemesh.geo.sheet import CartilageSheet, fit_sheet, sheet_to_brep
+from kneemesh.mesh import sheet
 from kneemesh.mesh.meniscus import hexahedral_mesh
 from kneemesh.segmentation import Segmentation, assemble_label_maps
 from kneemesh.tet_meshing import Mesh, tetrahedral_mesh
@@ -222,15 +223,15 @@ def cartilage_sheet(cartilage_sides: CartilageSides) -> CartilageSheet:
 
 
 @pytest.fixture(scope="session")
-def cartilage_hex_blocks(cartilage_sheet: CartilageSheet) -> BRep:
-    """The five-block solid of cartilage_sheet."""
-    return sheet_to_hex_blocks(cartilage_sheet)
+def cartilage_hex_solid(cartilage_sheet: CartilageSheet) -> BRep:
+    """The solid of cartilage_sheet, with the defaults for hexahedra."""
+    return sheet_to_brep(cartilage_sheet)
 
 
 @pytest.fixture(scope="session")
-def cartilage_hexahedra(cartilage_hex_blocks: BRep) -> Mesh:
-    """Linear hexahedral mesh of cartilage_hex_blocks with the default counts."""
-    return sheet.hexahedral_mesh(cartilage_hex_blocks)
+def cartilage_hexahedra(cartilage_hex_solid: BRep) -> Mesh:
+    """Linear hexahedral mesh of cartilage_hex_solid at the default size."""
+    return sheet.hexahedral_mesh(cartilage_hex_solid, DEFAULT_CARTILAGE_ELEMENT_SIZE)
 
 
 @pytest.fixture(scope="session")
@@ -251,9 +252,9 @@ def real_cartilage() -> dict[str, CartilageSides]:
 
 
 @pytest.fixture(scope="session")
-def real_cartilage_hex_blocks(real_cartilage: dict[str, CartilageSides]) -> dict[str, BRep]:
-    """The five-block solid of each real cartilage's sheet with the defaults for hexahedra."""
-    return {structure: sheet_to_hex_blocks(fit_sheet(sides)) for structure, sides in real_cartilage.items()}
+def real_cartilage_hex_solids(real_cartilage: dict[str, CartilageSides]) -> dict[str, BRep]:
+    """The solid of each real cartilage's sheet with the defaults for hexahedra."""
+    return {structure: sheet_to_brep(fit_sheet(sides)) for structure, sides in real_cartilage.items()}
 
 
 def _femoral_on_bone() -> Segmentation:
@@ -304,21 +305,21 @@ def femoral_sheet(femoral_sides: CartilageSides) -> CartilageSheet:
 
 
 @pytest.fixture(scope="session")
-def femoral_hex_blocks(femoral_sheet: CartilageSheet) -> BRep:
-    """The seventeen-block solid of femoral_sheet."""
-    return femoral_sheet_to_hex_blocks(femoral_sheet)
+def femoral_hex_solid(femoral_sheet: CartilageSheet) -> BRep:
+    """The solid of femoral_sheet, with the defaults for hexahedra."""
+    return sheet_to_brep(femoral_sheet)
 
 
 @pytest.fixture(scope="session")
-def femoral_hexahedra(femoral_hex_blocks: BRep) -> Mesh:
-    """Linear hexahedral mesh of femoral_hex_blocks at the default size."""
-    return femur.hexahedral_mesh(femoral_hex_blocks)
+def femoral_hexahedra(femoral_hex_solid: BRep) -> Mesh:
+    """Linear hexahedral mesh of femoral_hex_solid at the default size."""
+    return sheet.hexahedral_mesh(femoral_hex_solid, DEFAULT_CARTILAGE_ELEMENT_SIZE)
 
 
 @pytest.fixture(scope="session")
 def femoral_solid(femoral_sides: CartilageSides) -> BRep:
     """The solid of femoral_sides's sheet with the defaults for tetrahedra."""
-    return femoral_sheet_to_brep(fit_femoral_sheet(femoral_sides, perimeter_radius=1.0, min_thickness=0.1, hole_thickness=0.05))
+    return sheet_to_brep(fit_femoral_sheet(femoral_sides, perimeter_radius=1.0, min_thickness=0.1, hole_thickness=0.05))
 
 
 @pytest.fixture(scope="session")
@@ -338,6 +339,6 @@ def real_femoral_sheet(real_femoral_sides: CartilageSides) -> CartilageSheet:
 
 
 @pytest.fixture(scope="session")
-def real_femoral_hex_blocks(real_femoral_sheet: CartilageSheet) -> BRep:
-    """The real femoral cartilage's seventeen-block solid at the defaults for hexahedra. Fragmenting it takes about 10 s."""
-    return femoral_sheet_to_hex_blocks(real_femoral_sheet)
+def real_femoral_hex_solid(real_femoral_sheet: CartilageSheet) -> BRep:
+    """The real femoral cartilage's solid at the defaults for hexahedra."""
+    return sheet_to_brep(real_femoral_sheet)

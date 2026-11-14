@@ -9,7 +9,6 @@ from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, model_valida
 
 from kneemesh.cartilage import DEFAULT_SIDE_COSINE
 from kneemesh.disk import BREP_SUFFIXES
-from kneemesh.geo.femur import DEFAULT_RING_WIDTH
 from kneemesh.geo.sheet import (
     DEFAULT_HOLE_THICKNESS,
     DEFAULT_MIN_THICKNESS_HEXAHEDRAL,
@@ -17,6 +16,7 @@ from kneemesh.geo.sheet import (
     DEFAULT_PERIMETER_RADIUS_HEXAHEDRAL,
     DEFAULT_PERIMETER_RADIUS_TETRAHEDRAL,
 )
+from kneemesh.mesh.sheet import QuadAlgorithm
 from kneemesh.mesh_optimization import (
     DEFAULT_FEATURE_ANGLE,
     DEFAULT_LAPLACIAN_ITERATIONS,
@@ -166,7 +166,8 @@ class CartilageBrep(SurfaceBrep):
 
     Each is a sheet over the plane normal to its thinnest direction, between
     its articular side and the side against its bone, within a smooth
-    perimeter. Defaults left as None depend on hex_blocks.
+    perimeter. Defaults left as None depend on hex_blocks. Either way the
+    B-rep is one solid, which hexahedral meshing partitions itself.
     """
 
     side_cosine: float = Field(
@@ -200,7 +201,10 @@ class CartilageBrep(SurfaceBrep):
         description="Thickness as a fraction of the mean below which the sheet gets a hole, as do regions with no cartilage. "
         + "Ignored for hex_blocks, which are only thickened; 0 makes no holes",
     )
-    hex_blocks: bool = Field(default=False, description="Build the five-block butterfly solid that hexahedral meshing needs")
+    hex_blocks: bool = Field(
+        default=False,
+        description="Build the solid for hexahedral meshing: the perimeter rounded more, thin regions thickened more, and no holes",
+    )
 
     @model_validator(mode="after")
     def _check_thicknesses(self) -> Self:
@@ -236,15 +240,6 @@ class FemoralCartilageBrep(CartilageBrep):
     femur. Defaults left as None depend on hex_blocks, as for the other cartilage.
     """
 
-    ring_width: float = Field(
-        default=DEFAULT_RING_WIDTH,
-        gt=0,
-        lt=1,
-        description="Width of the ring of blocks along the perimeter, as a fraction of the condylar legs' half-width. "
-        + "Between about 0.4 and 0.6 on the real femoral cartilage; wider rings fold the trochlea's narrow side",
-    )
-    hex_blocks: bool = Field(default=False, description="Build the seventeen-block solid that hexahedral meshing needs")
-
 
 class StructureMesh(BaseConfig):
     """Settings shared by every structure for tetrahedral meshing and for optimizing hexahedral meshes."""
@@ -265,7 +260,9 @@ class StructureMesh(BaseConfig):
     optimize: bool = Field(default=False, description="Move hexahedral mesh nodes to raise the elements' scaled Jacobians after meshing")
     laplacian_iterations: int = Field(default=DEFAULT_LAPLACIAN_ITERATIONS, ge=0, description="Smart Laplacian sweeps when optimizing")
     optimization_iterations: int = Field(
-        default=DEFAULT_OPTIMIZATION_ITERATIONS, ge=0, description="Gradient steps minimizing the sum of 1 / scaled Jacobian when optimizing"
+        default=DEFAULT_OPTIMIZATION_ITERATIONS,
+        ge=0,
+        description="Gradient steps minimizing the sum of 1 / scaled Jacobian when optimizing, and at most as many untangling inverted elements first",
     )
     surface_deviation: float = Field(
         default=DEFAULT_SURFACE_DEVIATION,
@@ -305,50 +302,51 @@ class MeniscusMesh(StructureMesh):
 DEFAULT_CARTILAGE_ASPECT_WEIGHT = 0.5
 """Default weight of the squared Frobenius aspect ratios when optimizing cartilage hexahedra."""
 
+DEFAULT_CARTILAGE_ELEMENT_SIZE = 2.0
+"""Default size of cartilage hexahedra along the sheet, in physical units."""
+
 
 class CartilageMesh(StructureMesh):
     """Settings for meshing the B-reps of the lateral and medial tibial and the patellar cartilage.
 
-    Hexahedral element types need B-reps built with hex_blocks.
+    Hexahedra are a quadrilateral mesh of one side of the sheet, stacked
+    elements_through deep along straight columns to the other side.
     """
 
-    elements_around: int = Field(default=8, description="Hexahedra along each quarter of the perimeter and each side of the inner block")
-    elements_radial: int = Field(default=4, description="Hexahedra along each spoke from the perimeter to the inner block")
-    elements_through: int = Field(default=3, description="Hexahedra through the thickness")
+    element_size: float = Field(
+        default=DEFAULT_CARTILAGE_ELEMENT_SIZE, gt=0, description="Target size of the hexahedra along the sheet, in physical units"
+    )
+    elements_through: int = Field(default=3, ge=1, description="Hexahedra through the thickness")
+    quad_algorithm: QuadAlgorithm = Field(
+        default="frontal_delaunay",
+        description="gmsh algorithm for the quadrilaterals on the sheet's side: frontal_delaunay keeps their size closest to element_size; "
+        + "quasi_structured aligns them with a cross field, leaving few irregular nodes, but varies their size, down to 0.3 of "
+        + "element_size on the real patellar cartilage",
+    )
+    save_partition: bool = Field(
+        default=False,
+        description="Also write the blocks the hexahedral mesh's irregular nodes partition the sheet into, one volume each, to "
+        + "<output_directory>/<structure>_partition.brep. quasi_structured gives about 10 to 30 blocks; frontal_delaunay "
+        + "gives hundreds, mostly single elements",
+    )
     aspect_weight: float = Field(
         default=DEFAULT_CARTILAGE_ASPECT_WEIGHT,
         ge=0,
         description="Weight of the elements' squared Frobenius aspect ratios against 1 / scaled Jacobian when optimizing. "
-        + "0 optimizes the scaled Jacobian alone, which raised the real medial tibial cartilage's largest aspect ratio to 11, against 6.4 at 0.5",
+        + "0 optimizes the scaled Jacobian alone, which can stretch elements",
     )
 
 
-DEFAULT_FEMORAL_ELEMENT_SIZE = 2.5
-"""Default size of the femoral cartilage's elements along the sheet, in physical units."""
-
-
-class FemoralCartilageMesh(StructureMesh):
+class FemoralCartilageMesh(CartilageMesh):
     """Settings for meshing the femoral cartilage's B-rep.
 
-    Hexahedral element types need B-reps built with hex_blocks. Its blocks
-    have no fixed counts, so hexahedra are sized by element_size along the
-    sheet and elements_through across it, and tetrahedra default to the same size.
+    Hexahedra are made as for the other cartilage, and tetrahedra default to element_size.
     """
 
-    element_size: float = Field(
-        default=DEFAULT_FEMORAL_ELEMENT_SIZE, gt=0, description="Target size of the elements along the sheet, in physical units"
-    )
-    elements_through: int = Field(default=3, ge=1, description="Hexahedra through the thickness")
     max_size: OptionalFloat = Field(
         default=None,
         description="Largest tetrahedron size in physical units. None is element_size: the default from the oriented bounding box, "
         + "which the wrapped cartilage makes about 30 mm across, gave nearly flat tetrahedra",
-    )
-    aspect_weight: float = Field(
-        default=DEFAULT_CARTILAGE_ASPECT_WEIGHT,
-        ge=0,
-        description="Weight of the elements' squared Frobenius aspect ratios against 1 / scaled Jacobian when optimizing. "
-        + "0 optimizes the scaled Jacobian alone, which left the real femoral cartilage's largest aspect ratio near 9.5",
     )
 
     @property
@@ -467,6 +465,8 @@ class BrepMesh(BaseConfig):
         _check_suffix(suffix)
         if (self.meniscus.optimize or self.cartilage.optimize or self.femoral_cartilage.optimize) and self.element_shape != "hexahedral":
             raise ValueError("optimize applies only to hexahedral meshes")
+        if (self.cartilage.save_partition or self.femoral_cartilage.save_partition) and self.element_shape != "hexahedral":
+            raise ValueError("save_partition applies only to hexahedral meshes")
         return self
 
     @property
@@ -492,3 +492,7 @@ class BrepMesh(BaseConfig):
     def output_path(self, structure: Structure) -> Path:
         """The mesh file to write for structure."""
         return self.output_directory / f"{structure}{self.output_suffix}"
+
+    def partition_path(self, structure: Structure) -> Path:
+        """The B-rep of a sheet's hexahedral partition to write for structure, with save_partition."""
+        return self.output_directory / f"{structure}_partition.brep"

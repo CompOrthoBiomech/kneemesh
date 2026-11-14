@@ -15,12 +15,11 @@ from pydantic.fields import FieldInfo
 
 from kneemesh.brep import BRep
 from kneemesh.cartilage import CartilageSides, classify_sides
-from kneemesh.config import BONES, BaseConfig, BrepMesh, CartilageBrep, LabelMapAssembly, LabelMapBrep, Structure, StructureMesh
+from kneemesh.config import BONES, BaseConfig, BrepMesh, CartilageBrep, CartilageMesh, LabelMapAssembly, LabelMapBrep, Structure, StructureMesh
 from kneemesh.disk import read_brep, read_label_map, segmentation_labels_path, write_brep, write_mesh, write_segmentation
-from kneemesh.geo.femur import femoral_sheet_to_brep, femoral_sheet_to_hex_blocks, fit_femoral_sheet
+from kneemesh.geo.femur import fit_femoral_sheet
 from kneemesh.geo.meniscus import centerline, contours_to_brep, contours_to_hex_blocks, slice_isocontour
-from kneemesh.geo.sheet import CartilageSheet, fit_sheet, sheet_to_brep, sheet_to_hex_blocks
-from kneemesh.mesh import femur as femur_mesh
+from kneemesh.geo.sheet import CartilageSheet, fit_sheet, sheet_to_brep
 from kneemesh.mesh import meniscus as meniscus_mesh
 from kneemesh.mesh import sheet as sheet_mesh
 from kneemesh.mesh_optimization import mesh_quality, optimize_hexahedral_mesh
@@ -29,7 +28,7 @@ from kneemesh.tet_meshing import Mesh, tetrahedral_mesh
 from kneemesh.vol import extract_isocontour, signed_distance_field, smooth_isocontour
 
 type _BrepBuilder = Callable[[Segmentation, Structure, LabelMapBrep], BRep]
-type _Mesher = Callable[[BRep, BrepMesh], Mesh]
+type _Mesher = Callable[[BRep, BrepMesh, Structure], Mesh]
 
 
 def run_brep(config: LabelMapBrep) -> dict[Structure, BRep]:
@@ -96,7 +95,7 @@ def run_mesh(config: BrepMesh) -> dict[Structure, Mesh]:
         mesher = meshers[structure]
         assert mesher is not None
         logger.info("Reading B-rep {} for {}", path, structure)
-        mesh = mesher(read_brep(path), config)
+        mesh = mesher(read_brep(path), config, structure)
         counts = ", ".join(f"{len(connectivity)} {name}" for name, connectivity in mesh.elements.items())
         logger.info("Meshed {} with {} nodes and {}", structure, len(mesh.nodes), counts)
         output = config.output_path(structure)
@@ -201,9 +200,6 @@ def _cartilage_brep(segmentation: Segmentation, structure: Structure, brep_confi
     sides = _cartilage_sides(segmentation, structure, config)
     sheet = fit_sheet(sides, config.resolved_perimeter_radius, config.perimeter_inset, config.resolved_min_thickness, config.resolved_hole_thickness)
     _log_sheet(sheet)
-    if config.hex_blocks:
-        logger.info("Building hexahedral blocks")
-        return sheet_to_hex_blocks(sheet)
     logger.info("Building the solid")
     return sheet_to_brep(sheet)
 
@@ -216,14 +212,11 @@ def _femoral_cartilage_brep(segmentation: Segmentation, structure: Structure, br
         sides, config.resolved_perimeter_radius, config.perimeter_inset, config.resolved_min_thickness, config.resolved_hole_thickness
     )
     _log_sheet(sheet)
-    if config.hex_blocks:
-        logger.info("Building hexahedral blocks with a ring {} of the legs' half-width", config.ring_width)
-        return femoral_sheet_to_hex_blocks(sheet, config.ring_width)
     logger.info("Building the solid")
-    return femoral_sheet_to_brep(sheet, config.ring_width)
+    return sheet_to_brep(sheet)
 
 
-def _meniscus_mesh(brep: BRep, mesh_config: BrepMesh) -> Mesh:
+def _meniscus_mesh(brep: BRep, mesh_config: BrepMesh, _structure: Structure) -> Mesh:
     config = mesh_config.meniscus
     logger.info("Meshing with {} elements", mesh_config.element_type)
     if mesh_config.element_shape == "hexahedral":
@@ -234,31 +227,44 @@ def _meniscus_mesh(brep: BRep, mesh_config: BrepMesh) -> Mesh:
     return _tetrahedral_mesh(brep, config, mesh_config)
 
 
-def _cartilage_mesh(brep: BRep, mesh_config: BrepMesh) -> Mesh:
+def _cartilage_mesh(brep: BRep, mesh_config: BrepMesh, structure: Structure) -> Mesh:
     config = mesh_config.cartilage
     logger.info("Meshing with {} elements", mesh_config.element_type)
     if mesh_config.element_shape == "hexahedral":
-        mesh = sheet_mesh.hexahedral_mesh(
-            brep,
-            config.elements_around,
-            config.elements_radial,
-            config.elements_through,
-            mesh_config.element_order,
-            mesh_config.second_order_incomplete,
-        )
-        return _optimize(mesh, config) if config.optimize else mesh
+        return _sheet_hexahedra(brep, config, mesh_config, structure)
     return _tetrahedral_mesh(brep, config, mesh_config)
 
 
-def _femoral_cartilage_mesh(brep: BRep, mesh_config: BrepMesh) -> Mesh:
+def _femoral_cartilage_mesh(brep: BRep, mesh_config: BrepMesh, structure: Structure) -> Mesh:
     config = mesh_config.femoral_cartilage
-    logger.info("Meshing with {} elements of size {}", mesh_config.element_type, config.element_size)
+    logger.info("Meshing with {} elements", mesh_config.element_type)
     if mesh_config.element_shape == "hexahedral":
-        mesh = femur_mesh.hexahedral_mesh(
-            brep, config.element_size, config.elements_through, mesh_config.element_order, mesh_config.second_order_incomplete
-        )
-        return _optimize(mesh, config) if config.optimize else mesh
+        return _sheet_hexahedra(brep, config, mesh_config, structure)
     return _tetrahedral_mesh(brep, config, mesh_config, config.resolved_max_size)
+
+
+def _sheet_hexahedra(brep: BRep, config: CartilageMesh, mesh_config: BrepMesh, structure: Structure) -> Mesh:
+    logger.info(
+        "Meshing a side with {} quadrilaterals of size {}, stacked {} through the thickness",
+        config.quad_algorithm,
+        config.element_size,
+        config.elements_through,
+    )
+    mesh = sheet_mesh.hexahedral_mesh(
+        brep,
+        config.element_size,
+        config.elements_through,
+        mesh_config.element_order,
+        mesh_config.second_order_incomplete,
+        config.quad_algorithm,
+    )
+    if config.save_partition:
+        path = mesh_config.partition_path(structure)
+        logger.info("Building the partition of the sheet into blocks")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        write_brep(sheet_mesh.sheet_partition_brep(brep, config.element_size, config.quad_algorithm), path)
+        logger.info("Wrote {}", path)
+    return _optimize(mesh, config) if config.optimize else mesh
 
 
 def _tetrahedral_mesh(brep: BRep, config: StructureMesh, mesh_config: BrepMesh, max_size: float | None = None) -> Mesh:

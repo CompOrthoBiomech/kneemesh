@@ -7,7 +7,6 @@ import SimpleITK as sitk
 
 from kneemesh.brep import gmsh_session
 from kneemesh.cartilage import CartilageSides
-from kneemesh.geo.femur import femoral_blocks, femoral_sheet_to_brep
 from kneemesh.geo.sheet import CylinderFrame, fit_sheet
 from kneemesh.tet_meshing import import_solid
 
@@ -26,11 +25,6 @@ def solid_summary(brep):
         volumes = [tag for _, tag in gmsh.model.getEntities(3)]
         sides = [len(gmsh.model.getBoundary([(3, volume)], oriented=False)) for volume in volumes]
         return sum(gmsh.model.occ.getMass(3, volume) for volume in volumes), sides
-
-
-def cell_areas(grid):
-    along, across = grid[:-1, 1:] - grid[:-1, :-1], grid[1:, :-1] - grid[:-1, :-1]
-    return along[..., 0] * across[..., 1] - along[..., 1] * across[..., 0]
 
 
 def test_cylinder_frame_round_trips_and_is_right_handed(femoral_sheet):
@@ -74,41 +68,16 @@ def test_femoral_sheet_unrolls_the_shell(femoral_sheet):
     assert 0.75 * shell < femoral_sheet.area < shell
 
 
-def test_femoral_blocks_are_a_core_of_five_inside_a_ring_of_twelve(femoral_sheet):
-    blocks = femoral_blocks(femoral_sheet)
+def test_femoral_hex_solid_is_two_sides_and_a_wall(femoral_hex_solid):
+    _, sides = solid_summary(femoral_hex_solid)
 
-    assert len(blocks) == 17
-    assert all(cell_areas(grid).min() > 0 for grid in blocks)
-    # The ring's first rows run around the perimeter, so its blocks' areas add up to the sheet's with the core's.
-    total = sum(float(cell_areas(grid).sum()) for grid in blocks)
-    assert total == pytest.approx(femoral_sheet.area, rel=0.02)
+    assert sides == [3]
 
 
-def test_real_femoral_blocks_do_not_fold(real_femoral_sheet):
-    blocks = femoral_blocks(real_femoral_sheet)
+def test_real_femoral_hex_solid_is_two_sides_and_a_wall(real_femoral_hex_solid):
+    _, sides = solid_summary(real_femoral_hex_solid)
 
-    assert all(cell_areas(grid).min() > 0 for grid in blocks)
-
-
-def test_femoral_hex_blocks_are_seventeen_six_sided_blocks(femoral_hex_blocks):
-    _, sides = solid_summary(femoral_hex_blocks)
-
-    assert sides == [6] * 17
-
-
-def test_real_femoral_hex_blocks_are_seventeen_six_sided_blocks(real_femoral_hex_blocks, real_femoral_sheet):
-    volume, sides = solid_summary(real_femoral_hex_blocks)
-
-    assert sides == [6] * 17
-    assert volume == pytest.approx(real_femoral_sheet.area * real_femoral_sheet.mean_thickness, rel=0.1)
-
-
-def test_femoral_solid_and_blocks_have_the_same_volume(femoral_sheet, femoral_hex_blocks):
-    blocks_volume, _ = solid_summary(femoral_hex_blocks)
-    solid_volume, sides = solid_summary(femoral_sheet_to_brep(femoral_sheet))
-
-    assert len(sides) == 1
-    assert solid_volume == pytest.approx(blocks_volume, rel=1e-3)
+    assert sides == [3]
 
 
 def test_femoral_tetrahedral_solid_keeps_most_of_the_shell(femoral_solid, femoral_segmentation):
@@ -117,17 +86,6 @@ def test_femoral_tetrahedral_solid_keeps_most_of_the_shell(femoral_solid, femora
 
     assert len(sides) == 1
     assert 0.85 * voxels < volume < voxels
-
-
-def test_femoral_blocks_need_a_u_shaped_domain(cartilage_sheet):
-    with pytest.raises(ValueError, match="U-shaped"):
-        femoral_blocks(cartilage_sheet)
-
-
-@pytest.mark.parametrize("ring_width", [0.0, 1.0])
-def test_femoral_blocks_reject_ring_widths_out_of_range(femoral_sheet, ring_width):
-    with pytest.raises(ValueError, match="ring_width"):
-        femoral_blocks(femoral_sheet, ring_width)
 
 
 def test_a_plane_cannot_hold_the_wrapped_real_femoral_cartilage(real_femoral_sides, real_femoral_sheet):

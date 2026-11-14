@@ -1,11 +1,14 @@
 """Node optimization of hexahedral meshes for the scaled Jacobian and the Frobenius aspect ratio.
 
-Two strategies run in turn on the hexahedra's corner nodes:
+Up to three strategies run in turn on the hexahedra's corner nodes:
 
 1. Smart Laplacian smoothing moves each node toward the average of its edge
    neighbors, keeping a move only if it does not lower the worst scaled
    Jacobian of the elements around the node.
-2. Optimization minimizes the sum of 1 / SJ over every element corner, plus
+2. If any element is still inverted, untangling minimizes the sum of
+   max(0, 0.2 - SJ)^2 over every element corner, which stays finite and
+   smooth through inverted corners, until none is inverted.
+3. Optimization minimizes the sum of 1 / SJ over every element corner, plus
    aspect_weight times the sum of each corner's squared Frobenius aspect
    ratio, by projected gradient descent. Both terms grow without bound as a
    corner degenerates, so no step can invert an element, and both weigh the
@@ -54,6 +57,7 @@ _MIN_STEP = 1e-8
 _STEP_GROWTH = 1.5
 _CONVERGENCE = 1e-7
 _VOLUME_ROUNDS = 3
+_UNTANGLE_TARGET = 0.2
 
 
 @dataclass(frozen=True)
@@ -119,7 +123,7 @@ class _Constraints:
         surface = self.kind == _SURFACE
         # Surface nodes: along is the normal part, across the tangential part.
         normal = np.clip(np.einsum("ij,ij->i", offsets, self.direction), -self.deviation, self.deviation)
-        if self.preserve_volume:
+        if self.preserve_volume and self.areas.any():
             # Removing the area-weighted mean normal offset cancels the net volume
             # it adds; a few rounds keep the offsets within their limits too.
             for _ in range(_VOLUME_ROUNDS):
@@ -198,7 +202,9 @@ def optimize_hexahedral_mesh(
     Smart Laplacian smoothing runs first, then optimization of the sum of
     1 / SJ over every element corner plus aspect_weight times the sum of their
     squared Frobenius aspect ratios. Optimization needs every element valid,
-    so it is skipped with a warning if smoothing leaves one inverted.
+    so elements smoothing leaves inverted are untangled first, by raising
+    every corner's scaled Jacobian toward 0.2, and optimization is skipped
+    with a warning if any stays inverted.
 
     Boundary allowances scale with each node's local size, the mean length
     of the element edges at the node. Feature edges are boundary edges where
@@ -208,7 +214,8 @@ def optimize_hexahedral_mesh(
     Args:
         mesh: Mesh of linear or high-order hexahedra, such as hexahedral_mesh returns.
         laplacian_iterations: Smart Laplacian sweeps. 0 skips smoothing.
-        optimization_iterations: Gradient steps of the optimization. 0 skips it.
+        optimization_iterations: Gradient steps of the optimization, and at
+            most as many of untangling. 0 skips both.
         surface_deviation: How far a boundary node may move off its starting
             tangent plane, or off its feature edge, as a fraction of its local size.
             0 keeps boundary nodes on their tangent planes and edge lines.
@@ -255,7 +262,9 @@ def optimize_hexahedral_mesh(
         positions = _smart_laplacian(positions, corners, constraints, laplacian_iterations)
     if optimization_iterations:
         if (np.linalg.det(_corner_edges(positions, corners)) <= 0).any():
-            logger.warning("Skipping optimization because the mesh has inverted elements")
+            positions = _untangle(positions, corners, constraints, optimization_iterations)
+        if (np.linalg.det(_corner_edges(positions, corners)) <= 0).any():
+            logger.warning("Skipping optimization because untangling left inverted elements")
         else:
             positions = _optimize(positions, corners, constraints, optimization_iterations, aspect_weight)
 
@@ -361,6 +370,56 @@ def _optimize(positions: np.ndarray, corners: np.ndarray, constraints: _Constrai
         if converged:
             logger.debug("Optimization converged after {} steps", iteration + 1)
             break
+    return positions
+
+
+def _untangling_objective(nodes: np.ndarray, corners: np.ndarray) -> tuple[float, np.ndarray]:
+    """Return the sum of max(0, _UNTANGLE_TARGET - SJ)^2 over all corners, and its gradient.
+
+    SJ = det E / prod |e_k|, so dSJ / de_k = cof_k / prod |e_k| - SJ e_k / |e_k|^2
+    for the cofactor rows cof_k of E. Unlike 1 / SJ, it is finite and smooth
+    through det E = 0, so it can pull inverted corners back.
+    """
+    edges = _corner_edges(nodes, corners)
+    cofactors = np.cross(np.roll(edges, -1, axis=-2), np.roll(edges, -2, axis=-2))
+    determinants = np.einsum("...i,...i->...", edges[..., 0, :], cofactors[..., 0, :])
+    squared = np.maximum(np.einsum("...i,...i->...", edges, edges), np.finfo(float).tiny)
+    product = np.sqrt(squared).prod(axis=-1)
+    quality = determinants / product
+    shortfall = np.maximum(_UNTANGLE_TARGET - quality, 0.0)
+    quality_gradient = cofactors / product[..., None, None] - quality[..., None, None] * edges / squared[..., None]
+    edge_gradient = -2 * shortfall[..., None, None] * quality_gradient
+    indices = np.concatenate((corners[:, _CORNER_NEIGHBORS].ravel(), corners.ravel()))
+    values = np.concatenate((edge_gradient.reshape(-1, 3), -edge_gradient.sum(axis=2).reshape(-1, 3)))
+    gradient = np.column_stack([np.bincount(indices, weights=values[:, axis], minlength=len(nodes)) for axis in range(3)])
+    return float(np.sum(shortfall**2)), gradient
+
+
+def _untangle(positions: np.ndarray, corners: np.ndarray, constraints: _Constraints, iterations: int) -> np.ndarray:
+    """Raise every corner's scaled Jacobian toward _UNTANGLE_TARGET by projected gradient descent, stopping once none is inverted.
+
+    Only corners below the target contribute, so the rest of the mesh moves
+    only as far as the poor corners' nodes pull it.
+    """
+    scale = _local_sizes(constraints.origin, corners)[:, None] ** 2
+    energy, gradient = _untangling_objective(positions, corners)
+    step = _INITIAL_STEP
+    for iteration in range(iterations):
+        if (np.linalg.det(_corner_edges(positions, corners)) > 0).all():
+            logger.debug("Untangled after {} steps", iteration)
+            break
+        direction = scale * constraints.line_gradient(gradient)
+        while step >= _MIN_STEP:
+            trial = constraints.project(positions - step * direction)
+            trial_energy, trial_gradient = _untangling_objective(trial, corners)
+            if trial_energy < energy:
+                break
+            step /= 2
+        else:
+            logger.debug("Untangling stalled after {} steps", iteration)
+            break
+        positions, energy, gradient = trial, trial_energy, trial_gradient
+        step *= _STEP_GROWTH
     return positions
 
 

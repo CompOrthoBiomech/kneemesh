@@ -5,17 +5,8 @@ import numpy as np
 import pytest
 
 from kneemesh.brep import gmsh_session
-from kneemesh.geo.sheet import (
-    _butterfly_blocks,
-    _outward_normals,
-    _signed_turning_angles,
-    blocks_to_hex_brep,
-    coons_block,
-    fit_sheet,
-    sheet_to_brep,
-    sheet_to_hex_blocks,
-)
-from kneemesh.tet_meshing import import_solid
+from kneemesh.geo.sheet import _outward_normals, fit_sheet, sheet_to_brep
+from kneemesh.tet_meshing import import_solid, tetrahedral_mesh
 
 # The cartilage_segmentation fixture's ellipse semi-axes and the centers of its thin dip and defect, in mm.
 SEMI_AXES = (15.0, 10.0)
@@ -41,9 +32,24 @@ def solid_summary(brep):
 
 
 def radii_of_curvature(loop):
-    lengths = np.linalg.norm(np.roll(loop, -1, axis=0) - loop, axis=1)
-    curvature = _signed_turning_angles(loop) / (0.5 * (lengths + np.roll(lengths, 1)))
+    incoming, outgoing = loop - np.roll(loop, 1, axis=0), np.roll(loop, -1, axis=0) - loop
+    turns = np.arctan2(incoming[:, 0] * outgoing[:, 1] - incoming[:, 1] * outgoing[:, 0], np.einsum("ij,ij->i", incoming, outgoing))
+    curvature = turns / (0.5 * (np.linalg.norm(incoming, axis=1) + np.linalg.norm(outgoing, axis=1)))
     return 1 / curvature.max(), -1 / curvature.min()
+
+
+def inside_points(sheet):
+    """Domain points on loops shrunk toward the perimeter's mean, which the convex synthetic perimeter contains."""
+    center = sheet.perimeter.mean(axis=0)
+    return np.concatenate([center + fraction * (sheet.perimeter - center) for fraction in np.linspace(0.0, 0.95, 10)])
+
+
+def sides_and_walls(brep):
+    """The solid's two sides, the larger first, and its other faces, the walls."""
+    with gmsh_session():
+        import_solid(brep)
+        faces = sorted((tag for _, tag in gmsh.model.getEntities(2)), key=lambda face: -gmsh.model.occ.getMass(2, face))
+        return faces[:2], faces[2:]
 
 
 def test_sheet_normal_points_from_the_bone_to_the_articular_side(cartilage_sheet):
@@ -88,9 +94,9 @@ def test_thin_regions_are_thickened_on_the_bone_side_only(cartilage_sides):
     assert thickness(loose, thin) < 0.5 * loose.mean_thickness
     assert thick.min_thickness == pytest.approx(0.5 * thick.mean_thickness)
     assert thickness(thick, thin) >= thick.min_thickness
-    blocks = np.concatenate([grid.reshape(-1, 2) for grid in _butterfly_blocks(thick)])
-    assert thickness(thick, blocks).min() >= thick.min_thickness
-    assert thick.articular.ev(blocks[:, 0], blocks[:, 1]) == pytest.approx(loose.articular.ev(blocks[:, 0], blocks[:, 1]))
+    points = inside_points(thick)
+    assert thickness(thick, points).min() >= thick.min_thickness
+    assert thick.articular.ev(points[:, 0], points[:, 1]) == pytest.approx(loose.articular.ev(points[:, 0], points[:, 1]))
 
 
 def test_defects_become_holes_only_when_asked(cartilage_defect_sides):
@@ -136,24 +142,51 @@ def test_perimeter_inset_shrinks_the_sheet(cartilage_sides, cartilage_sheet):
     assert inset.area < 0.95 * cartilage_sheet.area
 
 
-def test_hex_blocks_are_five_six_sided_blocks_around_an_inner_one(cartilage_hex_blocks):
-    _, sides, faces = solid_summary(cartilage_hex_blocks)
+def test_solid_is_two_sides_and_a_wall(cartilage_sheet, cartilage_hex_solid):
+    _, sides, _ = solid_summary(cartilage_hex_solid)
+    # occ.getMass is unreliable with ruled walls, so the volume comes from tetrahedra.
+    mesh = tetrahedral_mesh(cartilage_hex_solid)
+    corners = mesh.nodes[mesh.elements["Tetrahedron 4"]]
+    edges = corners[:, 1:] - corners[:, :1]
+    volume = abs(np.linalg.det(edges)).sum() / 6
+    # Each shrunk loop stands for a ring of area proportional to its fraction.
+    weights = np.repeat(np.linspace(0.0, 0.95, 10), len(cartilage_sheet.perimeter))
 
-    assert [len(block) for block in sides] == [6] * 5
-    shared = sorted(sum(faces[face] == 2 for face in block) for block in sides)
-    # The inner block shares all four walls; each outer block shares two spoke walls and its inner wall.
-    assert shared == [3, 3, 3, 3, 4]
+    assert [len(faces) for faces in sides] == [3]
+    assert volume == pytest.approx(
+        cartilage_sheet.area * np.average(thickness(cartilage_sheet, inside_points(cartilage_sheet)), weights=weights), rel=0.05
+    )
 
 
-def test_hex_blocks_and_solid_have_the_same_volume(cartilage_sheet, cartilage_hex_blocks):
-    blocks_volume, _, _ = solid_summary(cartilage_hex_blocks)
-    solid_volume, sides, _ = solid_summary(sheet_to_brep(cartilage_sheet))
+def test_solid_sides_are_parameterized_by_the_domain(cartilage_sheet, cartilage_hex_solid):
+    points = inside_points(cartilage_sheet)
+    (top, bottom), _ = sides_and_walls(cartilage_hex_solid)
 
-    assert len(sides) == 1
-    assert solid_volume == pytest.approx(blocks_volume, rel=1e-3)
-    # The volume over the grid of thicknesses inside the perimeter.
-    blocks = _butterfly_blocks(cartilage_sheet)
-    assert blocks_volume == pytest.approx(cartilage_sheet.area * thickness(cartilage_sheet, np.concatenate(blocks)).mean(), rel=0.1)
+    with gmsh_session():
+        import_solid(cartilage_hex_solid)
+        values = {face: np.reshape(gmsh.model.getValue(2, face, points.ravel().tolist()), (-1, 3)) for face in (top, bottom)}
+        bounds = [np.concatenate(gmsh.model.getParametrizationBounds(2, face)) for face in (top, bottom)]
+
+    assert bounds[0] == pytest.approx(bounds[1])
+    # The surfaces interpolate the sides' points on a 0.5 mm grid.
+    expected = {side: cartilage_sheet.points(points, side) for side in ("articular", "bone")}
+    deviations = sorted(np.linalg.norm(values[face] - expected[side], axis=1).max() for face in (top, bottom) for side in expected)
+    assert deviations[1] < 0.02
+
+
+def test_columns_between_the_sides_lie_on_the_wall(cartilage_sheet, cartilage_hex_solid):
+    (top, bottom), walls = sides_and_walls(cartilage_hex_solid)
+
+    with gmsh_session():
+        import_solid(cartilage_hex_solid)
+        ends = [np.reshape(gmsh.model.getValue(2, face, cartilage_sheet.perimeter.ravel().tolist()), (-1, 3)) for face in (top, bottom)]
+        quarters = [ends[0] + fraction * (ends[1] - ends[0]) for fraction in (0.25, 0.5, 0.75)]
+        distances = [
+            np.linalg.norm(np.reshape(gmsh.model.getClosestPoint(2, walls[0], points.ravel().tolist())[0], (-1, 3)) - points, axis=1)
+            for points in quarters
+        ]
+
+    assert np.max(distances) < 1e-3
 
 
 def test_solid_has_a_hole_through_it(cartilage_defect_sides):
@@ -174,41 +207,11 @@ def test_holes_narrower_than_the_perimeter_radius_vanish(cartilage_defect_sides)
     assert fit_sheet(cartilage_defect_sides, perimeter_radius=3.0, min_thickness=0.2, hole_thickness=0.05).holes == []
 
 
-def test_hex_blocks_ignore_holes(cartilage_defect_sides):
-    sheet = fit_sheet(cartilage_defect_sides, perimeter_radius=1.0, min_thickness=0.2, hole_thickness=0.05)
-
-    _, sides, _ = solid_summary(sheet_to_hex_blocks(sheet))
-
-    assert len(sheet.holes) == 1
-    assert len(sides) == 5
-
-
 @pytest.mark.parametrize("structure", ["lateral_tibial_cartilage", "medial_tibial_cartilage", "patellar_cartilage"])
-def test_real_cartilage_hex_blocks_do_not_fold(real_cartilage_hex_blocks, structure):
-    _, sides, _ = solid_summary(real_cartilage_hex_blocks[structure])
+def test_real_cartilage_hex_solids_are_two_sides_and_a_wall(real_cartilage_hex_solids, structure):
+    _, sides, _ = solid_summary(real_cartilage_hex_solids[structure])
 
-    # Fragmenting would split overlapping or folded blocks into more than five volumes.
-    assert [len(block) for block in sides] == [6] * 5
-
-
-def test_butterfly_blocks_bend_around_the_real_lateral_notch(real_cartilage):
-    blocks = _butterfly_blocks(fit_sheet(real_cartilage["lateral_tibial_cartilage"]))
-
-    for grid in blocks:
-        along, across = grid[:-1, 1:] - grid[:-1, :-1], grid[1:, :-1] - grid[:-1, :-1]
-        assert (along[..., 0] * across[..., 1] - along[..., 1] * across[..., 0]).min() > 0
-
-
-def test_butterfly_columns_leave_the_perimeter_at_right_angles(real_cartilage):
-    blocks = _butterfly_blocks(fit_sheet(real_cartilage["medial_tibial_cartilage"]))
-
-    for grid in blocks[1:]:
-        # Row 0 lies on the perimeter; interior points of the row have central tangents.
-        tangents = grid[0, 2:] - grid[0, :-2]
-        columns = grid[1, 1:-1] - grid[0, 1:-1]
-        cosines = np.einsum("ij,ij->i", tangents, columns) / (np.linalg.norm(tangents, axis=1) * np.linalg.norm(columns, axis=1))
-        # The B-spline arc's samples and the polygon's normals differ slightly.
-        assert np.abs(cosines).max() < 0.05
+    assert [len(faces) for faces in sides] == [3]
 
 
 def test_real_lateral_tibial_tetrahedral_solid_builds_around_its_lobe(real_cartilage):
@@ -243,12 +246,17 @@ def test_tilt_moves_the_sides_apart_along_the_normal_at_the_perimeter_only(real_
     assert np.array_equal(sheet.tilted(center, "articular"), center)
 
 
-def test_hex_brep_rejects_overlapping_blocks(cartilage_sheet):
-    inner = _butterfly_blocks(cartilage_sheet)[0]
-    shifted = inner + 0.5 * (inner[-1, -1] - inner[0, 0])
+def test_tilt_continues_smoothly_outside_the_perimeter(real_cartilage):
+    sheet = fit_sheet(real_cartilage["patellar_cartilage"])
+    normals = _outward_normals(sheet.perimeter)
+    step = 1e-4 * sheet.tilt_reach
 
-    with pytest.raises(ValueError, match="overlap|four-sided"):
-        blocks_to_hex_brep(cartilage_sheet, [inner, shifted])
+    moves = [sheet.tilted(sheet.perimeter + offset * normals, "articular") - (sheet.perimeter + offset * normals) for offset in (-step, 0.0, step)]
+
+    # The move grows outward through the perimeter without a kink: its two one-sided slopes agree, up to the
+    # polyline's piecewise normals. Fading by unsigned distance gave them opposite signs.
+    inward, outward = (moves[1] - moves[0]) / step, (moves[2] - moves[1]) / step
+    assert np.linalg.norm(outward - inward) < 0.1 * np.linalg.norm(inward)
 
 
 def test_plane_frame_round_trips(cartilage_sheet):
@@ -256,17 +264,3 @@ def test_plane_frame_round_trips(cartilage_sheet):
     points = np.random.default_rng(0).uniform(-10, 10, (20, 3))
 
     assert frame.physical(*frame.local(points)) == pytest.approx(points, abs=1e-12)
-
-
-def test_coons_block_keeps_its_sides_and_fills_a_square_evenly():
-    samples = np.linspace(0.0, 1.0, 5)[:, np.newaxis]
-    bottom, top = samples * [1.0, 0.0], samples * [1.0, 0.0] + [0.0, 1.0]
-    left, right = samples * [0.0, 1.0], samples * [0.0, 1.0] + [1.0, 0.0]
-    curved = bottom + np.column_stack((np.zeros(5), 0.1 * np.sin(np.pi * samples[:, 0])))
-
-    square = coons_block([bottom, top, left, right])
-    bent = coons_block([curved, top, left, right])
-
-    assert square[2, 3] == pytest.approx([0.75, 0.5])
-    assert bent[0] == pytest.approx(curved)
-    assert bent[:, -1] == pytest.approx(right)

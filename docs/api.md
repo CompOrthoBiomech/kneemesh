@@ -42,8 +42,6 @@ Modules at the package root apply to every structure. The `geo` and `mesh` subpa
 
 ```{eval-rst}
 .. automodule:: kneemesh.geo.femur
-
-.. automodule:: kneemesh.mesh.femur
 ```
 
 ## Planned structures
@@ -52,6 +50,8 @@ Modules at the package root apply to every structure. The `geo` and `mesh` subpa
 .. automodule:: kneemesh.geo.tibia
 
 .. automodule:: kneemesh.geo.patella
+
+.. automodule:: kneemesh.mesh.femur
 
 .. automodule:: kneemesh.mesh.tibia
 

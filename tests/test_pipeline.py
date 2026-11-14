@@ -415,7 +415,8 @@ def test_pipeline_builds_and_meshes_cartilage_against_its_bone(in_tmp_path, cart
     assert brep_main(["--label-map", "knee.nii", "--labels", labels, "--output", "_hex.brep", "--cartilage.hex-blocks", "true"]) == 0
     assert brep_main(["--label-map", "knee.nii", "--labels", labels, "--output", "_tet.brep"]) == 0
     hex_breps = json.dumps({"lateral_tibial_cartilage": "lateral_tibial_cartilage_hex.brep"})
-    argv = ["--breps", hex_breps, "--element-type", "hex8", "--cartilage.elements-around", "6", "--cartilage.optimize", "true"]
+    argv = ["--breps", hex_breps, "--element-type", "hex8", "--cartilage.element-size", "3", "--cartilage.optimize", "true"]
+    argv += ["--cartilage.quad-algorithm", "quasi_structured", "--cartilage.save-partition", "true"]
     assert mesh_main(argv) == 0
     assert mesh_main(["--breps", json.dumps({"lateral_tibial_cartilage": "lateral_tibial_cartilage_tet.brep"})]) == 0
 
@@ -423,6 +424,7 @@ def test_pipeline_builds_and_meshes_cartilage_against_its_bone(in_tmp_path, cart
     assert "Using tibia only to orient its cartilage" in stderr
     assert "Optimized minimum scaled Jacobian" in stderr and "maximum Frobenius aspect ratio" in stderr
     assert sorted(path.name for path in in_tmp_path.glob("*.msh")) == ["lateral_tibial_cartilage_hex8.msh", "lateral_tibial_cartilage_tet4.msh"]
+    assert (in_tmp_path / "lateral_tibial_cartilage_partition.brep").exists()
     assert not list(in_tmp_path.glob("tibia*.brep"))
 
 

@@ -9,13 +9,13 @@
   "output": "_{element_type}.vtk",
   "output_directory": "examples",
   "cartilage": {
-    "elements_around": 24,
-    "elements_radial": 6,
+    "element_size": 2.0,
     "elements_through": 3,
     "optimize": true
   },
   "femoral_cartilage": {
     "element_size": 2.0,
+    "elements_through": 3,
     "optimize": true
   }
 }

@@ -21,8 +21,6 @@ import SimpleITK as sitk
 from loguru import logger
 from scipy.interpolate import RectBivariateSpline, griddata
 from scipy.ndimage import gaussian_filter, gaussian_filter1d
-from scipy.sparse import coo_matrix, diags
-from scipy.sparse.linalg import spsolve
 from scipy.spatial import KDTree
 from vtkmodules.util.numpy_support import numpy_to_vtk, vtk_to_numpy
 from vtkmodules.vtkCommonDataModel import vtkImageData
@@ -31,18 +29,12 @@ from vtkmodules.vtkFiltersCore import vtkFlyingEdges2D, vtkStripper
 from kneemesh.brep import (
     BRep,
     add_closed_wire,
-    add_swept_surface,
-    butterfly_split_indices,
-    chord_parameters,
-    clamped_interpolation,
     export_brep,
     gmsh_session,
     periodic_spline,
     resample_closed,
-    split_periodic_spline,
 )
 from kneemesh.cartilage import CartilageSides
-from kneemesh.tet_meshing import gmsh_options
 
 DEFAULT_PERIMETER_RADIUS_HEXAHEDRAL = 3.0
 """Default smallest radius of curvature, in physical units, of the perimeter of a sheet built for hexahedra."""
@@ -73,19 +65,10 @@ _OUTLINE_SMOOTHING = 0.5
 _HEIGHT_SMOOTHING_PIXELS = 2.0
 # Width of the smooth maximum that thickens thin regions, as a fraction of the minimum thickness.
 _THICKENING_BLEND = 0.5
-# Points along each side of a block's patches.
-_PATCH_SAMPLES = 20
-# Inner block corners lie this fraction of the way from the perimeter's centroid to the split points.
-_INNER_BLOCK_SCALE = 0.5
 _SPLINE_ORDER = 3
-# Fuzzy tolerances of fragmenting blocks, tried in turn, as fractions of the sheet's mean thickness.
-_FRAGMENT_TOLERANCES = (1e-3, 3e-2, 1e-1)
-# Jacobi iterations, relaxation, and convergence tolerance, relative to the perimeter's extent, of the Winslow ring grid.
-_WINSLOW_ITERATIONS = 5000
-_WINSLOW_RELAXATION = 0.5
-_WINSLOW_TOLERANCE = 1e-7
-# Largest distance of the ring's second row from the perimeter along its normals, as a fraction of the local convex radius of curvature.
-_NORMAL_ROW_REACH = 0.5
+# Spacing, in physical units, of the domain grid each side's surface interpolates, and the grid's margin beyond the perimeter in spacings.
+_SURFACE_SPACING = 0.5
+_SURFACE_MARGIN = 3
 # Largest wall tilt, as a fraction of the local thickness and of perimeter_radius, and the tilt's smoothing along the perimeter, as a fraction of perimeter_radius.
 _MAX_WALL_TILT = 0.25
 _MAX_TILT_REACH = 0.25
@@ -268,7 +251,10 @@ class CartilageSheet:
         """Return (N, 2) domain points of a side, moved along the perimeter's outward normal by half the tilt, out for the articular side and in for the bone side.
 
         The move fades as the square of the distance from the perimeter, out
-        to tilt_reach, at the nearest point of the perimeter.
+        to tilt_reach inside it, at the nearest point of the perimeter.
+        Outside, the same square of the signed distance continues to grow, up
+        to four times the tilt at tilt_reach, so a side's surface, which
+        reaches past the perimeter to be trimmed, has no crease along it.
         """
         if not self.tilt.any():
             return domain_points
@@ -278,7 +264,9 @@ class CartilageSheet:
         normals = _outward_normals(self.perimeter)
         normal = (1 - fraction)[:, np.newaxis] * normals[segment] + fraction[:, np.newaxis] * normals[following]
         normal /= np.linalg.norm(normal, axis=1, keepdims=True)
-        weight = np.clip(1 - distance / self.tilt_reach, 0.0, 1.0) ** 2
+        nearest = (1 - fraction)[:, np.newaxis] * self.perimeter[segment] + fraction[:, np.newaxis] * self.perimeter[following]
+        inside = np.einsum("ij,ij->i", domain_points - nearest, normal) <= 0
+        weight = (1 - np.clip(np.where(inside, distance, -distance) / self.tilt_reach, -1.0, 1.0)) ** 2
         sign = 0.5 if side == "articular" else -0.5
         return domain_points + (sign * weight * tilt)[:, np.newaxis] * normal
 
@@ -421,236 +409,79 @@ def fit_sheet(
 
 
 def sheet_to_brep(sheet: CartilageSheet) -> BRep:
-    """Build a solid of a cartilage sheet for tetrahedral meshing.
+    """Build a solid of a cartilage sheet: its two sides, the wall between them at the perimeter, and the walls of its holes.
 
-    The two sides are B-spline patches over the same butterfly partition of
-    the perimeter that sheet_to_hex_blocks uses, joined at the perimeter by
-    straight walls tilted as fit_sheet describes, and sewn into one solid.
-    Each hole is cut out with a ruled prism along the height lines.
+    Each side is one bicubic B-spline surface interpolating the side's points
+    over a grid of domain points, trimmed by the perimeter and the hole
+    outlines drawn in its parameter space, so both sides share one
+    parameterization: the surface parameters are the domain coordinates
+    (s, t). Each wall is ruled between matching edges of the two sides, so it
+    is straight from side to side, tilted at the perimeter as fit_sheet
+    describes and along the height lines at the holes. Hexahedral meshing
+    relies on both: mesh.sheet.hexahedral_mesh pairs the sides' points at
+    equal parameters and follows the walls' straight lines.
 
-    Raises:
-        ValueError: If the butterfly partition folds.
+    Returns:
+        The solid as one volume.
     """
-    return blocks_to_solid(sheet, _butterfly_blocks(sheet))
-
-
-def sheet_to_hex_blocks(sheet: CartilageSheet) -> BRep:
-    """Build a solid of a cartilage sheet as five blocks for hexahedral meshing.
-
-    The perimeter is split with a butterfly partition, as the meniscus's
-    sections are: an inner quadrilateral surrounded by four blocks, one on
-    each of four equal-length arcs of the perimeter. The splits are rotated
-    away from the perimeter's sharpest convex turns and toward its concave
-    ones. The inner quadrilateral's corners lie halfway from the perimeter's
-    centroid to the split points, and the spokes from the split points to
-    them bend around concavities of the perimeter. Each block's two sides are
-    B-spline patches through the heights over a grid of domain points. Ruled
-    walls between the two sides' edges stand on every block side, tilted at
-    the perimeter as fit_sheet describes, and the blocks are fragmented so
-    neighbors share their walls. Holes are ignored.
-
-    Raises:
-        ValueError: If the butterfly partition folds, where the perimeter is
-            too concave for its blocks.
-    """
-    if sheet.holes:
-        logger.warning("Hexahedral blocks cannot have holes; ignoring {} holes", len(sheet.holes))
-    return blocks_to_hex_brep(sheet, _butterfly_blocks(sheet))
-
-
-def blocks_to_solid(sheet: CartilageSheet, blocks: Sequence[np.ndarray]) -> BRep:
-    """Build one solid of a sheet from a partition of its domain into blocks, cutting out its holes.
-
-    Each block contributes a patch on each side, and block sides that no
-    other block shares, which lie on the perimeter, contribute walls.
-
-    Args:
-        sheet: The sheet.
-        blocks: (rows, columns, 2) grids of domain points, as from ring_blocks and coons_block.
-    """
-    edges = _block_edges(blocks)
     with gmsh_session():
-        faces = []
-        for grid in blocks:
-            faces.extend(_add_patch(sheet.points(grid, side)) for side in ("articular", "bone"))
-        faces.extend(_add_wall(sheet, edge) for edge, uses in edges.values() if uses == 1)
-        shell = gmsh.model.occ.addSurfaceLoop(faces, sewing=True)
-        solid = [(3, gmsh.model.occ.addVolume([shell]))]
-        if sheet.holes:
-            prisms = [_add_prism(sheet, hole) for hole in sheet.holes]
-            solid, _ = gmsh.model.occ.cut(solid, prisms)
+        loops = [sheet.perimeter, *sheet.holes]
+        faces = [_add_side(sheet, side, loops) for side in ("articular", "bone")]
+        gmsh.model.occ.synchronize()
+        rims = [_rims_by_loop(face, loops) for face in faces]
+        walls: list[int] = []
+        for articular_rim, bone_rim in zip(*rims, strict=True):
+            wires = [gmsh.model.occ.addWire([articular_rim]), gmsh.model.occ.addWire([bone_rim])]
+            walls.extend(tag for dim, tag in gmsh.model.occ.addThruSections(wires, makeSolid=False, makeRuled=True) if dim == 2)
+        shell = gmsh.model.occ.addSurfaceLoop([*faces, *walls], sewing=True)
+        gmsh.model.occ.addVolume([shell])
         gmsh.model.occ.synchronize()
         return export_brep()
 
 
-def blocks_to_hex_brep(sheet: CartilageSheet, blocks: Sequence[np.ndarray]) -> BRep:
-    """Build a sheet as one six-sided volume per block of a partition of its domain, for hexahedral meshing.
+def _add_side(sheet: CartilageSheet, side: str, loops: Sequence[np.ndarray]) -> int:
+    """Add one side of a sheet as a B-spline surface over the domain, trimmed by loops in its parameter space, returning its tag.
 
-    Each block's two sides are patches over its grid, and a wall stands on
-    each of its four sides. Walls of sides that neighboring blocks share are
-    built once, and the blocks are fragmented so neighbors share their faces.
-
-    Fragmenting is fuzzy, and no one tolerance worked for every real and
-    synthetic sheet tested: where the sheet is thin, the sides meet the walls
-    nearly tangentially, and exact fragmenting left slivers where three blocks
-    meet on the real femoral cartilage's rim, while neighboring patches there
-    can also overlap by about 0.05 mm. Each of _FRAGMENT_TOLERANCES, as
-    fractions of the mean thickness, is tried in turn until every block comes
-    out as one volume of six four-sided faces.
-
-    Args:
-        sheet: The sheet. Its holes are not cut.
-        blocks: (rows, columns, 2) grids of domain points, as from ring_blocks and coons_block.
-
-    Raises:
-        ValueError: If at every tolerance the blocks overlap, so fragmenting
-            splits them, or fragmenting leaves a block without six four-sided faces.
+    The surface interpolates the side's points on a grid of domain points
+    reaching _SURFACE_MARGIN spacings beyond the perimeter, with knots at the
+    grid's s and t coordinates, so its parameters are the domain coordinates.
     """
-    edges = _block_edges(blocks)
-    problem = ""
-    for tolerance in _FRAGMENT_TOLERANCES:
-        with gmsh_session():
-            problem = _fragment_blocks(sheet, blocks, edges, tolerance * sheet.mean_thickness)
-            if not problem:
-                return export_brep()
-        logger.debug("Fragmenting the blocks at tolerance {:.3g} of the mean thickness failed: {}", tolerance, problem)
-    raise ValueError(problem)
-
-
-def _fragment_blocks(
-    sheet: CartilageSheet, blocks: Sequence[np.ndarray], edges: dict[tuple[float, ...], tuple[np.ndarray, int]], tolerance: float
-) -> str:
-    """Add the blocks to the current gmsh model and fragment them with a fuzzy tolerance, returning what is wrong with the result, or "" if nothing."""
-    walls = {key: _add_wall(sheet, edge) for key, (edge, _) in edges.items()}
-    volumes = []
-    for grid in blocks:
-        faces = [_add_patch(sheet.points(grid, side)) for side in ("articular", "bone")]
-        faces.extend(walls[_edge_key(edge)] for edge in _grid_sides(grid))
-        volumes.append((3, gmsh.model.occ.addVolume([gmsh.model.occ.addSurfaceLoop(faces, sewing=True)])))
-    # Sewing copies the shared walls into each block. They are identical
-    # surfaces, so fragmenting merges them back into one each.
-    with gmsh_options({"Geometry.ToleranceBoolean": tolerance}):
-        gmsh.model.occ.fragment(volumes[:1], volumes[1:])
-    gmsh.model.occ.synchronize()
-    if len(gmsh.model.getEntities(3)) != len(blocks):
-        return f"The {len(blocks)} blocks overlap; fragmenting them gave {len(gmsh.model.getEntities(3))} volumes"
-    for _, volume in gmsh.model.getEntities(3):
-        faces = gmsh.model.getBoundary([(3, volume)], oriented=False)
-        sides = [len(gmsh.model.getBoundary([face], combined=False)) for face in faces]
-        if sides != [4] * 6:
-            return f"Fragmenting the blocks left a volume with {len(faces)} faces of {sides} sides instead of six four-sided faces"
-    return ""
-
-
-def coons_block(sides: Sequence[np.ndarray]) -> np.ndarray:
-    """Return a (rows, columns, 2) grid of domain points interpolating four sides, by transfinite (Coons) interpolation.
-
-    Args:
-        sides: The bottom row (b = 0) and top row (b = 1), both running in a,
-            then the left column (a = 0) and right column (a = 1), both
-            running in b. Their ends must meet at the four corners.
-    """
-    bottom, top, left, right = (np.asarray(side, dtype=float) for side in sides)
-    a = np.linspace(0.0, 1.0, len(bottom))[np.newaxis, :, np.newaxis]
-    b = np.linspace(0.0, 1.0, len(left))[:, np.newaxis, np.newaxis]
-    grid = (
-        (1 - b) * bottom[np.newaxis]
-        + b * top[np.newaxis]
-        + (1 - a) * left[:, np.newaxis]
-        + a * right[:, np.newaxis]
-        - ((1 - a) * (1 - b) * bottom[0] + a * (1 - b) * bottom[-1] + (1 - a) * b * top[0] + a * b * top[-1])
+    low = sheet.perimeter.min(axis=0) - _SURFACE_MARGIN * _SURFACE_SPACING
+    high = sheet.perimeter.max(axis=0) + _SURFACE_MARGIN * _SURFACE_SPACING
+    s, t = (np.linspace(low[axis], high[axis], int(np.ceil((high[axis] - low[axis]) / _SURFACE_SPACING)) + 1) for axis in range(2))
+    points = sheet.points(np.stack(np.meshgrid(s, t, indexing="ij"), axis=-1), side)
+    splines = [RectBivariateSpline(s, t, points[..., axis], kx=_SPLINE_ORDER, ky=_SPLINE_ORDER, s=0) for axis in range(3)]
+    knots_s, knots_t = splines[0].get_knots()
+    count_s, count_t = len(knots_s) - _SPLINE_ORDER - 1, len(knots_t) - _SPLINE_ORDER - 1
+    poles = np.stack([spline.get_coeffs().reshape(count_s, count_t) for spline in splines], axis=-1)
+    # gmsh takes the poles with u, here s, varying fastest.
+    tags = [gmsh.model.occ.addPoint(*pole) for pole in poles.transpose(1, 0, 2).reshape(-1, 3)]
+    unique_s, multiplicities_s = np.unique(knots_s, return_counts=True)
+    unique_t, multiplicities_t = np.unique(knots_t, return_counts=True)
+    wires = [add_closed_wire(periodic_spline(np.column_stack((loop, np.zeros(len(loop)))), _SPLINE_ORDER), len(loop)) for loop in loops]
+    return gmsh.model.occ.addBSplineSurface(
+        tags,
+        count_s,
+        degreeU=_SPLINE_ORDER,
+        degreeV=_SPLINE_ORDER,
+        knotsU=unique_s.tolist(),
+        knotsV=unique_t.tolist(),
+        multiplicitiesU=multiplicities_s.tolist(),
+        multiplicitiesV=multiplicities_t.tolist(),
+        wireTags=wires,
+        wire3D=False,
     )
-    # Keep the sides exact, so neighboring blocks built from the same points share them.
-    grid[0], grid[-1], grid[:, 0], grid[:, -1] = bottom, top, left, right
-    return grid
 
 
-def split_perimeter(perimeter: np.ndarray, splits: np.ndarray) -> list[np.ndarray]:
-    """Return the arcs of a periodic cubic spline through a perimeter between splits, each as _PATCH_SAMPLES points.
-
-    Args:
-        perimeter: (N, 2) domain points around the perimeter.
-        splits: Increasing indices into perimeter, the first a whole number
-            below N and the others possibly fractional, the last less than N
-            past the first. Arc k runs from split k to split k + 1, and the
-            last arc back to the first split.
-    """
-    points = np.roll(perimeter, -int(splits[0]), axis=0)
-    parameters = np.interp(np.asarray(splits) - splits[0], np.arange(len(points) + 1), chord_parameters(points))
-    curves = split_periodic_spline(periodic_spline(points, 3), parameters)
-    samples = np.linspace(0.0, 1.0, _PATCH_SAMPLES)
-    return [curve(curve.t[0] + samples * (curve.t[-1] - curve.t[0])) for curve in curves]
-
-
-def ring_blocks(arcs: Sequence[np.ndarray], core_sides: Sequence[np.ndarray]) -> list[np.ndarray]:
-    """Return the blocks of a ring between a perimeter and the boundary of a core of blocks inside it.
-
-    Block k runs along the perimeter arc from split k to split k + 1 at row
-    0, toward core side k at its last row, and its last column is the first
-    column of block k + 1. The ring's interior starts from a discrete harmonic
-    (Laplace) grid, is relaxed by Winslow's equations, and is then respaced
-    evenly along each column, so the spokes bend around concavities of the
-    perimeter and leave it at right angles. Straight spokes with transfinite
-    interpolation fold the blocks at the real lateral tibial cartilage's
-    notch, and a Laplace grid alone folds at the core's convex corners.
-
-    Args:
-        arcs: Arc k of a counterclockwise perimeter, from split k to split
-            k + 1, as _PATCH_SAMPLES points, as from split_perimeter.
-        core_sides: Side k of the core's boundary, counterclockwise from
-            boundary vertex k to vertex k + 1, as _PATCH_SAMPLES points.
-    """
-    count = _PATCH_SAMPLES
-
-    # Ring rows run around the perimeter, row 0 on it and the last row on the
-    # core's sides, with columns that wrap.
-    columns = len(core_sides) * (count - 1)
-    ring = np.zeros((count, columns, 2))
-    ring[0] = np.vstack([arc[:-1] for arc in arcs])
-    ring[-1] = np.vstack([side[:-1] for side in core_sides])
-    rows = np.arange(1, count - 1)[:, np.newaxis, np.newaxis] / (count - 1)
-    ring[1:-1] = (1 - rows) * ring[0] + rows * ring[-1]
-    index = np.arange((count - 2) * columns).reshape(count - 2, columns)
-    edges = np.vstack(
-        (np.column_stack((index.ravel(), np.roll(index, -1, axis=1).ravel())), np.column_stack((index[:-1].ravel(), index[1:].ravel())))
-    )
-    adjacency = coo_matrix((np.ones(len(edges)), (edges[:, 0], edges[:, 1])), shape=(index.size, index.size)).tocsr()
-    adjacency = adjacency + adjacency.T
-    # Each free point has four neighbors; those in the first and last free rows reach the fixed rows.
-    laplacian = (diags(np.full(index.size, 4.0)) - adjacency).tocsc()
-    right = np.zeros((count - 2, columns, 2))
-    right[0] += ring[0]
-    right[-1] += ring[-1]
-    solved = spsolve(laplacian, right.reshape(-1, 2))
-    ring[1:-1] = np.asarray(solved).reshape(count - 2, columns, 2)
-    ring = _even_columns(_winslow(ring))
-
-    side = np.arange(count)
-    return [ring[:, (block * (count - 1) + side) % columns] for block in range(len(core_sides))]
-
-
-def inset_loops(perimeter: np.ndarray, distance: float, pixel: float) -> list[np.ndarray]:
-    """Return the closed loops, counterclockwise, of points distance inside a perimeter, from an exact distance map at pixel spacing.
-
-    Several loops come back where the region inside the perimeter is narrower than twice distance somewhere.
-    """
-    grid = _Grid.around(perimeter, pixel, 2 * pixel)
-    return [_ccw(loop) for loop in grid.contours(grid.distance(grid.inside(perimeter)), -distance)]
-
-
-def resample_open(points: np.ndarray, count: int) -> np.ndarray:
-    """Return count points evenly spaced by length along a polyline, keeping its ends."""
-    lengths = np.concatenate(([0.0], np.cumsum(np.linalg.norm(np.diff(points, axis=0), axis=1))))
-    targets = np.linspace(0.0, lengths[-1], count)
-    return np.column_stack([np.interp(targets, lengths, points[:, axis]) for axis in range(points.shape[1])])
-
-
-def check_unfolded(blocks: Sequence[np.ndarray], hint: str) -> None:
-    """Raise ValueError, with hint appended, if any cell of any block loses the counterclockwise orientation of the unit square."""
-    for block_index, grid in enumerate(blocks):
-        da, db = grid[:-1, 1:] - grid[:-1, :-1], grid[1:, :-1] - grid[:-1, :-1]
-        if np.any(da[..., 0] * db[..., 1] - da[..., 1] * db[..., 0] <= 0):
-            raise ValueError(f"Block {block_index} folds; {hint}")
+def _rims_by_loop(face: int, loops: Sequence[np.ndarray]) -> list[int]:
+    """Return the boundary curve of a trimmed side over each loop, in the loops' order, matched by its points' parameters."""
+    rims = [-1] * len(loops)
+    for _, curve in gmsh.model.getBoundary([(2, face)], combined=False, oriented=False):
+        low, high = gmsh.model.getParametrizationBounds(1, abs(curve))
+        point = gmsh.model.getValue(1, abs(curve), [0.5 * (low[0] + high[0])])
+        domain_point = np.reshape(gmsh.model.getParametrization(2, face, point), (1, 2))
+        rims[int(np.argmin([_nearest_on_loop(loop, domain_point)[0][0] for loop in loops]))] = abs(curve)
+    return rims
 
 
 @dataclass(frozen=True)
@@ -754,7 +585,7 @@ class _Grid:
         return mask
 
     def spline(self, values: np.ndarray) -> RectBivariateSpline:
-        return RectBivariateSpline(self.s, self.t, values.T, kx=3, ky=3, s=0)
+        return RectBivariateSpline(self.s, self.t, values.T, kx=_SPLINE_ORDER, ky=_SPLINE_ORDER, s=0)
 
 
 def _largest_component(mask: np.ndarray) -> np.ndarray:
@@ -780,13 +611,6 @@ def _signed_area(loop: np.ndarray) -> float:
 
 def _ccw(loop: np.ndarray) -> np.ndarray:
     return loop if _signed_area(loop) > 0 else loop[::-1].copy()
-
-
-def _centroid(loop: np.ndarray) -> np.ndarray:
-    s, t = loop[:, 0], loop[:, 1]
-    cross = s * np.roll(t, -1) - np.roll(s, -1) * t
-    area = cross.sum() / 2
-    return np.array([np.sum((s + np.roll(s, -1)) * cross), np.sum((t + np.roll(t, -1)) * cross)]) / (6 * area)
 
 
 def _outward_normals(loop: np.ndarray) -> np.ndarray:
@@ -831,158 +655,3 @@ def _wall_tilt(perimeter: np.ndarray, articular: RectBivariateSpline, bone: Rect
     # Smoothing spreads the tilt of thick stretches into thin ones, so it is limited again afterward.
     spacing = _loop_length(perimeter) / len(perimeter)
     return np.clip(gaussian_filter1d(tilt, _TILT_SMOOTHING * reach / spacing, mode="wrap"), -limit, limit)
-
-
-def _butterfly_blocks(sheet: CartilageSheet) -> list[np.ndarray]:
-    """Return the domain points of each butterfly block on a grid, the inner block first.
-
-    Each block is a (_PATCH_SAMPLES, _PATCH_SAMPLES, 2) array indexed [b, a].
-    Outer block i runs along arc i of the perimeter in a at b = 0, toward the
-    inner block at b = 1. Its side at a = 1 is the side at a = 0 of block
-    i + 1. The inner block is a bilinear quadrilateral from corner 0 toward
-    corner 1 in a and toward corner 3 in b, where outer block i's inner side
-    runs straight from corner i to corner i + 1. The four outer blocks form a
-    ring (ring_blocks) between the perimeter and the inner block's straight
-    sides. Letting the inner block's sides move too rounds its corners to
-    nearly 180 degrees.
-
-    Raises:
-        ValueError: If any block's map folds.
-    """
-    count = _PATCH_SAMPLES
-    perimeter = sheet.perimeter
-    # A split at a convex corner halves its small angle between two blocks,
-    # but one at a concave notch splits its reflex angle, which a single
-    # block would otherwise have to bend around.
-    splits = butterfly_split_indices([perimeter], _signed_turning_angles(perimeter))
-    arcs = split_perimeter(perimeter, splits)
-    centroid = _centroid(perimeter)
-    corners = [centroid + _INNER_BLOCK_SCALE * (arc[0] - centroid) for arc in arcs]
-    samples = np.linspace(0.0, 1.0, count)[:, np.newaxis]
-    inner_sides = [corners[i] + samples * (corners[(i + 1) % 4] - corners[i]) for i in range(4)]
-    inner = coons_block([inner_sides[0], inner_sides[2][::-1], inner_sides[3][::-1], inner_sides[1]])
-    blocks = [inner, *ring_blocks(arcs, inner_sides)]
-    check_unfolded(blocks, "the perimeter is too concave. Try a larger perimeter_radius")
-    return blocks
-
-
-def _signed_turning_angles(loop: np.ndarray) -> np.ndarray:
-    """Return the angle a counterclockwise loop of plane points turns at each point, negative where it is concave."""
-    incoming = loop - np.roll(loop, 1, axis=0)
-    outgoing = np.roll(loop, -1, axis=0) - loop
-    cross = incoming[:, 0] * outgoing[:, 1] - incoming[:, 1] * outgoing[:, 0]
-    return np.arctan2(cross, np.sum(incoming * outgoing, axis=1))
-
-
-def _winslow(ring: np.ndarray) -> np.ndarray:
-    """Relax the free rows of a ring grid by Winslow's equations, keeping its first and last rows.
-
-    Winslow's equations make the grid's computational coordinates harmonic
-    functions of position, the inverse of a Laplace grid, which keeps grid
-    lines from crossing near the inner block's corners, where the ring turns
-    through 270 degrees and a Laplace grid folds. Columns wrap around.
-
-    After every sweep the second row is moved onto the perimeter's inward
-    normals, keeping its distance from the perimeter, so columns leave the
-    perimeter at right angles. Winslow alone let them leave the real medial
-    tibial cartilage's perimeter at 150 degrees, which skewed its rim elements.
-    Inward normals of a convex turn meet at its center of curvature, so the
-    second row stays within _NORMAL_ROW_REACH of the local radius of
-    curvature; uncapped, it folded the 1 mm perimeter of the real lateral
-    tibial cartilage's tetrahedral solid at a lobe.
-    """
-    grid = ring.copy()
-    tangents = np.roll(ring[0], -1, axis=0) - np.roll(ring[0], 1, axis=0)
-    inward = -_outward_normals(ring[0])
-    curvature = _signed_turning_angles(ring[0]) / (0.5 * np.linalg.norm(tangents, axis=1))
-    reach = _NORMAL_ROW_REACH / np.maximum(curvature, np.finfo(float).tiny)
-    for _ in range(_WINSLOW_ITERATIONS):
-        east, west = np.roll(grid, -1, axis=1)[1:-1], np.roll(grid, 1, axis=1)[1:-1]
-        north, south = grid[2:], grid[:-2]
-        north_east, north_west = np.roll(grid, -1, axis=1)[2:], np.roll(grid, 1, axis=1)[2:]
-        south_east, south_west = np.roll(grid, -1, axis=1)[:-2], np.roll(grid, 1, axis=1)[:-2]
-        along, across = (east - west) / 2, (north - south) / 2
-        alpha = np.sum(across**2, axis=-1, keepdims=True)
-        beta = np.sum(along * across, axis=-1, keepdims=True)
-        gamma = np.sum(along**2, axis=-1, keepdims=True)
-        cross = (north_east - north_west - south_east + south_west) / 4
-        updated = (alpha * (east + west) + gamma * (north + south) - 2 * beta * cross) / (2 * (alpha + gamma))
-        change = float(np.max(np.abs(updated - grid[1:-1])))
-        grid[1:-1] += _WINSLOW_RELAXATION * (updated - grid[1:-1])
-        grid[1] = grid[0] + inward * np.minimum(np.linalg.norm(grid[1] - grid[0], axis=-1), reach)[:, np.newaxis]
-        if change < _WINSLOW_TOLERANCE * float(np.max(np.ptp(ring[0], axis=0))):
-            break
-    return grid
-
-
-def _even_columns(ring: np.ndarray) -> np.ndarray:
-    """Respace the points along each column of a ring grid evenly by arc length, keeping its ends.
-
-    Winslow's equations crowd the rows toward the inner block, by more than
-    ten times along the real cartilage's spokes, and cubic patches through
-    such uneven rows at uniform parameters overshoot and fold.
-    """
-    lengths = np.concatenate((np.zeros((1, ring.shape[1])), np.cumsum(np.linalg.norm(np.diff(ring, axis=0), axis=-1), axis=0)))
-    fractions = np.linspace(0.0, 1.0, ring.shape[0])
-    even = np.empty_like(ring)
-    for column in range(ring.shape[1]):
-        targets = fractions * lengths[-1, column]
-        for axis in range(2):
-            even[:, column, axis] = np.interp(targets, lengths[:, column], ring[:, column, axis])
-    return even
-
-
-def _add_patch(points: np.ndarray) -> int:
-    """Add a B-spline surface through a (rows, columns, 3) grid of points, returning its tag.
-
-    Rows and columns are interpolated at uniform parameters, so a patch's
-    edge depends only on that edge's points and matches its neighbor's and
-    its wall's exactly.
-    """
-    parameters = np.linspace(0.0, 1.0, points.shape[1])
-    rows = [clamped_interpolation(parameters, row, _SPLINE_ORDER) for row in points]
-    return add_swept_surface(rows, _SPLINE_ORDER, np.linspace(0.0, 1.0, points.shape[0]), _SPLINE_ORDER)
-
-
-def _add_wall(sheet: CartilageSheet, edge: np.ndarray) -> int:
-    """Add a ruled surface of straight lines between the two sides' edges over a block side, returning its tag.
-
-    Away from the perimeter both edges lie over the same domain points, so the lines follow the height lines; near it the tilt parts them.
-    """
-    parameters = np.linspace(0.0, 1.0, len(edge))
-    rows = [clamped_interpolation(parameters, sheet.points(edge, side), _SPLINE_ORDER) for side in ("articular", "bone")]
-    return add_swept_surface(rows, _SPLINE_ORDER, np.array([0.0, 1.0]), 1)
-
-
-def _add_prism(sheet: CartilageSheet, hole: np.ndarray) -> tuple[int, int]:
-    """Add a ruled prism along the height lines through the whole sheet over a hole's outline, returning its dimension and tag."""
-    heights = np.concatenate((sheet.articular.ev(hole[:, 0], hole[:, 1]), sheet.bone.ev(hole[:, 0], hole[:, 1])))
-    margin = sheet.mean_thickness
-    wires = [
-        add_closed_wire(periodic_spline(sheet.frame.physical(hole, np.full(len(hole), height)), _SPLINE_ORDER), len(hole))
-        for height in (heights.min() - margin, heights.max() + margin)
-    ]
-    prism = gmsh.model.occ.addThruSections(wires, makeSolid=True, makeRuled=True)
-    return next(dim_tag for dim_tag in prism if dim_tag[0] == 3)
-
-
-def _grid_sides(grid: np.ndarray) -> list[np.ndarray]:
-    """Return a block grid's four sides: its first and last rows and its first and last columns."""
-    return [grid[0], grid[-1], grid[:, 0], grid[:, -1]]
-
-
-def _edge_key(edge: np.ndarray) -> tuple[float, ...]:
-    """Return a key identifying a block side regardless of its direction, from its rounded ends and mean point."""
-    ends = sorted((tuple(np.round(edge[0], 6)), tuple(np.round(edge[-1], 6))))
-    return (*ends[0], *ends[1], *np.round(edge.mean(axis=0), 6))
-
-
-def _block_edges(blocks: Sequence[np.ndarray]) -> dict[tuple[float, ...], tuple[np.ndarray, int]]:
-    """Return each distinct block side, in the direction it was first met, and how many blocks have it."""
-    edges: dict[tuple[float, ...], tuple[np.ndarray, int]] = {}
-    for grid in blocks:
-        for edge in _grid_sides(grid):
-            key = _edge_key(edge)
-            first, uses = edges.get(key, (edge, 0))
-            edges[key] = (first, uses + 1)
-    return edges

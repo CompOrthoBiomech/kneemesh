@@ -9,6 +9,7 @@ from kneemesh.mesh_optimization import (
     _hexahedron_corners,
     _local_sizes,
     _objective,
+    _untangling_objective,
     frobenius_aspects,
     mesh_quality,
     optimize_hexahedral_mesh,
@@ -238,8 +239,37 @@ def test_smart_laplacian_never_lowers_the_worst_element():
     assert mesh_quality(smoothed).mean > mesh_quality(mesh).mean
 
 
-def test_optimization_is_skipped_when_elements_stay_inverted():
+def test_untangling_objective_gradient_matches_finite_differences_through_inverted_corners():
     mesh = tangled_grid()
+    corners = _hexahedron_corners(mesh)
+    _, gradient = _untangling_objective(mesh.nodes, corners)
+    step = 1e-6
+
+    # The inverted element's nodes include corners on both sides of zero and above the target.
+    for node in np.unique(corners[scaled_jacobians(mesh) <= 0]):
+        for axis in range(3):
+            ahead, behind = mesh.nodes.copy(), mesh.nodes.copy()
+            ahead[node, axis] += step
+            behind[node, axis] -= step
+            difference = (_untangling_objective(ahead, corners)[0] - _untangling_objective(behind, corners)[0]) / (2 * step)
+            assert gradient[node, axis] == pytest.approx(difference, rel=1e-4, abs=1e-8)
+
+
+def test_optimization_untangles_inverted_elements_without_smoothing():
+    mesh = tangled_grid()
+
+    optimized = optimize_hexahedral_mesh(mesh, laplacian_iterations=0, surface_deviation=0.0)
+
+    quality = mesh_quality(optimized)
+    assert quality.inverted == 0
+    assert quality.minimum > 0.99
+
+
+def test_optimization_is_skipped_when_elements_stay_inverted():
+    # Every node of a lone hexahedron is a feature corner, so none can move.
+    inverted = UNIT_CUBE.copy()
+    inverted[6] = [0.2, 0.2, -0.5]
+    mesh = hexahedra(inverted, [range(8)])
     messages = []
     logger.enable("kneemesh")
     handler = logger.add(messages.append, level="WARNING")

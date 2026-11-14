@@ -207,15 +207,29 @@ def test_femoral_cartilage_sections_extend_the_cartilage_settings():
     brep = LabelMapBrep(labels={"femur": 1, "femoral_cartilage": 2}, femoral_cartilage=FemoralCartilageBrep(hex_blocks=True))
 
     assert brep.femoral_cartilage.resolved_perimeter_radius == 3.0
-    assert brep.femoral_cartilage.ring_width == 0.5
+    # Its solid is built like the other sheets', so the block partition's ring width is gone.
     with pytest.raises(pydantic.ValidationError):
-        FemoralCartilageBrep(ring_width=1.0)
+        FemoralCartilageBrep.model_validate({"ring_width": 0.5})
 
 
 def test_femoral_tetrahedra_default_to_the_element_size():
-    assert FemoralCartilageMesh().resolved_max_size == 2.5
-    assert FemoralCartilageMesh(element_size=2.0).resolved_max_size == 2.0
+    assert FemoralCartilageMesh().resolved_max_size == 2.0
+    assert FemoralCartilageMesh(element_size=3.0).resolved_max_size == 3.0
     assert FemoralCartilageMesh(element_size=2.0, max_size=3.0).resolved_max_size == 3.0
     assert FemoralCartilageMesh().aspect_weight == 0.5
     with pytest.raises(pydantic.ValidationError, match="only to hexahedral"):
         BrepMesh(femoral_cartilage=FemoralCartilageMesh(optimize=True))
+
+
+def test_cartilage_hexahedra_settings():
+    config = CartilageMesh()
+
+    assert (config.element_size, config.elements_through, config.quad_algorithm, config.save_partition) == (2.0, 3, "frontal_delaunay", False)
+    assert CartilageMesh.model_validate({"quad_algorithm": "quasi_structured"}).quad_algorithm == "quasi_structured"
+    with pytest.raises(pydantic.ValidationError):
+        CartilageMesh.model_validate({"quad_algorithm": "butterfly"})
+    with pytest.raises(pydantic.ValidationError):
+        CartilageMesh.model_validate({"elements_around": 8})
+    with pytest.raises(pydantic.ValidationError, match="only to hexahedral"):
+        BrepMesh(cartilage=CartilageMesh(save_partition=True))
+    assert BrepMesh(element_type="hex8").partition_path("patellar_cartilage") == Path("patellar_cartilage_partition.brep")

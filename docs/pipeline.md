@@ -14,18 +14,16 @@ For the lateral and medial tibial and the patellar cartilage, each a sheet over 
 1. {py:func}`~kneemesh.vol.signed_distance_field`, {py:func}`~kneemesh.vol.extract_isocontour`, and {py:func}`~kneemesh.vol.smooth_isocontour` extract the cartilage's smoothed surface as for the meniscus, and the bone's distance field too.
 2. {py:func}`~kneemesh.cartilage.classify_sides` splits the surface into its articular side and the side against the bone, by the angle between each point's normal and the bone's distance gradient, dropping the steep rim between them.
 3. {py:func}`~kneemesh.geo.sheet.fit_sheet` fits both sides as heights over the plane normal to the cartilage's thinnest direction, within a perimeter where the two sides overlap. Rolling a disk of radius `perimeter_radius` around the perimeter, inside and out, keeps it from curving more tightly than that radius. Regions thinner than `min_thickness` of the mean are thickened by lowering the bone side, and for tetrahedra, regions thinner than `hole_thickness`, or missing from the label, become holes.
-4. {py:func}`~kneemesh.geo.sheet.sheet_to_brep` builds the solid for tetrahedral meshing, or {py:func}`~kneemesh.geo.sheet.sheet_to_hex_blocks` the five-block butterfly solid for hexahedral meshing, which never has holes.
+4. {py:func}`~kneemesh.geo.sheet.sheet_to_brep` builds the solid: each side one B-spline surface over the domain, trimmed by the perimeter and any holes, and straight walls ruled between the sides' edges. The same solid serves tetrahedral and hexahedral meshing; `hex_blocks` only picks the defaults that suit hexahedra.
 
 The femoral cartilage takes the same steps over a cylinder instead of a plane:
 
 1. {py:func}`~kneemesh.geo.femur.fit_femoral_sheet` fits a {py:class}`~kneemesh.geo.sheet.CylinderFrame` to the side against the femur, along the direction its surface normals vary least, and fits both sides as distances from that axis over the cylinder unrolled. The unrolled domain is a U.
-2. {py:func}`~kneemesh.geo.femur.femoral_sheet_to_brep` builds the solid for tetrahedral meshing, or {py:func}`~kneemesh.geo.femur.femoral_sheet_to_hex_blocks` the seventeen-block solid for hexahedral meshing.
+2. {py:func}`~kneemesh.geo.sheet.sheet_to_brep` builds its solid as for the other cartilage.
 
 The bone under each cartilage must be in the segmentation. It is used only to tell the cartilage's sides apart; bone B-reps are not implemented yet, so the bone is not built.
 
-The butterfly's inner quadrilateral is fixed with corners halfway from the perimeter's centroid to the four split points. Between it and the perimeter, the four outer blocks form a ring of grid lines relaxed by Winslow's equations, which keep them from crossing in the perimeter's concavities and at the inner block's corners. Straight spokes instead fold the blocks at the real lateral tibial cartilage's notch.
-
-The femoral cartilage's U is split like three half butterflies glued along the trochlea ({py:func}`~kneemesh.geo.femur.femoral_blocks`): a core of five quadrilaterals, one along each condyle and three across the trochlea divided where the condyles and the notch meet it, inside a ring of twelve blocks relaxed the same way. The core's sides along the condyles and the trochlea's flanks follow the outline a ring width inside the perimeter, so the ring is about equally wide everywhere, and the straight sides across the condyles' ends, the trochlea's front, and the notch's top keep the core's corners near right angles.
+Both sides' surfaces take the domain coordinates as their parameters, so a point of one side and the point of the other at the same parameters lie on one straight column through the sheet, and the walls are made of such columns. {py:func}`kneemesh.mesh.sheet.hexahedral_mesh` relies on this to partition the sheet when it meshes it: it meshes one side with quadrilaterals by gmsh's Frontal-Delaunay algorithm, or its quasi-structured one, which follows a cross field aligned with the boundary, and runs each node's column to the other side, stacking hexahedra along the columns. {py:func}`kneemesh.mesh.sheet.sheet_partition_brep` builds the blocks the quadrilaterals' irregular nodes divide the sheet into, as a B-rep of one volume per block.
 
 ## Distance field smoothing
 
