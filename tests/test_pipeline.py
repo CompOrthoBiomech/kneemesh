@@ -300,10 +300,11 @@ def test_pipelines_build_and_mesh_a_bone(in_tmp_path, bone_label, capsys):
     write_label_map(bone_label, in_tmp_path / "bone.nii")
     labels = json.dumps({"femur": 1})
 
-    assert brep_main(["--label-map", "bone.nii", "--labels", labels, "--bone.shaft-cut-fraction", "0.2", "--bone.output", "_surface.stl"]) == 0
+    assert brep_main(["--label-map", "bone.nii", "--labels", labels, "--femur.shaft-cut-fraction", "0.2", "--femur.output", "_surface.stl"]) == 0
     breps = json.dumps({"femur": "femur_surface.stl"})
-    assert mesh_main(["--breps", breps, "--bone.element-type", "quad8", "--output", "_{element_type}.vtk"]) == 0
-    assert mesh_main(["--breps", breps, "--element-type", "hex8", "--bone.element-type", "tet10", "--bone.max-size", "3"]) == 0
+    assert mesh_main(["--breps", breps, "--femur.element-type", "quad8", "--output", "_{element_type}.vtk"]) == 0
+    argv = ["--breps", breps, "--element-type", "hex8", "--femur.element-type", "tet10", "--femur.max-size", "3", "--assembled-mesh", "knee.vtu"]
+    assert mesh_main(argv) == 0
 
     assert read_surface(in_tmp_path / "femur_surface.stl").GetNumberOfPolys() > 0
     assert sorted(path.name for path in in_tmp_path.glob("femur_*.*sh")) == ["femur_tet10.msh"]
@@ -311,6 +312,8 @@ def test_pipelines_build_and_mesh_a_bone(in_tmp_path, bone_label, capsys):
     stderr = capsys.readouterr().err
     assert "cutting off 0.2 of each shaft" in stderr
     assert "Meshing with tet10 elements of size 1.0 within 3.0 of the surface" in stderr
+    assert "Wrote the 1 structures' meshes as one" in stderr
+    assert (in_tmp_path / "knee.vtu").stat().st_size > 0
 
 
 def test_pipeline_reads_named_labels_from_a_multilabel_image(in_tmp_path, meniscus_label):

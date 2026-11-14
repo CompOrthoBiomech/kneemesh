@@ -4,9 +4,17 @@
     "tibia": "examples/tibia.stl",
     "patella": "examples/patella.stl"
   },
-  "output": "_{element_type}.vtk",
+  "output": "_{element_type}.vtu",
   "output_directory": "examples",
-  "bone": {
+  "femur": {
+    "element_type": "quad4",
+    "element_size": 2.0
+  },
+  "tibia": {
+    "element_type": "quad4",
+    "element_size": 2.0
+  },
+  "patella": {
     "element_type": "quad4",
     "element_size": 2.0
   }

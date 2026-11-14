@@ -4,7 +4,7 @@ import pytest
 
 from kneemesh.brep import gmsh_session
 from kneemesh.geo.sheet import fit_sheet, sheet_to_brep
-from kneemesh.mesh.sheet import _base_complex, hexahedral_mesh, sheet_partition_brep
+from kneemesh.mesh.sheet import _base_complex, hexahedral_mesh, sheet_face_groups, sheet_partition_brep
 from kneemesh.mesh_optimization import mesh_quality, optimize_hexahedral_mesh, scaled_jacobians
 from kneemesh.tet_meshing import import_solid, tetrahedral_mesh
 
@@ -51,7 +51,7 @@ def block_sides(brep):
 
 
 def test_hexahedral_mesh_is_valid_and_fills_the_solid(cartilage_hexahedra, cartilage_hex_solid):
-    assert cartilage_hexahedra.element_types == {"Hexahedron 8": 5}
+    assert cartilage_hexahedra.element_types == {"Hexahedron 8": 5, "Quadrilateral 4": 3}
     assert scaled_jacobians(cartilage_hexahedra).min() > 0.3
     assert mesh_quality(cartilage_hexahedra).mean > 0.8
     # Linear faces cut chords off the curved perimeter.
@@ -170,7 +170,7 @@ def test_scaled_jacobian_alone_stretches_real_cartilage_elements(real_cartilage_
 
 
 def test_femoral_hexahedra_are_valid(femoral_hexahedra):
-    assert femoral_hexahedra.element_types == {"Hexahedron 8": 5}
+    assert femoral_hexahedra.element_types == {"Hexahedron 8": 5, "Quadrilateral 4": 3}
     assert scaled_jacobians(femoral_hexahedra).min() > 0.2
     assert max_bend(femoral_hexahedra) < 1e-9
 
@@ -218,3 +218,45 @@ def test_sheet_partition_is_six_sided_blocks(cartilage_hex_solid):
     sides = block_sides(partition)
     assert len(sides) >= 1
     assert all(block == [4] * 6 for block in sides)
+
+
+def check_sides(mesh, distance_from_bone):
+    """The articular side lies farther from the bone than the bone side, and the sides and walls make the surface."""
+    articular, bone = (set(mesh.element_sets[name].tolist()) for name in ("articular_side", "bone_side"))
+    assert list(mesh.element_sets) == ["surface", "articular_side", "bone_side"]
+    assert articular and bone and not articular & bone
+    assert articular | bone < set(mesh.element_sets["surface"].tolist())
+    heights = {name: distance_from_bone(mesh.nodes[mesh.node_sets[name]]) for name in ("articular_side", "bone_side")}
+    assert np.median(heights["articular_side"]) > np.median(heights["bone_side"]) + 1.0
+
+
+def above_tibia(points):
+    """Distance from the cartilage fixture's spherical tibia, of radius 40 mm centered 40 mm below z = 0."""
+    return np.linalg.norm(points - [0.0, 0.0, -40.0], axis=1) - 40.0
+
+
+def above_femur(points):
+    """Distance from the femoral fixture's cylindrical femur, of radius 20 mm along x."""
+    return np.hypot(points[:, 1], points[:, 2]) - 20.0
+
+
+def test_hexahedral_mesh_names_the_sides(cartilage_hexahedra):
+    check_sides(cartilage_hexahedra, above_tibia)
+    # Each side is one layer of the columns' ends.
+    assert len(cartilage_hexahedra.element_sets["articular_side"]) == len(cartilage_hexahedra.element_sets["bone_side"])
+
+
+def test_hexahedral_mesh_names_the_sides_of_second_order_elements(cartilage_hex_solid):
+    mesh = hexahedral_mesh(cartilage_hex_solid, 3.0, 2, element_order=2)
+
+    check_sides(mesh, above_tibia)
+    assert list(mesh.faces) == ["Quadrilateral 9"]
+
+
+def test_femoral_hexahedral_mesh_names_the_sides(femoral_hexahedra):
+    check_sides(femoral_hexahedra, above_femur)
+
+
+@pytest.mark.parametrize(("solid", "distance"), [("cartilage_solid", above_tibia), ("femoral_solid", above_femur)])
+def test_tetrahedral_mesh_names_the_sides(request, solid, distance):
+    check_sides(tetrahedral_mesh(request.getfixturevalue(solid), face_groups=sheet_face_groups), distance)

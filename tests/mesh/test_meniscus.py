@@ -3,7 +3,7 @@ import numpy as np
 import pytest
 
 from kneemesh.disk import write_brep
-from kneemesh.mesh.meniscus import hexahedral_mesh
+from kneemesh.mesh.meniscus import hexahedral_mesh, meniscus_face_groups
 from kneemesh.tet_meshing import tetrahedral_mesh
 from kneemesh.vol import extract_isocontour, signed_distance_field, smooth_isocontour
 
@@ -87,8 +87,8 @@ def test_hexahedral_mesh_second_order_incomplete_has_20_node_hexahedra(meniscus_
 
 
 def test_mesh_records_gmsh_element_types(meniscus_tetrahedra, meniscus_hexahedra):
-    assert meniscus_tetrahedra.element_types == {"Tetrahedron 4": 4}
-    assert meniscus_hexahedra.element_types == {"Hexahedron 8": 5}
+    assert meniscus_tetrahedra.element_types == {"Tetrahedron 4": 4, "Triangle 3": 2}
+    assert meniscus_hexahedra.element_types == {"Hexahedron 8": 5, "Quadrilateral 4": 3}
 
 
 def test_hexahedral_mesh_rejects_single_block_solid(meniscus_solid):
@@ -127,3 +127,36 @@ def test_hexahedral_mesh_of_real_meniscus_has_no_inverted_elements(real_label):
     mesh = hexahedral_mesh(contours_to_hex_blocks(slices), elements_per_edge=4, elements_along=20)
 
     assert scaled_corner_jacobians(mesh, "Hexahedron 8").min() > 0.1
+
+
+def face_centers(mesh, name):
+    """The centroid of each face in an element set of a mesh with one kind of face."""
+    ((kind, faces),) = mesh.faces.items()
+    first = sum(len(connectivity) for connectivity in mesh.elements.values())
+    return mesh.nodes[faces[mesh.element_sets[name] - first, : 3 if kind.startswith("Triangle") else 4]].mean(axis=1)
+
+
+def check_horns(mesh):
+    surface = set(mesh.element_sets["surface"].tolist())
+    anterior, posterior, body = (set(mesh.element_sets[name].tolist()) for name in ("anterior_horn", "posterior_horn", "body"))
+    assert list(mesh.element_sets) == ["surface", "anterior_horn", "posterior_horn", "body"]
+    assert anterior and posterior and body
+    assert anterior | posterior | body == surface
+    assert not (anterior & posterior or anterior & body or posterior & body)
+    # The horns are the ends: the fixture's arc spans 270 degrees about z with its gap facing -x.
+    for name, sign in (("anterior_horn", -1), ("posterior_horn", 1)):
+        centers = face_centers(mesh, name)
+        assert np.all(sign * centers[:, 1] > 0)
+        assert np.all(centers[:, 0] < 0)
+        assert set(mesh.node_sets[name].tolist()) <= set(mesh.node_sets["surface"].tolist())
+
+
+def test_hexahedral_mesh_names_the_horns_and_body(meniscus_hexahedra):
+    check_horns(meniscus_hexahedra)
+    # Each horn is a cap of five blocks of 4 by 4 faces.
+    assert len(meniscus_hexahedra.element_sets["anterior_horn"]) == len(meniscus_hexahedra.element_sets["posterior_horn"]) == 5 * 16
+
+
+@pytest.mark.parametrize("solid", ["meniscus_solid", "meniscus_domed_solid"])
+def test_tetrahedral_mesh_names_the_horns_and_body(request, solid):
+    check_horns(tetrahedral_mesh(request.getfixturevalue(solid), max_size=2.0, face_groups=meniscus_face_groups))

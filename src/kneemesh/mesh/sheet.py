@@ -13,6 +13,10 @@ places the field's singularities where the shape needs them, and meshes
 along it, leaving few irregular nodes. The regions those few nodes' straight
 lines of edges bound are a partition of the sheet into four-sided blocks,
 which sheet_partition_brep can build.
+
+Both meshes of a sheet have the sets "articular_side" and "bone_side"
+besides "surface" (mesh_sets): the faces on the side away from the bone,
+the side above, and on the side against it.
 """
 
 from dataclasses import dataclass
@@ -23,6 +27,7 @@ import numpy as np
 from loguru import logger
 
 from kneemesh.brep import BRep, add_swept_surface, clamped_interpolation, export_brep, gmsh_session
+from kneemesh.mesh_sets import boundary_faces
 from kneemesh.tet_meshing import Mesh, gmsh_options, import_solid, require_element_order
 
 type QuadAlgorithm = Literal["quasi_structured", "frontal_delaunay"]
@@ -41,6 +46,10 @@ _SMOOTHING_SWEEPS = 5
 _HEXAHEDRON_TYPES = {(1, False): 5, (2, False): 12, (2, True): 17}
 _QUADRANGLE_TYPES = {1: 3, 2: 10}
 _SPLINE_ORDER = 3
+ARTICULAR_SIDE = "articular_side"
+"""Name of a sheet mesh's set of the faces on its articular side, away from the bone, and of their nodes."""
+BONE_SIDE = "bone_side"
+"""Name of a sheet mesh's set of the faces on its side against the bone, and of their nodes."""
 
 
 @dataclass(frozen=True)
@@ -96,8 +105,42 @@ def hexahedral_mesh(
     with gmsh_session():
         import_solid(brep)
         top, bottom = _sheet_sides()
+        top_is_articular = _articular_side(top, bottom) == top
         side = _quadrangulate(top, bottom, element_size, element_order, quad_algorithm)
-    return _extrude(side, elements_through, element_order, second_order_incomplete)
+    return _extrude(side, elements_through, element_order, second_order_incomplete, top_is_articular)
+
+
+def sheet_face_groups() -> dict[str, list[int]]:
+    """Name the current model's sheet sides, for tet_meshing.tetrahedral_mesh's face_groups: articular_side and bone_side.
+
+    Raises:
+        ValueError: If the model is not a sheet's solid.
+    """
+    top, bottom = _sheet_sides()
+    articular = _articular_side(top, bottom)
+    return {ARTICULAR_SIDE: [articular], BONE_SIDE: [bottom if articular == top else top]}
+
+
+def _articular_side(top: int, bottom: int) -> int:
+    """Return which of a sheet's two sides is the articular one.
+
+    Both sides share their parameterization, whose normal, the cross product
+    of the derivatives along s and t, points from the bone toward the
+    articular side (geo.sheet.SheetFrame). A solid's faces are oriented so
+    their normals point out of it, so the articular side's normal agrees
+    with its parameterization's and the bone side's opposes it.
+
+    Raises:
+        ValueError: If both sides' normals agree with their parameterizations, or neither's does.
+    """
+    agrees = []
+    for face in (top, bottom):
+        _, parameters = gmsh.model.getClosestPoint(2, face, gmsh.model.occ.getCenterOfMass(2, face))
+        along_s, along_t = np.reshape(gmsh.model.getDerivative(2, face, parameters), (2, 3))
+        agrees.append(float(np.dot(gmsh.model.getNormal(face, parameters), np.cross(along_s, along_t))) > 0)
+    if agrees[0] == agrees[1]:
+        raise ValueError("Cannot tell the sheet's articular side from its bone side; its sides need one parameterization")
+    return top if agrees[0] else bottom
 
 
 def _sheet_sides() -> tuple[int, int]:
@@ -222,8 +265,11 @@ def _columns(top: int, bottom: int, order: int) -> _Side:
     return _Side(near, far, quadrangles, rim)
 
 
-def _extrude(side: _Side, through: int, order: int, incomplete: bool) -> Mesh:
-    """Stack hexahedra through the thickness on a side's quadrilaterals, along their nodes' columns."""
+def _extrude(side: _Side, through: int, order: int, incomplete: bool, top_is_articular: bool) -> Mesh:
+    """Stack hexahedra through the thickness on a side's quadrilaterals, along their nodes' columns.
+
+    The meshed side is the top; top_is_articular says whether it is the articular side, naming the sides' sets.
+    """
     layers = through * order + 1
     fractions = np.linspace(0.0, 1.0, layers)[:, np.newaxis, np.newaxis]
     nodes = ((1 - fractions) * side.near + fractions * side.far).reshape(-1, 3)
@@ -243,7 +289,8 @@ def _extrude(side: _Side, through: int, order: int, incomplete: bool) -> Mesh:
 
     corners = nodes[elements[:, :8]]
     determinants = np.einsum("ij,ij->i", np.cross(corners[:, 1] - corners[:, 0], corners[:, 3] - corners[:, 0]), corners[:, 4] - corners[:, 0])
-    if np.median(determinants) < 0:
+    reversed_layers = bool(np.median(determinants) < 0)
+    if reversed_layers:
         # The meshed side is the higher one, so the columns run down: reverse the layers.
         nodes = nodes.reshape(layers, count, 3)[::-1].reshape(-1, 3)
     lines = np.stack([side.rim + layer * count for layer in range(0, layers, order)], axis=1)
@@ -252,6 +299,15 @@ def _extrude(side: _Side, through: int, order: int, incomplete: bool) -> Mesh:
     remap = np.full(len(nodes), -1, dtype=np.int64)
     remap[used] = np.arange(len(used))
     mesh = Mesh(nodes[used], {name: elements.reshape(-1, len(hexahedron_local))}, {name: hexahedron_type}, remap[lines])
+    # The faces wholly in the first layer of node indices lie on the top side, or on the bottom if the layers were reversed.
+    faces = boundary_faces(mesh.elements)
+    layer = used // count
+    first = np.concatenate([np.all(layer[connectivity] == 0, axis=1) for connectivity in faces.values()])
+    last = np.concatenate([np.all(layer[connectivity] == layers - 1, axis=1) for connectivity in faces.values()])
+    on_top, on_bottom = (last, first) if reversed_layers else (first, last)
+    mesh = mesh.with_face_sets(
+        {ARTICULAR_SIDE: on_top, BONE_SIDE: on_bottom} if top_is_articular else {ARTICULAR_SIDE: on_bottom, BONE_SIDE: on_top}, faces
+    )
     logger.debug("Extruded {} {} through {} layers", len(mesh.elements[name]), name, through)
     return mesh
 

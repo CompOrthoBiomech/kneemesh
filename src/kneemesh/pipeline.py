@@ -17,7 +17,17 @@ from vtkmodules.vtkCommonDataModel import vtkPolyData
 from kneemesh.brep import BRep
 from kneemesh.cartilage import CartilageSides, classify_sides
 from kneemesh.config import BONES, BaseConfig, BrepMesh, CartilageBrep, CartilageMesh, LabelMapAssembly, LabelMapBrep, Structure, StructureMesh
-from kneemesh.disk import read_brep, read_label_map, read_surface, segmentation_labels_path, write_brep, write_mesh, write_segmentation, write_surface
+from kneemesh.disk import (
+    read_brep,
+    read_label_map,
+    read_surface,
+    segmentation_labels_path,
+    write_brep,
+    write_mesh,
+    write_meshes,
+    write_segmentation,
+    write_surface,
+)
 from kneemesh.geo.bone import bone_mask, decimate_surface
 from kneemesh.geo.femur import fit_femoral_sheet
 from kneemesh.geo.meniscus import centerline, contours_to_brep, contours_to_hex_blocks, slice_isocontour
@@ -68,7 +78,9 @@ def run_brep(config: LabelMapBrep) -> dict[Structure, BRep | vtkPolyData]:
 def run_mesh(config: BrepMesh) -> dict[Structure, Mesh]:
     """Mesh the B-rep of every structure in config.breps, or a bone's surface, and write each to config.output_path(structure).
 
-    Each structure's name picks its pipeline, and each mesh is written as soon as it is made.
+    Each structure's name picks its pipeline, and each mesh is written as soon
+    as it is made. With config.assembled_mesh, all of them are then written
+    there as one, renumbered (disk.write_meshes).
 
     Returns:
         The mesh of each structure.
@@ -85,11 +97,28 @@ def run_mesh(config: BrepMesh) -> dict[Structure, Mesh]:
         mesh = _MESHERS[structure](path, config, structure)
         counts = ", ".join(f"{len(connectivity)} {name}" for name, connectivity in mesh.elements.items())
         logger.info("Meshed {} with {} nodes and {}", structure, len(mesh.nodes), counts)
+        logger.info(
+            "Sets of {}: {}",
+            structure,
+            ", ".join(f"{name} ({len(mesh.element_sets[name])} faces, {len(mesh.node_sets[name])} nodes)" for name in mesh.element_sets),
+        )
         output = config.output_path(structure)
         output.parent.mkdir(parents=True, exist_ok=True)
         write_mesh(mesh, output)
         logger.info("Wrote {}", output)
         meshes[structure] = mesh
+    if config.assembled_mesh is not None:
+        config.assembled_mesh.parent.mkdir(parents=True, exist_ok=True)
+        write_meshes(meshes, config.assembled_mesh)
+        nodes = sum(len(mesh.nodes) for mesh in meshes.values())
+        elements = sum(mesh.element_count for mesh in meshes.values())
+        logger.info(
+            "Wrote the {} structures' meshes as one, with {} nodes and {} elements and faces, to {}",
+            len(meshes),
+            nodes,
+            elements,
+            config.assembled_mesh,
+        )
     return meshes
 
 
@@ -204,7 +233,7 @@ def _femoral_cartilage_brep(segmentation: Segmentation, structure: Structure, br
 
 
 def _bone_surface(segmentation: Segmentation, structure: Structure, brep_config: LabelMapBrep) -> vtkPolyData:
-    config = brep_config.bone
+    config = brep_config.bone(structure)
     label = segmentation.value(structure)
     logger.info("Filling cavities of {} (label {}) and cutting off {} of each shaft", structure, label, config.shaft_cut_fraction)
     mask = bone_mask(segmentation.image, label, config.shaft_cut_fraction)
@@ -218,8 +247,8 @@ def _bone_surface(segmentation: Segmentation, structure: Structure, brep_config:
     return decimate_surface(surface, config.triangle_size)
 
 
-def _bone_mesh(path: Path, mesh_config: BrepMesh, _structure: Structure) -> Mesh:
-    config = mesh_config.bone
+def _bone_mesh(path: Path, mesh_config: BrepMesh, structure: Structure) -> Mesh:
+    config = mesh_config.bone(structure)
     surface = read_surface(path)
     if config.element_shape == "tetrahedral":
         logger.info(
@@ -260,7 +289,7 @@ def _meniscus_mesh(path: Path, mesh_config: BrepMesh, _structure: Structure) -> 
             brep, config.elements_per_edge, config.elements_along, mesh_config.element_order, mesh_config.second_order_incomplete
         )
         return _optimize(mesh, config) if config.optimize else mesh
-    return _tetrahedral_mesh(brep, config, mesh_config)
+    return _tetrahedral_mesh(brep, config, mesh_config, face_groups=meniscus_mesh.meniscus_face_groups)
 
 
 def _cartilage_mesh(path: Path, mesh_config: BrepMesh, structure: Structure) -> Mesh:
@@ -269,7 +298,7 @@ def _cartilage_mesh(path: Path, mesh_config: BrepMesh, structure: Structure) -> 
     logger.info("Meshing with {} elements", mesh_config.element_type)
     if mesh_config.element_shape == "hexahedral":
         return _sheet_hexahedra(brep, config, mesh_config, structure)
-    return _tetrahedral_mesh(brep, config, mesh_config)
+    return _tetrahedral_mesh(brep, config, mesh_config, face_groups=sheet_mesh.sheet_face_groups)
 
 
 def _femoral_cartilage_mesh(path: Path, mesh_config: BrepMesh, structure: Structure) -> Mesh:
@@ -278,7 +307,7 @@ def _femoral_cartilage_mesh(path: Path, mesh_config: BrepMesh, structure: Struct
     logger.info("Meshing with {} elements", mesh_config.element_type)
     if mesh_config.element_shape == "hexahedral":
         return _sheet_hexahedra(brep, config, mesh_config, structure)
-    return _tetrahedral_mesh(brep, config, mesh_config, config.resolved_max_size)
+    return _tetrahedral_mesh(brep, config, mesh_config, config.resolved_max_size, sheet_mesh.sheet_face_groups)
 
 
 def _sheet_hexahedra(brep: BRep, config: CartilageMesh, mesh_config: BrepMesh, structure: Structure) -> Mesh:
@@ -305,7 +334,13 @@ def _sheet_hexahedra(brep: BRep, config: CartilageMesh, mesh_config: BrepMesh, s
     return _optimize(mesh, config) if config.optimize else mesh
 
 
-def _tetrahedral_mesh(brep: BRep, config: StructureMesh, mesh_config: BrepMesh, max_size: float | None = None) -> Mesh:
+def _tetrahedral_mesh(
+    brep: BRep,
+    config: StructureMesh,
+    mesh_config: BrepMesh,
+    max_size: float | None = None,
+    face_groups: Callable[[], dict[str, list[int]]] | None = None,
+) -> Mesh:
     return tetrahedral_mesh(
         brep,
         config.min_size,
@@ -315,6 +350,7 @@ def _tetrahedral_mesh(brep: BRep, config: StructureMesh, mesh_config: BrepMesh, 
         config.algorithm_3d,
         mesh_config.element_order,
         mesh_config.second_order_incomplete,
+        face_groups,
     )
 
 

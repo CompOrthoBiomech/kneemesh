@@ -18,11 +18,13 @@ For the tibial, patellar, and femoral cartilage:
 
 For the femur, tibia, and patella:
 
-- **Surface from segmentation labels.** Fills the label's cavities, optionally cuts the shafts the scan cuts off shorter (`--bone.shaft-cut-fraction`), and writes the smoothed, decimated surface as `.stl`; gmsh reparametrizes it for meshing.
-- **Surface meshing** with 3- or 6-node triangles or 4-, 8-, or 9-node quadrilaterals (`--bone.element-type`, `tri3` by default).
-- **Tetrahedral meshing** with 4- or 10-node tetrahedra, finest in the cortical shell (`--bone.cortical-element-size` within `--bone.cortical-distance` of the surface) and growing by `--bone.cancellous-grad` per unit of depth up to `--bone.max-size`.
+- **Surface from segmentation labels.** Fills the label's cavities, optionally cuts the shafts the scan cuts off shorter (`--femur.shaft-cut-fraction`, and likewise for each bone), and writes the smoothed, decimated surface as `.stl`; gmsh reparametrizes it for meshing.
+- **Surface meshing** with 3- or 6-node triangles or 4-, 8-, or 9-node quadrilaterals (`--femur.element-type`, `tri3` by default).
+- **Tetrahedral meshing** with 4- or 10-node tetrahedra, finest in the cortical shell (`--femur.cortical-element-size` within `--femur.cortical-distance` of the surface) and growing by `--femur.cancellous-grad` per unit of depth up to `--femur.max-size`.
 
-Meshes are written in any format gmsh infers from the file extension, such as `.msh`, `.vtk`, or `.inp`.
+Each bone has its own settings: `femur`, `tibia`, and `patella`.
+
+Every mesh has named node and element sets of its surface: each bone's surface, each cartilage's articular and bone sides, and each meniscus's anterior and posterior horns and body. `.vtu` and `.vtkhdf` (a multiblock) hold them; other formats gmsh infers from the file extension, such as `.msh`, `.vtk`, or `.inp`, hold the elements only. `--assembled-mesh knee.vtu` or `knee.vtkhdf` also writes every structure's mesh as one, numbered on through the structures.
 
 **Documentation:** <https://comporthobiomech.github.io/kneemesh/>
 

@@ -11,24 +11,39 @@
     "femoral_cartilage": "examples/femoral_cartilage_hex.brep"
   },
   "element_type": "hex8",
-  "output": "_{element_type}.vtk",
+  "output": "_{element_type}.vtu",
   "output_directory": "examples",
+  "assembled_mesh": "examples/knee_hex8.vtkhdf",
   "meniscus": {
     "elements_per_edge": 6,
-    "elements_along": 40,
+    "elements_along": 50,
     "optimize": true
   },
   "cartilage": {
-    "element_size": 2.0,
-    "elements_through": 3,
+    "element_size": 1.5,
+    "elements_through": 4,
     "optimize": true
   },
   "femoral_cartilage": {
-    "element_size": 2.0,
-    "elements_through": 3,
+    "element_size": 1.5,
+    "elements_through": 4,
     "optimize": true
   },
-  "bone": {
+  "femur": {
+    "element_type": "tet4",
+    "cortical_element_size": 2.0,
+    "cortical_distance": 4.0,
+    "cancellous_grad": 0.5,
+    "max_size": 5.0
+  },
+  "tibia": {
+    "element_type": "tet4",
+    "cortical_element_size": 2.0,
+    "cortical_distance": 4.0,
+    "cancellous_grad": 0.5,
+    "max_size": 5.0
+  },
+  "patella": {
     "element_type": "tet4",
     "cortical_element_size": 2.0,
     "cortical_distance": 4.0,

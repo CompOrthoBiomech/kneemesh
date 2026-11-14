@@ -23,7 +23,10 @@
   "femoral_cartilage": {
     "hex_blocks": true
   },
-  "bone": {
-    "shaft_cut_fraction": 0.6
+  "femur": {
+    "shaft_cut_fraction": 0.4
+  },
+  "tibia": {
+    "shaft_cut_fraction": 0.3
   }
 }

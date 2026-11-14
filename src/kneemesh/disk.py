@@ -1,6 +1,7 @@
 """Reading and writing LabelMaps as .nii, .nrrd, or .mhd + .raw, segmentations, poly data as .vtp, B-reps as .brep, and bone surfaces as .stl, and writing meshes."""
 
 import json
+from collections.abc import Mapping
 from os import PathLike
 from pathlib import Path
 
@@ -8,9 +9,21 @@ import gmsh
 import numpy as np
 import SimpleITK as sitk
 from loguru import logger
-from vtkmodules.vtkCommonDataModel import vtkPolyData
+from vtkmodules.util.numpy_support import numpy_to_vtk
+from vtkmodules.vtkCommonCore import VTK_ID_TYPE, VTK_UNSIGNED_CHAR, vtkPoints, vtkStringArray
+from vtkmodules.vtkCommonDataModel import (
+    VTK_VERTEX,
+    vtkCellArray,
+    vtkCompositeDataSet,
+    vtkDataObject,
+    vtkFieldData,
+    vtkMultiBlockDataSet,
+    vtkPolyData,
+    vtkUnstructuredGrid,
+)
 from vtkmodules.vtkIOGeometry import vtkSTLReader, vtkSTLWriter
-from vtkmodules.vtkIOXML import vtkXMLPolyDataReader, vtkXMLPolyDataWriter
+from vtkmodules.vtkIOHDF import vtkHDFWriter
+from vtkmodules.vtkIOXML import vtkXMLPolyDataReader, vtkXMLPolyDataWriter, vtkXMLUnstructuredGridWriter
 
 from kneemesh.brep import BRep, gmsh_session
 from kneemesh.segmentation import Segmentation
@@ -21,6 +34,24 @@ SUPPORTED_SUFFIXES = frozenset({".nii", ".nrrd", ".mhd"})
 POLY_DATA_SUFFIXES = frozenset({".vtp"})
 BREP_SUFFIXES = frozenset({".brep"})
 SURFACE_SUFFIXES = frozenset({".stl"})
+MESH_SET_SUFFIXES = frozenset({".vtu", ".vtkhdf"})
+"""Mesh formats written with their node and element sets, and the formats of an assembled mesh."""
+
+_HDF_CHUNK_SIZE = 4096
+_HDF_COMPRESSION_LEVEL = 4
+# The VTK cell type of each gmsh element, and the gmsh node at each of the VTK cell's nodes where their orders differ.
+_VTK_CELLS: dict[str, tuple[int, list[int] | None]] = {
+    "Triangle 3": (5, None),
+    "Triangle 6": (22, None),
+    "Quadrilateral 4": (9, None),
+    "Quadrilateral 8": (23, None),
+    "Quadrilateral 9": (28, None),
+    "Tetrahedron 4": (10, None),
+    "Tetrahedron 10": (24, [0, 1, 2, 3, 4, 5, 6, 7, 9, 8]),
+    "Hexahedron 8": (12, None),
+    "Hexahedron 20": (25, [0, 1, 2, 3, 4, 5, 6, 7, 8, 11, 13, 9, 16, 18, 19, 17, 10, 12, 14, 15]),
+    "Hexahedron 27": (29, [0, 1, 2, 3, 4, 5, 6, 7, 8, 11, 13, 9, 16, 18, 19, 17, 10, 12, 14, 15, 22, 23, 21, 24, 20, 25, 26]),
+}
 
 
 def read_label_map(path: str | PathLike[str]) -> sitk.Image:
@@ -194,16 +225,21 @@ def write_surface(surface: vtkPolyData, path: str | PathLike[str]) -> None:
 
 
 def write_mesh(mesh: Mesh, path: str | PathLike[str]) -> None:
-    """Write a mesh in the format gmsh infers from the extension, overwriting any existing file.
+    """Write a mesh, overwriting any existing file: with its sets as .vtu or .vtkhdf, or in another format gmsh infers from the extension.
 
-    Formats include .msh, .vtk, .inp, .unv, .bdf, .med, .mesh, and .su2, and
-    .stl for meshes of triangles.
+    .vtu and .vtkhdf are written as write_meshes writes one structure, with
+    set names as they are. gmsh's formats include .msh, .vtk, .inp, .unv,
+    .bdf, .med, .mesh, and .su2, and .stl for meshes of triangles; they hold
+    the elements only, without faces or sets.
 
     Raises:
         ValueError: If gmsh does not recognize the extension.
         OSError: If the file cannot be written.
     """
     path = Path(path)
+    if path.suffix.lower() in MESH_SET_SUFFIXES:
+        _write_vtk({"": mesh}, path)
+        return
     with gmsh_session():
         dimension = max((gmsh.model.mesh.getElementProperties(element_type)[1] for element_type in mesh.element_types.values()), default=3)
         entity = gmsh.model.addDiscreteEntity(dimension)
@@ -220,6 +256,170 @@ def write_mesh(mesh: Mesh, path: str | PathLike[str]) -> None:
                 raise ValueError(f"gmsh cannot write meshes in the format of {path.name!r}") from error
             raise OSError(f"Could not write mesh to {path}") from error
     logger.debug("Wrote mesh to {}", path)
+
+
+def write_meshes[Name: str](meshes: Mapping[Name, Mesh], path: str | PathLike[str]) -> None:
+    """Write several structures' meshes as one, overwriting any existing file, as .vtu or .vtkhdf.
+
+    Nodes and elements are numbered from 1 through the structures in order,
+    each structure's elements before its faces, and each structure's sets
+    are named "<structure>_<set>", such as "femur_surface". Every node and
+    element carries its number, as "node_id" and "element_id".
+
+    - .vtu: one unstructured grid of every element and face, with a
+      "structure" cell array indexing the field array "structures", and a
+      point array per node set and a cell array per element set, 1 for members.
+    - .vtkhdf: a multiblock with a block per structure, by name, as one
+      structure's .vtkhdf: an "elements" grid of its elements, and
+      "element_sets" and "node_sets" blocks holding a grid per set, of the
+      set's elements or of vertices at its nodes.
+
+    Raises:
+        ValueError: If the extension is not .vtu or .vtkhdf, or no meshes are given.
+        OSError: If the file cannot be written.
+    """
+    path = _validated_path(path, MESH_SET_SUFFIXES)
+    if not meshes:
+        raise ValueError("Give at least one mesh to write")
+    _write_vtk(meshes, path)
+
+
+def _write_vtk[Name: str](meshes: Mapping[Name, Mesh], path: Path) -> None:
+    assembled = list(meshes) != [""]
+    node_offset, element_offset = 0, 0
+    parts = []
+    for name, mesh in meshes.items():
+        parts.append((name, mesh, node_offset, element_offset))
+        node_offset += len(mesh.nodes)
+        element_offset += mesh.element_count
+    if path.suffix.lower() == ".vtu":
+        output = _single_grid(parts, assembled)
+        writer = vtkXMLUnstructuredGridWriter()
+        writer.SetDataModeToAppended()
+    else:
+        if assembled:
+            output = vtkMultiBlockDataSet()
+            for index, (name, mesh, nodes, elements) in enumerate(parts):
+                _set_block(output, index, name, _part_blocks(mesh, nodes, elements))
+        else:
+            output = _part_blocks(parts[0][1], 0, 0)
+        writer = vtkHDFWriter()
+        # The default chunks of 25,000 values pad each set's small arrays: the real knee's tetrahedra took 81 MB, and 10 MB so.
+        writer.SetChunkSize(_HDF_CHUNK_SIZE)
+        writer.SetCompressionLevel(_HDF_COMPRESSION_LEVEL)
+    writer.SetInputData(output)
+    writer.SetFileName(str(path))
+    if not writer.Write():
+        raise OSError(f"Could not write mesh to {path}")
+    logger.debug("Wrote {} meshes to {}", len(parts), path)
+
+
+def _numbered(mesh: Mesh) -> list[tuple[str, np.ndarray]]:
+    """A mesh's elements then faces, by gmsh name, in the order of their numbers."""
+    return [*mesh.elements.items(), *mesh.faces.items()]
+
+
+def _grid(points: np.ndarray, cells: list[tuple[str, np.ndarray]]) -> vtkUnstructuredGrid:
+    """An unstructured grid of points and cells given by gmsh name and connectivity into points."""
+    grid = vtkUnstructuredGrid()
+    vtk_points = vtkPoints()
+    vtk_points.SetData(numpy_to_vtk(np.ascontiguousarray(points, dtype=np.float64), deep=True))
+    grid.SetPoints(vtk_points)
+    types, sizes, connectivity = [], [], []
+    for name, rows in cells:
+        if name not in _VTK_CELLS:
+            raise ValueError(f"No VTK cell for {name} elements")
+        cell_type, order = _VTK_CELLS[name]
+        rows = rows if order is None else rows[:, order]
+        types.append(np.full(len(rows), cell_type, dtype=np.uint8))
+        sizes.append(np.full(len(rows), rows.shape[1], dtype=np.int64))
+        connectivity.append(rows.ravel())
+    offsets = np.concatenate([[0], np.cumsum(np.concatenate([np.zeros(0, np.int64), *sizes]))]).astype(np.int64)
+    cell_array = vtkCellArray()
+    cell_array.SetData(
+        numpy_to_vtk(offsets, deep=True, array_type=VTK_ID_TYPE),
+        numpy_to_vtk(np.concatenate([np.zeros(0, np.int64), *connectivity]).astype(np.int64), deep=True, array_type=VTK_ID_TYPE),
+    )
+    grid.SetCells(numpy_to_vtk(np.concatenate([np.zeros(0, np.uint8), *types]), deep=True, array_type=VTK_UNSIGNED_CHAR), cell_array)
+    return grid
+
+
+def _add_array(data: vtkFieldData, name: str, values: np.ndarray) -> None:
+    array = numpy_to_vtk(np.ascontiguousarray(values), deep=True)
+    array.SetName(name)
+    data.AddArray(array)
+
+
+def _single_grid(parts: list[tuple[str, Mesh, int, int]], assembled: bool) -> vtkUnstructuredGrid:
+    points = np.concatenate([mesh.nodes for _, mesh, _, _ in parts])
+    cells = [(name, rows + nodes) for _, mesh, nodes, _ in parts for name, rows in _numbered(mesh)]
+    grid = _grid(points, cells)
+    total_elements = sum(mesh.element_count for _, mesh, _, _ in parts)
+    _add_array(grid.GetPointData(), "node_id", np.arange(1, len(points) + 1, dtype=np.int64))
+    _add_array(grid.GetCellData(), "element_id", np.arange(1, total_elements + 1, dtype=np.int64))
+    if assembled:
+        _add_array(grid.GetCellData(), "structure", np.repeat(np.arange(len(parts), dtype=np.int32), [mesh.element_count for _, mesh, _, _ in parts]))
+        names = vtkStringArray()
+        names.SetName("structures")
+        for name, *_ in parts:
+            names.InsertNextValue(name)
+        grid.GetFieldData().AddArray(names)
+    for name, mesh, nodes, elements in parts:
+        prefix = f"{name}_" if assembled else ""
+        for set_name, members in mesh.node_sets.items():
+            mask = np.zeros(len(points), dtype=np.uint8)
+            mask[nodes + members] = 1
+            _add_array(grid.GetPointData(), prefix + set_name, mask)
+        for set_name, members in mesh.element_sets.items():
+            mask = np.zeros(total_elements, dtype=np.uint8)
+            mask[elements + members] = 1
+            _add_array(grid.GetCellData(), prefix + set_name, mask)
+    return grid
+
+
+def _subgrid(mesh: Mesh, cells: list[tuple[str, np.ndarray]], node_offset: int, element_ids: np.ndarray) -> vtkUnstructuredGrid:
+    """A grid of some of a mesh's cells and only the nodes they use, carrying their numbers."""
+    used = np.unique(np.concatenate([np.zeros(0, np.int64), *(rows.ravel() for _, rows in cells)]))
+    renumber = np.zeros(len(mesh.nodes), dtype=np.int64)
+    renumber[used] = np.arange(len(used))
+    grid = _grid(mesh.nodes[used], [(name, renumber[rows]) for name, rows in cells])
+    _add_array(grid.GetPointData(), "node_id", node_offset + used + 1)
+    _add_array(grid.GetCellData(), "element_id", element_ids)
+    return grid
+
+
+def _part_blocks(mesh: Mesh, node_offset: int, element_offset: int) -> vtkMultiBlockDataSet:
+    numbered = _numbered(mesh)
+    starts = np.cumsum([0, *(len(rows) for _, rows in numbered)])
+    part = vtkMultiBlockDataSet()
+    volume = sum(len(rows) for rows in mesh.elements.values())
+    _set_block(part, 0, "elements", _subgrid(mesh, list(mesh.elements.items()), node_offset, element_offset + np.arange(1, volume + 1)))
+    element_sets = vtkMultiBlockDataSet()
+    for index, (name, members) in enumerate(mesh.element_sets.items()):
+        members = np.sort(members)
+        cells = [
+            (kind, rows[members[(members >= start) & (members < end)] - start])
+            for (kind, rows), start, end in zip(numbered, starts[:-1], starts[1:], strict=True)
+        ]
+        cells = [(kind, rows) for kind, rows in cells if len(rows)]
+        _set_block(element_sets, index, name, _subgrid(mesh, cells, node_offset, element_offset + members + 1))
+    _set_block(part, 1, "element_sets", element_sets)
+    node_sets = vtkMultiBlockDataSet()
+    for index, (name, members) in enumerate(mesh.node_sets.items()):
+        grid = _grid(mesh.nodes[members], [])
+        vertices = vtkCellArray()
+        for point in range(len(members)):
+            vertices.InsertNextCell(1, [point])
+        grid.SetCells(VTK_VERTEX, vertices)
+        _add_array(grid.GetPointData(), "node_id", node_offset + members + 1)
+        _set_block(node_sets, index, name, grid)
+    _set_block(part, 2, "node_sets", node_sets)
+    return part
+
+
+def _set_block(blocks: vtkMultiBlockDataSet, index: int, name: str, block: vtkDataObject) -> None:
+    blocks.SetBlock(index, block)
+    blocks.GetMetaData(index).Set(vtkCompositeDataSet.NAME(), name)
 
 
 def _validated_path(path: str | PathLike[str], suffixes: frozenset[str] = SUPPORTED_SUFFIXES) -> Path:

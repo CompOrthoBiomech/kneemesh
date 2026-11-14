@@ -1,6 +1,12 @@
-"""Hexahedral meshing of the meniscus's five-block butterfly solid."""
+"""Hexahedral meshing of the meniscus's five-block butterfly solid, and the meniscus's named sets of faces.
+
+Both meshes of a meniscus have the sets "anterior_horn", "posterior_horn",
+and "body" besides "surface" (mesh_sets): the faces on the caps at either
+end and on the rest of its surface.
+"""
 
 import gmsh
+import numpy as np
 
 from kneemesh.brep import BRep, gmsh_session
 from kneemesh.tet_meshing import Mesh, gmsh_mesh, gmsh_options, import_solid, require_element_order
@@ -58,6 +64,47 @@ def hexahedral_mesh(
         for volume in volumes:
             gmsh.model.mesh.setTransfiniteVolume(volume)
         gmsh.model.add_physical_group(3, volumes, name="solid")
+        groups = meniscus_face_groups()
 
         gmsh.model.mesh.generate(3)
-        return gmsh_mesh()
+        return gmsh_mesh(3, groups)
+
+
+ANTERIOR_HORN = "anterior_horn"
+"""Name of a meniscus mesh's set of the faces on the cap at its anterior end, and of their nodes."""
+POSTERIOR_HORN = "posterior_horn"
+"""Name of a meniscus mesh's set of the faces on the cap at its posterior end, and of their nodes."""
+BODY = "body"
+"""Name of a meniscus mesh's set of the faces on its surface between the horns' caps, and of their nodes."""
+
+
+def meniscus_face_groups() -> dict[str, list[int]]:
+    """Name the current model's meniscus faces, for tet_meshing.tetrahedral_mesh's face_groups: its horns' caps and its body.
+
+    The caps are the planar boundary faces, as on hexahedral blocks and
+    planar-capped solids, or, with smooth caps, every boundary face but the
+    largest, the loft. Caps sharing curves make one horn. The anterior horn
+    is the one at lower y: SimpleITK's physical space is LPS, so y grows
+    toward the patient's back.
+
+    Raises:
+        ValueError: If the caps do not form two horns.
+    """
+    boundary = [tag for _, tag in gmsh.model.getEntities(2) if len(gmsh.model.getAdjacencies(2, tag)[0]) == 1]
+    planar = [face for face in boundary if gmsh.model.getType(2, face) == "Plane"]
+    caps = planar or sorted(boundary, key=lambda face: gmsh.model.occ.getMass(2, face))[:-1]
+    curves = {face: {abs(tag) for _, tag in gmsh.model.getBoundary([(2, face)], combined=False, oriented=False)} for face in caps}
+    horns: list[set[int]] = []
+    for face in caps:
+        joined = [horn for horn in horns if any(curves[face] & curves[other] for other in horn)]
+        horns = [horn for horn in horns if horn not in joined] + [set().union({face}, *joined)]
+    if len(horns) != 2:
+        raise ValueError(f"A meniscus's caps should form two horns, got {len(horns)}")
+
+    def y(horn: set[int]) -> float:
+        masses = np.array([gmsh.model.occ.getMass(2, face) for face in horn])
+        centers = np.array([gmsh.model.occ.getCenterOfMass(2, face) for face in horn])
+        return float(masses @ centers[:, 1] / masses.sum())
+
+    anterior, posterior = sorted(horns, key=y)
+    return {ANTERIOR_HORN: sorted(anterior), POSTERIOR_HORN: sorted(posterior), BODY: sorted(set(boundary) - set(caps))}

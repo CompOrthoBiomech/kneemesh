@@ -63,7 +63,7 @@ The `femoral_cartilage` sections apply to `femoral_cartilage`. Its B-rep setting
 
 ## Bones
 
-The `bone` sections apply to `femur`, `tibia`, and `patella`. A bone's geometry is its closed, triangulated surface, written as `.stl`, rather than a B-rep, and it is meshed with its own `element_type`: triangles or quadrilaterals on its surface, or tetrahedra, never hexahedra.
+The `femur`, `tibia`, and `patella` sections each hold one bone's settings. A bone's geometry is its closed, triangulated surface, written as `.stl`, rather than a B-rep, and it is meshed with its own `element_type`: triangles or quadrilaterals on its surface, or tetrahedra, never hexahedra.
 
 ```{eval-rst}
 .. autopydantic_model:: kneemesh.config.BoneBrep

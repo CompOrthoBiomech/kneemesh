@@ -4,7 +4,7 @@
 
 The structure names, keys of `labels`, `label_maps`, and `breps`, pick each structure's pipeline: `lateral_meniscus`, `medial_meniscus`, `patellar_cartilage`, `femoral_cartilage`, `lateral_tibial_cartilage`, `medial_tibial_cartilage`, `femur`, `tibia`, and `patella`. All are implemented. The bones' geometry is a triangulated surface rather than a B-rep; see [Bones](#bones).
 
-Each structure's output is written to `<output-directory>/<structure><output>`, where `--output` is a suffix. B-rep suffixes end in `.brep`, `.brep` by default; bones' surfaces take `--bone.output`, `.stl` by default. Mesh suffixes default to `_{element_type}.msh`, with `{element_type}` replaced by `--element-type`: `hex8`, `hex20`, `hex27`, `tet4` (the default), or `tet10`, or for a bone by `--bone.element-type`. gmsh infers the mesh format from the extension.
+Each structure's output is written to `<output-directory>/<structure><output>`, where `--output` is a suffix. B-rep suffixes end in `.brep`, `.brep` by default; bones' surfaces take their own section's `--femur.output`, `--tibia.output`, or `--patella.output`, `.stl` by default. Mesh suffixes default to `_{element_type}.msh`, with `{element_type}` replaced by `--element-type`: `hex8`, `hex20`, `hex27`, `tet4` (the default), or `tet10`, or for a bone by its own `--femur.element-type`, `--tibia.element-type`, or `--patella.element-type`. `.vtu` and `.vtkhdf` meshes hold their node and element sets (see [Node and element sets](#node-and-element-sets)); gmsh infers other formats from the extension and writes the elements only.
 
 ```sh
 kneemesh-brep --label-map meniscus.nii --labels '{"medial_meniscus": 1}' --meniscus.cap planar
@@ -76,19 +76,40 @@ Tetrahedra default to `--femoral-cartilage.element-size` too, since the default 
 
 ## Bones
 
-The femur, tibia, and patella are not meshed with hexahedra, and their geometry is not a B-rep. `kneemesh-brep` writes each bone's closed, triangulated surface as `.stl`:
+The femur, tibia, and patella are not meshed with hexahedra, and their geometry is not a B-rep. Each bone has its own settings section, `femur`, `tibia`, or `patella`, so options are given as `--tibia.shaft-cut-fraction 0.3`; below, `--<bone>` stands for any of them. `kneemesh-brep` writes each bone's closed, triangulated surface as `.stl`:
 
-1. {py:func}`~kneemesh.geo.bone.bone_mask` fills the label's cavities. Where the scan cuts a shaft off, as it does the femur's and tibia's, `--bone.shaft-cut-fraction` removes that fraction of the bone's length along the shaft from the cut end, square in the voxel map, to make the mesh smaller; 0, the default, keeps the shaft as scanned. A shaft is cut off where the label's last slice along an image axis is a whole cross-section, nearly the same as the slices 2 mm inside it.
+1. {py:func}`~kneemesh.geo.bone.bone_mask` fills the label's cavities. Where the scan cuts a shaft off, as it does the femur's and tibia's, `--<bone>.shaft-cut-fraction` removes that fraction of the bone's length along the shaft from the cut end, square in the voxel map, to make the mesh smaller; 0, the default, keeps the shaft as scanned. A shaft is cut off where the label's last slice along an image axis is a whole cross-section, nearly the same as the slices 2 mm inside it.
 2. The surface is the isocontour of the mask's smoothed distance field, as for the other structures, smoothed by a windowed sinc filter with non-manifold and feature-edge smoothing off and coordinates normalized. Smoothing rounds the flat end of a cut shaft.
-3. {py:func}`~kneemesh.geo.bone.decimate_surface` reduces the triangles to `--bone.triangle-size`, 1 by default, which moves the real bones' surfaces by at most 0.02. gmsh took minutes to reparametrize the real femur's 340,000 triangles.
+3. {py:func}`~kneemesh.geo.bone.decimate_surface` reduces the triangles to `--<bone>.triangle-size`, 1 by default, which moves the real bones' surfaces by at most 0.02. gmsh took minutes to reparametrize the real femur's 340,000 triangles.
 
-`kneemesh-mesh` meshes a bone given its `.stl` in `--breps`. gmsh splits the surface into patches it can map to a plane and meshes them ({py:mod}`kneemesh.mesh.bone`). `--bone.element-type` chooses the elements, separately from `--element-type`:
+`kneemesh-mesh` meshes a bone given its `.stl` in `--breps`. gmsh splits the surface into patches it can map to a plane and meshes them ({py:mod}`kneemesh.mesh.bone`). `--<bone>.element-type` chooses the elements, separately from `--element-type`:
 
-- `tri3` (the default) or `tri6` triangles, or `quad4`, `quad8`, or `quad9` quadrilaterals, on the surface, about `--bone.element-size` across, 2 by default. Quadrilateral meshes hold quadrilaterals only. The mesh is smoothed across the seams between gmsh's patches, and every node, second-order ones included, lies on the surface.
-- `tet4` or `tet10` tetrahedra through the volume, `--bone.cortical-element-size` across, 1 by default, within `--bone.cortical-distance` of the surface, 3 by default, where the cortical bone lies. Deeper, in the cancellous bone, their edges grow by `--bone.cancellous-grad` per unit of depth, 0.5 by default, up to `--bone.max-size`, 4 by default; a smaller grad makes a smoother transition and more elements.
+- `tri3` (the default) or `tri6` triangles, or `quad4`, `quad8`, or `quad9` quadrilaterals, on the surface, about `--<bone>.element-size` across, 2 by default. Quadrilateral meshes hold quadrilaterals only. The mesh is smoothed across the seams between gmsh's patches, and every node, second-order ones included, lies on the surface.
+- `tet4` or `tet10` tetrahedra through the volume, `--<bone>.cortical-element-size` across, 1 by default, within `--<bone>.cortical-distance` of the surface, 3 by default, where the cortical bone lies. Deeper, in the cancellous bone, their edges grow by `--<bone>.cancellous-grad` per unit of depth, 0.5 by default, up to `--<bone>.max-size`, 4 by default; a smaller grad makes a smoother transition and more elements.
 
 ```sh
-kneemesh-brep --label-maps '{"femur": "femur.nii"}' --bone.shaft-cut-fraction 0.3
-kneemesh-mesh --breps '{"femur": "femur.stl"}' --bone.element-type quad4
-kneemesh-mesh --breps '{"femur": "femur.stl"}' --bone.element-type tet10 --bone.cortical-distance 2
+kneemesh-brep --label-maps '{"femur": "femur.nii", "tibia": "tibia.nii"}' --femur.shaft-cut-fraction 0.4 --tibia.shaft-cut-fraction 0.3
+kneemesh-mesh --breps '{"femur": "femur.stl"}' --femur.element-type quad4
+kneemesh-mesh --breps '{"femur": "femur.stl"}' --femur.element-type tet10 --femur.cortical-distance 2
+```
+
+## Node and element sets
+
+Every mesh has named sets of faces on its surface, element sets, and of their nodes, node sets, by the same names:
+
+| Structure | Sets |
+|---|---|
+| Every structure | `surface`: every boundary face, or a bone's surface mesh's own elements |
+| Bones | `surface` only |
+| Cartilage | `articular_side`, the side away from the bone, and `bone_side`, the side against it; the walls between them are in `surface` only |
+| Menisci | `anterior_horn` and `posterior_horn`, the caps at its ends, and `body`, the rest |
+
+A face is an element of its own, a triangle or quadrilateral of the volume elements' order, numbered after the volume elements. The anterior horn is the one toward the patient's front, at lower y in the LPS physical space SimpleITK reads images into, so it relies on the image's orientation being right.
+
+`.vtu` and `.vtkhdf` hold the sets; gmsh's formats hold only the elements. In a `.vtu`, the faces are cells after the volume elements, and each set is a point or cell array, 1 for its members. A `.vtkhdf` is a multiblock: an `elements` grid of the volume elements, and `element_sets` and `node_sets` blocks holding a grid per set, of its faces or of vertices at its nodes. Every node and element carries its number, from 1, as `node_id` and `element_id`.
+
+`--assembled-mesh` also writes every structure's mesh as one, as `.vtu` or `.vtkhdf`. Nodes and elements are numbered on through the structures in the order of `--breps`, each structure's volume elements before its faces, and sets are named `<structure>_<set>`, such as `lateral_meniscus_anterior_horn`. The `.vtu` is one grid with a `structure` cell array indexing the field array `structures`; the `.vtkhdf` has a block per structure, named for it. Structures share no nodes.
+
+```sh
+kneemesh-mesh --config examples/knee_mesh_tet4.json --assembled-mesh knee.vtkhdf
 ```

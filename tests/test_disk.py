@@ -5,6 +5,9 @@ import numpy as np
 import pytest
 import SimpleITK as sitk
 from vtkmodules.util.numpy_support import vtk_to_numpy
+from vtkmodules.vtkCommonDataModel import vtkCompositeDataSet
+from vtkmodules.vtkIOHDF import vtkHDFReader
+from vtkmodules.vtkIOXML import vtkXMLUnstructuredGridReader
 
 from kneemesh.brep import BRep, gmsh_session
 from kneemesh.disk import (
@@ -16,6 +19,7 @@ from kneemesh.disk import (
     write_brep,
     write_label_map,
     write_mesh,
+    write_meshes,
     write_poly_data,
     write_segmentation,
     write_surface,
@@ -290,3 +294,101 @@ def test_write_mesh_writes_surface_elements(tmp_path, bone_surface):
         gmsh.merge(str(path))
         assert len(gmsh.model.mesh.getElementTypes(3)) == 0
         assert len(gmsh.model.mesh.getElementsByType(3)[0]) == len(mesh.elements["Quadrilateral 4"])
+
+
+def read_vtu(path):
+    reader = vtkXMLUnstructuredGridReader()
+    reader.SetFileName(str(path))
+    reader.Update()
+    return reader.GetOutput()
+
+
+def read_vtkhdf(path):
+    reader = vtkHDFReader()
+    reader.SetFileName(str(path))
+    reader.Update()
+    return reader.GetOutputDataObject(0)
+
+
+def blocks(data):
+    """A multiblock's blocks by name."""
+    return {data.GetMetaData(index).Get(vtkCompositeDataSet.NAME()): data.GetBlock(index) for index in range(data.GetNumberOfBlocks())}
+
+
+def array(data, name):
+    return vtk_to_numpy(data.GetArray(name))
+
+
+def test_write_mesh_vtu_holds_faces_and_sets(tmp_path, small_tetrahedra):
+    path = tmp_path / "mesh.vtu"
+
+    write_mesh(small_tetrahedra, path)
+    grid = read_vtu(path)
+
+    tetrahedra, triangles = len(small_tetrahedra.elements["Tetrahedron 4"]), len(small_tetrahedra.faces["Triangle 3"])
+    types = vtk_to_numpy(grid.GetCellTypes())
+    assert np.allclose(vtk_to_numpy(grid.GetPoints().GetData()), small_tetrahedra.nodes)
+    assert types.tolist() == [10] * tetrahedra + [5] * triangles
+    assert array(grid.GetPointData(), "node_id").tolist() == list(range(1, len(small_tetrahedra.nodes) + 1))
+    assert array(grid.GetCellData(), "element_id").tolist() == list(range(1, tetrahedra + triangles + 1))
+    assert np.flatnonzero(array(grid.GetCellData(), "surface")).tolist() == small_tetrahedra.element_sets["surface"].tolist()
+    assert np.flatnonzero(array(grid.GetPointData(), "surface")).tolist() == small_tetrahedra.node_sets["surface"].tolist()
+    assert grid.GetCellData().GetArray("structure") is None
+
+
+def test_write_mesh_vtkhdf_holds_blocks_of_elements_and_sets(tmp_path, small_tetrahedra):
+    path = tmp_path / "mesh.vtkhdf"
+
+    write_mesh(small_tetrahedra, path)
+    part = blocks(read_vtkhdf(path))
+
+    assert list(part) == ["elements", "element_sets", "node_sets"]
+    assert part["elements"].GetNumberOfCells() == len(small_tetrahedra.elements["Tetrahedron 4"])
+    surface = blocks(part["element_sets"])["surface"]
+    assert array(surface.GetCellData(), "element_id").tolist() == (small_tetrahedra.element_sets["surface"] + 1).tolist()
+    assert np.allclose(vtk_to_numpy(surface.GetPoints().GetData()), small_tetrahedra.nodes[array(surface.GetPointData(), "node_id") - 1])
+    nodes = blocks(part["node_sets"])["surface"]
+    assert array(nodes.GetPointData(), "node_id").tolist() == (small_tetrahedra.node_sets["surface"] + 1).tolist()
+    assert nodes.GetNumberOfCells() == len(small_tetrahedra.node_sets["surface"])
+
+
+def test_write_meshes_numbers_structures_on(tmp_path, small_tetrahedra, bone_surface):
+    bone = surface_mesh(bone_surface, 3.0)
+    meshes = {"lateral_meniscus": small_tetrahedra, "femur": bone}
+    path = tmp_path / "knee.vtu"
+
+    write_meshes(meshes, path)
+    grid = read_vtu(path)
+
+    first = small_tetrahedra.element_count
+    structure = array(grid.GetCellData(), "structure")
+    assert grid.GetNumberOfPoints() == len(small_tetrahedra.nodes) + len(bone.nodes)
+    assert grid.GetFieldData().GetAbstractArray("structures").GetValue(1) == "femur"
+    assert np.count_nonzero(structure == 0) == first and np.count_nonzero(structure == 1) == bone.element_count
+    assert np.flatnonzero(array(grid.GetCellData(), "femur_surface")).tolist() == (first + bone.element_sets["surface"]).tolist()
+    femur_nodes = np.flatnonzero(array(grid.GetPointData(), "femur_surface"))
+    assert femur_nodes.tolist() == (len(small_tetrahedra.nodes) + bone.node_sets["surface"]).tolist()
+    assert np.count_nonzero(array(grid.GetCellData(), "lateral_meniscus_surface")) == len(small_tetrahedra.element_sets["surface"])
+
+
+def test_write_meshes_vtkhdf_has_a_block_per_structure(tmp_path, small_tetrahedra, bone_surface):
+    bone = surface_mesh(bone_surface, 3.0)
+    path = tmp_path / "knee.vtkhdf"
+
+    write_meshes({"lateral_meniscus": small_tetrahedra, "femur": bone}, path)
+    structures = blocks(read_vtkhdf(path))
+
+    assert list(structures) == ["lateral_meniscus", "femur"]
+    femur = blocks(structures["femur"])
+    node_ids = array(femur["elements"].GetPointData(), "node_id")
+    element_ids = array(femur["elements"].GetCellData(), "element_id")
+    assert node_ids.min() == len(small_tetrahedra.nodes) + 1
+    assert element_ids.tolist() == list(range(small_tetrahedra.element_count + 1, small_tetrahedra.element_count + bone.element_count + 1))
+    # A surface mesh's surface set is its own elements.
+    assert array(blocks(femur["element_sets"])["surface"].GetCellData(), "element_id").tolist() == element_ids.tolist()
+
+
+@pytest.mark.parametrize("filename", ["knee.msh", "knee.vtk"])
+def test_write_meshes_needs_vtu_or_vtkhdf(tmp_path, small_tetrahedra, filename):
+    with pytest.raises(ValueError, match="Unsupported file format"):
+        write_meshes({"lateral_meniscus": small_tetrahedra}, tmp_path / filename)

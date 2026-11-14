@@ -8,7 +8,7 @@ from typing import Annotated, Any, ClassVar, Literal, Self, get_args
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, model_validator
 
 from kneemesh.cartilage import DEFAULT_SIDE_COSINE
-from kneemesh.disk import BREP_SUFFIXES, SURFACE_SUFFIXES
+from kneemesh.disk import BREP_SUFFIXES, MESH_SET_SUFFIXES, SURFACE_SUFFIXES
 from kneemesh.geo.bone import DEFAULT_TRIANGLE_SIZE
 from kneemesh.geo.sheet import (
     DEFAULT_HOLE_THICKNESS,
@@ -256,7 +256,7 @@ class FemoralCartilageBrep(CartilageBrep):
 
 
 class BoneBrep(SurfaceBrep):
-    """Settings for building the femur's, tibia's, and patella's surfaces, with the defaults of each step.
+    """Settings for building a bone's surface, with the defaults of each step: the femur, tibia, and patella each have a section.
 
     A bone's geometry is not a B-rep but its closed, triangulated surface,
     written as .stl: the isocontour of its label with cavities filled,
@@ -409,7 +409,7 @@ class LabelMapBrep(BaseConfig):
     labels or label_maps is built by its own pipeline, with the settings of
     its section such as meniscus, and written to
     <output_directory>/<structure><output>. Bones, including those named only
-    to orient their cartilage, are written as surfaces with bone.output instead.
+    to orient their cartilage, are written as surfaces with their own section's output, such as femur.output, instead.
     """
 
     label_map: OptionalPath = Field(default=None, description="Multilabel LabelMap to read: .nii, .nrrd, or .mhd")
@@ -434,7 +434,9 @@ class LabelMapBrep(BaseConfig):
         default_factory=CartilageBrep, description="Settings for the lateral and medial tibial and the patellar cartilage"
     )
     femoral_cartilage: FemoralCartilageBrep = Field(default_factory=FemoralCartilageBrep, description="Settings for the femoral cartilage")
-    bone: BoneBrep = Field(default_factory=BoneBrep, description="Settings for the femur, tibia, and patella, whose output is a surface")
+    femur: BoneBrep = Field(default_factory=BoneBrep, description="Settings for the femur, whose output is a surface")
+    tibia: BoneBrep = Field(default_factory=BoneBrep, description="Settings for the tibia, whose output is a surface")
+    patella: BoneBrep = Field(default_factory=BoneBrep, description="Settings for the patella, whose output is a surface")
 
     @model_validator(mode="after")
     def _check_sources(self) -> Self:
@@ -463,11 +465,15 @@ class LabelMapBrep(BaseConfig):
 
     def output_path(self, structure: Structure) -> Path:
         """The B-rep file to write for structure, or the surface file for a bone."""
-        return self.output_directory / f"{structure}{self.bone.output if structure in BONE_STRUCTURES else self.output}"
+        return self.output_directory / f"{structure}{self.bone(structure).output if structure in BONE_STRUCTURES else self.output}"
+
+    def bone(self, structure: Structure) -> BoneBrep:
+        """The settings of a bone: femur, tibia, or patella."""
+        return _bone_section(self, structure, BoneBrep)
 
 
 class BoneMesh(BaseConfig):
-    """Settings for meshing the femur's, tibia's, and patella's surfaces, which gmsh reparametrizes.
+    """Settings for meshing a bone's surface, which gmsh reparametrizes: the femur, tibia, and patella each have a section.
 
     Bones are meshed on their surface with triangles or quadrilaterals, or
     through their volume with tetrahedra, by their own element_type; the
@@ -552,7 +558,7 @@ class BrepMesh(BaseConfig):
     Each structure in breps is meshed by its own pipeline, with the settings
     of its section such as meniscus, and written to
     <output_directory>/<structure><output>. Bones are meshed from their
-    surfaces with bone.element_type.
+    surfaces with their own section's element_type, such as femur.element_type.
     """
 
     breps: StructurePaths = Field(
@@ -562,20 +568,27 @@ class BrepMesh(BaseConfig):
     )
     element_type: ElementType = Field(
         default="tet4",
-        description="Element shape and node count: hex8, hex20, or hex27 hexahedra, or tet4 or tet10 tetrahedra. Bones use bone.element_type",
+        description="Element shape and node count: hex8, hex20, or hex27 hexahedra, or tet4 or tet10 tetrahedra. Bones use their own, such as femur.element_type",
     )
     output: str = Field(
         default="_{element_type}.msh",
         description="Suffix of each mesh file, appended to its structure's name, where {element_type} is replaced by the element type, "
-        + "a bone's own for bones. gmsh infers the format from the extension",
+        + "a bone's own for bones. .vtu and .vtkhdf hold the mesh's node and element sets; gmsh infers other formats from the extension",
     )
     output_directory: Path = _output_directory_field()
+    assembled_mesh: OptionalPath = Field(
+        default=None,
+        description="Where to also write every structure's mesh as one, with nodes, elements, and sets numbered on through the "
+        + "structures and sets named <structure>_<set>: .vtu for one grid, or .vtkhdf for a multiblock of the structures. None does not",
+    )
     meniscus: MeniscusMesh = Field(default_factory=MeniscusMesh, description="Settings for the lateral and medial menisci")
     cartilage: CartilageMesh = Field(
         default_factory=CartilageMesh, description="Settings for the lateral and medial tibial and the patellar cartilage"
     )
     femoral_cartilage: FemoralCartilageMesh = Field(default_factory=FemoralCartilageMesh, description="Settings for the femoral cartilage")
-    bone: BoneMesh = Field(default_factory=BoneMesh, description="Settings for the femur, tibia, and patella")
+    femur: BoneMesh = Field(default_factory=BoneMesh, description="Settings for the femur")
+    tibia: BoneMesh = Field(default_factory=BoneMesh, description="Settings for the tibia")
+    patella: BoneMesh = Field(default_factory=BoneMesh, description="Settings for the patella")
 
     @model_validator(mode="after")
     def _check_mesh(self) -> Self:
@@ -584,6 +597,8 @@ class BrepMesh(BaseConfig):
         except (KeyError, IndexError, ValueError) as error:
             raise ValueError(f"The output suffix may hold only the {{element_type}} placeholder, got {self.output!r}") from error
         _check_suffix(suffix)
+        if self.assembled_mesh is not None and self.assembled_mesh.suffix.lower() not in MESH_SET_SUFFIXES:
+            raise ValueError(f"assembled_mesh needs extension {' or '.join(sorted(MESH_SET_SUFFIXES))}, got {self.assembled_mesh.name!r}")
         if (self.meniscus.optimize or self.cartilage.optimize or self.femoral_cartilage.optimize) and self.element_shape != "hexahedral":
             raise ValueError("optimize applies only to hexahedral meshes")
         if (self.cartilage.save_partition or self.femoral_cartilage.save_partition) and self.element_shape != "hexahedral":
@@ -612,9 +627,21 @@ class BrepMesh(BaseConfig):
 
     def output_path(self, structure: Structure) -> Path:
         """The mesh file to write for structure, named with the bone's element type for a bone."""
-        suffix = self.output.format(element_type=self.bone.element_type) if structure in BONE_STRUCTURES else self.output_suffix
+        suffix = self.output.format(element_type=self.bone(structure).element_type) if structure in BONE_STRUCTURES else self.output_suffix
         return self.output_directory / f"{structure}{suffix}"
+
+    def bone(self, structure: Structure) -> BoneMesh:
+        """The settings of a bone: femur, tibia, or patella."""
+        return _bone_section(self, structure, BoneMesh)
 
     def partition_path(self, structure: Structure) -> Path:
         """The B-rep of a sheet's hexahedral partition to write for structure, with save_partition."""
         return self.output_directory / f"{structure}_partition.brep"
+
+
+def _bone_section[Section: BaseConfig](config: BaseConfig, structure: Structure, kind: type[Section]) -> Section:
+    if structure not in BONE_STRUCTURES:
+        raise ValueError(f"{structure} is not a bone; bones are {list(BONE_STRUCTURES)}")
+    section = getattr(config, structure)
+    assert isinstance(section, kind)
+    return section

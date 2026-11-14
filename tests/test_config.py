@@ -241,7 +241,7 @@ def test_cartilage_hexahedra_settings():
 
 
 def test_bones_are_written_as_surfaces():
-    config = LabelMapBrep(labels={"tibia": 1, "lateral_tibial_cartilage": 2}, output="_tet.brep", bone=BoneBrep(output="_bone.stl"))
+    config = LabelMapBrep(labels={"tibia": 1, "lateral_tibial_cartilage": 2}, output="_tet.brep", tibia=BoneBrep(output="_bone.stl"))
 
     assert config.output_path("tibia") == Path("tibia_bone.stl")
     assert config.output_path("lateral_tibial_cartilage") == Path("lateral_tibial_cartilage_tet.brep")
@@ -272,9 +272,10 @@ def test_bone_surface_settings():
     ],
 )
 def test_bones_mesh_with_their_own_element_type(element_type, shape, order, incomplete):
-    config = BrepMesh(element_type="hex8", bone=BoneMesh(element_type=element_type))
+    config = BrepMesh(element_type="hex8", femur=BoneMesh(element_type=element_type))
 
-    assert (config.bone.element_shape, config.bone.element_order, config.bone.second_order_incomplete) == (shape, order, incomplete)
+    bone = config.bone("femur")
+    assert (bone.element_shape, bone.element_order, bone.second_order_incomplete) == (shape, order, incomplete)
     assert config.output_path("femur") == Path(f"femur_{element_type}.msh")
     assert config.output_path("lateral_meniscus") == Path("lateral_meniscus_hex8.msh")
 
@@ -302,3 +303,24 @@ def test_bone_mesh_defaults_and_limits():
 def test_example_configurations_are_valid(path):
     model = LabelMapAssembly if path.stem.endswith("_assemble") else LabelMapBrep if "_brep" in path.stem else BrepMesh
     assert isinstance(model.from_json(path), model)
+
+
+def test_each_bone_has_its_own_settings():
+    brep = LabelMapBrep.model_validate({"femur": {"shaft_cut_fraction": 0.4}, "tibia": {"shaft_cut_fraction": 0.3}})
+    mesh = BrepMesh.model_validate({"femur": {"element_type": "tet4"}})
+
+    assert [brep.bone(bone).shaft_cut_fraction for bone in ("femur", "tibia", "patella")] == [0.4, 0.3, 0.0]
+    assert [mesh.bone(bone).element_type for bone in ("femur", "tibia", "patella")] == ["tet4", "tri3", "tri3"]
+    assert mesh.output_path("femur") == Path("femur_tet4.msh")
+    assert mesh.output_path("tibia") == Path("tibia_tri3.msh")
+    with pytest.raises(ValueError, match="not a bone"):
+        mesh.bone("lateral_meniscus")
+
+
+@pytest.mark.parametrize(("assembled", "valid"), [("knee.vtu", True), ("knee.vtkhdf", True), ("knee.msh", False)])
+def test_assembled_mesh_is_vtu_or_vtkhdf(assembled, valid):
+    if valid:
+        assert BrepMesh.model_validate({"assembled_mesh": assembled}).assembled_mesh == Path(assembled)
+    else:
+        with pytest.raises(pydantic.ValidationError, match="assembled_mesh needs extension"):
+            BrepMesh.model_validate({"assembled_mesh": assembled})

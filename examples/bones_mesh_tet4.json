@@ -4,9 +4,23 @@
     "tibia": "examples/tibia.stl",
     "patella": "examples/patella.stl"
   },
-  "output": "_{element_type}.vtk",
+  "output": "_{element_type}.vtu",
   "output_directory": "examples",
-  "bone": {
+  "femur": {
+    "element_type": "tet4",
+    "cortical_element_size": 2.0,
+    "cortical_distance": 4.0,
+    "cancellous_grad": 0.5,
+    "max_size": 5.0
+  },
+  "tibia": {
+    "element_type": "tet4",
+    "cortical_element_size": 2.0,
+    "cortical_distance": 4.0,
+    "cancellous_grad": 0.5,
+    "max_size": 5.0
+  },
+  "patella": {
     "element_type": "tet4",
     "cortical_element_size": 2.0,
     "cortical_distance": 4.0,

@@ -167,3 +167,22 @@ def test_surface_mesh_rejects_invalid_arguments(bone_surface, arguments, message
 def test_tetrahedral_mesh_rejects_invalid_arguments(bone_surface, arguments, message):
     with pytest.raises(ValueError, match=message):
         tetrahedral_mesh(bone_surface, **arguments)
+
+
+def test_surface_mesh_sets_are_all_of_it(bone_surface):
+    mesh = surface_mesh(bone_surface, 2.0, quadrilaterals=True)
+
+    assert mesh.element_sets["surface"].tolist() == list(range(len(mesh.elements["Quadrilateral 4"])))
+    assert mesh.node_sets["surface"].tolist() == list(range(len(mesh.nodes)))
+    assert mesh.faces == {}
+
+
+def test_tetrahedral_mesh_surface_set_lies_on_the_surface(bone_surface):
+    mesh = tetrahedral_mesh(bone_surface, element_order=2)
+
+    triangles = mesh.faces["Triangle 6"]
+    assert list(mesh.element_sets) == ["surface"]
+    assert len(mesh.element_sets["surface"]) == len(triangles)
+    assert distances(bone_surface, mesh.nodes[mesh.node_sets["surface"]]).max() < 1e-6
+    # A closed surface of triangles has two triangles for each corner node, less four.
+    assert len(triangles) == 2 * len(np.unique(triangles[:, :3])) - 4

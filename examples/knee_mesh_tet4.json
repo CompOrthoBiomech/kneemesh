@@ -11,8 +11,9 @@
     "femoral_cartilage": "examples/femoral_cartilage_tet.brep"
   },
   "element_type": "tet4",
-  "output": "_{element_type}.vtk",
+  "output": "_{element_type}.vtu",
   "output_directory": "examples",
+  "assembled_mesh": "examples/knee_tet4.vtkhdf",
   "meniscus": {
     "max_size": 1.0,
     "elements_per_circle": 8
@@ -20,7 +21,21 @@
   "cartilage": {
     "max_size": 1.0
   },
-  "bone": {
+  "femur": {
+    "element_type": "tet4",
+    "cortical_element_size": 2.0,
+    "cortical_distance": 4.0,
+    "cancellous_grad": 0.5,
+    "max_size": 5.0
+  },
+  "tibia": {
+    "element_type": "tet4",
+    "cortical_element_size": 2.0,
+    "cortical_distance": 4.0,
+    "cancellous_grad": 0.5,
+    "max_size": 5.0
+  },
+  "patella": {
     "element_type": "tet4",
     "cortical_element_size": 2.0,
     "cortical_distance": 4.0,

@@ -40,3 +40,7 @@ By default, the Gaussian's central 95% spans three voxel edges along each axis. 
 $$
 \sigma = \frac{3h}{2 \times 1.96} \approx 0.77\,h .
 $$
+
+## Sets and assembly
+
+Every mesh carries its boundary faces and named sets of them and of their nodes ({py:mod}`kneemesh.mesh_sets`). {py:func}`~kneemesh.mesh_sets.boundary_faces` finds the faces of the volume elements that belong to only one, and the meshers name groups of them by the B-rep faces gmsh meshed them on: {py:func}`kneemesh.mesh.meniscus.meniscus_face_groups` the meniscus's caps and loft, and {py:func}`kneemesh.mesh.sheet.sheet_face_groups` a cartilage sheet's two sides, telling the articular side by its normal, which agrees with its parameterization's. {py:func}`kneemesh.disk.write_mesh` writes the sets to `.vtu` and `.vtkhdf`, and {py:func}`kneemesh.disk.write_meshes`, for `assembled_mesh`, writes every structure's mesh as one, numbering nodes, elements, and sets on through the structures.
