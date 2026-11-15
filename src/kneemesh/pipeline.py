@@ -195,9 +195,12 @@ def _meniscus_brep(segmentation: Segmentation, structure: Structure, brep_config
     surface = smooth_isocontour(surface, config.smoothing_iterations, config.smoothing_pass_band)
     logger.info("Slicing every {} along the centerline", config.spacing)
     slices = slice_isocontour(surface, curve, config.spacing, config.points_per_slice)
-    if config.hex_blocks:
-        logger.info("Building hexahedral blocks through {} slices", len(slices))
+    if config.hex_blocks and config.hex_design == "butterfly":
+        logger.info("Building butterfly hexahedral blocks through {} slices", len(slices))
         return contours_to_hex_blocks(slices, config.spline_order)
+    if config.hex_blocks:
+        logger.info("Lofting through {} slices with planar caps, for swept hexahedra", len(slices))
+        return contours_to_brep(slices, config.spline_order, "planar")
     logger.info("Lofting through {} slices with {} caps", len(slices), config.cap)
     return contours_to_brep(slices, config.spline_order, config.cap, config.cap_offset)
 
@@ -303,7 +306,11 @@ def _meniscus_mesh(path: Path, mesh_config: BrepMesh, _structure: Structure) -> 
         mesh = meniscus_mesh.hexahedral_mesh(
             brep, config.elements_per_edge, config.elements_along, mesh_config.element_order, mesh_config.second_order_incomplete
         )
-        return _optimize(mesh, config) if config.optimize else mesh
+        if config.optimize:
+            return _optimize(mesh, config)
+        if inverted := mesh_quality(mesh).inverted:
+            logger.warning("{} hexahedra are inverted; set meniscus.optimize to untangle them", inverted)
+        return mesh
     return _tetrahedral_mesh(brep, config, mesh_config, face_groups=meniscus_mesh.meniscus_face_groups)
 
 

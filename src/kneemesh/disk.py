@@ -275,8 +275,9 @@ def write_meshes[Name: str](meshes: Mapping[Name, Mesh], path: str | PathLike[st
       point array per node set and a cell array per element set, 1 for members.
     - .vtkhdf: a multiblock with a block per structure, by name, as one
       structure's .vtkhdf: an "elements" grid of its elements, and
-      "element_sets" and "node_sets" blocks holding a grid per set, of the
-      set's elements or of vertices at its nodes.
+      "surfaces" and "node_sets" blocks holding a grid per set, named
+      "<structure>_<set>", of the set's faces or of vertices at its nodes.
+      Every grid's "node_id" numbers the same node at the same coordinates.
 
     Raises:
         ValueError: If the extension is not .vtu or .vtkhdf, or no meshes are given.
@@ -304,9 +305,9 @@ def _write_vtk[Name: str](meshes: Mapping[Name, Mesh], path: Path) -> None:
         if assembled:
             output = vtkMultiBlockDataSet()
             for index, (name, mesh, nodes, elements) in enumerate(parts):
-                _set_block(output, index, name, _part_blocks(mesh, nodes, elements))
+                _set_block(output, index, name, _part_blocks(mesh, nodes, elements, f"{name}_"))
         else:
-            output = _part_blocks(parts[0][1], 0, 0)
+            output = _part_blocks(parts[0][1], 0, 0, "")
         writer = vtkHDFWriter()
         # The default chunks of 25,000 values pad each set's small arrays: the real knee's tetrahedra took 81 MB, and 10 MB so.
         writer.SetChunkSize(_HDF_CHUNK_SIZE)
@@ -392,13 +393,14 @@ def _subgrid(mesh: Mesh, cells: list[tuple[str, np.ndarray]], node_offset: int, 
     return grid
 
 
-def _part_blocks(mesh: Mesh, node_offset: int, element_offset: int) -> vtkMultiBlockDataSet:
+def _part_blocks(mesh: Mesh, node_offset: int, element_offset: int, prefix: str) -> vtkMultiBlockDataSet:
+    """One structure's blocks: its volume elements, its face sets as "surfaces", and its node sets, set names prefixed."""
     numbered = _numbered(mesh)
     starts = np.cumsum([0, *(len(rows) for _, rows in numbered)])
     part = vtkMultiBlockDataSet()
     volume = sum(len(rows) for rows in mesh.elements.values())
     _set_block(part, 0, "elements", _subgrid(mesh, list(mesh.elements.items()), node_offset, element_offset + np.arange(1, volume + 1)))
-    element_sets = vtkMultiBlockDataSet()
+    surfaces = vtkMultiBlockDataSet()
     for index, (name, members) in enumerate(mesh.element_sets.items()):
         members = np.sort(members)
         cells = [
@@ -406,8 +408,8 @@ def _part_blocks(mesh: Mesh, node_offset: int, element_offset: int) -> vtkMultiB
             for (kind, rows), start, end in zip(numbered, starts[:-1], starts[1:], strict=True)
         ]
         cells = [(kind, rows) for kind, rows in cells if len(rows)]
-        _set_block(element_sets, index, name, _subgrid(mesh, cells, node_offset, element_offset + members + 1))
-    _set_block(part, 1, "element_sets", element_sets)
+        _set_block(surfaces, index, prefix + name, _subgrid(mesh, cells, node_offset, element_offset + members + 1))
+    _set_block(part, 1, "surfaces", surfaces)
     node_sets = vtkMultiBlockDataSet()
     for index, (name, members) in enumerate(mesh.node_sets.items()):
         grid = _grid(mesh.nodes[members], [])
@@ -416,7 +418,7 @@ def _part_blocks(mesh: Mesh, node_offset: int, element_offset: int) -> vtkMultiB
             vertices.InsertNextCell(1, [point])
         grid.SetCells(VTK_VERTEX, vertices)
         _add_array(grid.GetPointData(), "node_id", node_offset + members + 1)
-        _set_block(node_sets, index, name, grid)
+        _set_block(node_sets, index, prefix + name, grid)
     _set_block(part, 2, "node_sets", node_sets)
     return part
 

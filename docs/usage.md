@@ -14,7 +14,7 @@ kneemesh-mesh --breps '{"medial_meniscus": "medial_meniscus.brep"}' --meniscus.m
 
 The last command writes `medial_meniscus_tet4.msh`. Each run saves the configuration it used, so it can be repeated with `--config`. Without `--config` it is saved as `settings<timestamp>.json` in the working directory. With `--config` and overrides, the changed configuration is saved beside the original as `<name>_modified.json`. Section overrides change only the fields given, leaving the section's other values from `--config`.
 
-For a hexahedral mesh, build the menisci's B-reps with `--meniscus.hex-blocks true --meniscus.points-per-slice 10`, and preferably the cartilage's with `--cartilage.hex-blocks true` (`--femoral-cartilage.hex-blocks true` for the femoral cartilage), and mesh them with `--element-type hex8`, `hex20`, or `hex27`. Add `--meniscus.optimize true` to move the nodes afterward for better scaled Jacobians with {py:func}`~kneemesh.mesh_optimization.optimize_hexahedral_mesh`. It first untangles any inverted elements. Boundary nodes may then leave the B-rep's surface by up to `--meniscus.surface-deviation` times the local element size, 0.1 by default, without changing the volume overall; `--meniscus.surface-deviation 0` keeps them on its tangent planes.
+For a hexahedral mesh, build the menisci's B-reps with `--meniscus.hex-blocks true`, and preferably the cartilage's with `--cartilage.hex-blocks true` (`--femoral-cartilage.hex-blocks true` for the femoral cartilage), and mesh them with `--element-type hex8`, `hex20`, or `hex27`. `--meniscus.hex-design` picks the meniscus's hexahedra. `swept_quads`, the default, lofts the meniscus with planar caps; meshing fills its middle cross-section with unstructured quadrilaterals (gmsh's Frontal-Delaunay for quads), about `4 * --meniscus.elements-per-edge` edges around, and sweeps them through `--meniscus.elements-along` layers. `butterfly` builds five blocks, best with `--meniscus.points-per-slice 10`, meshed with structured hexahedra, `--meniscus.elements-per-edge` along each edge of a block's cap. On the real menisci the swept hexahedra optimize to minimum scaled Jacobians of 0.46-0.56 against the butterfly's 0.29-0.39, with a quarter of the elements, because the butterfly packs 80 quadrilaterals into a section with 16 edges around it where Frontal-Delaunay needs about 20. Mesh optimization moves the nodes afterward for better scaled Jacobians with {py:func}`~kneemesh.mesh_optimization.optimize_hexahedral_mesh`. The meniscus optimizes by default, since swept hexahedra can start with a few inverted elements; the cartilage takes `--cartilage.optimize true`. It first untangles any inverted elements. Boundary nodes may then leave the B-rep's surface by up to `--meniscus.surface-deviation` times the local element size, 0.1 by default, without changing the volume overall; `--meniscus.surface-deviation 0` keeps them on its tangent planes.
 
 ## Segmentations
 
@@ -38,7 +38,7 @@ Every structure in the segmentation is built. A cartilage needs the bone beneath
   "label_maps": {"lateral_meniscus": "lateral_meniscus.nii", "medial_meniscus": "medial_meniscus.nii"},
   "assembled_label_map": "knee.nrrd",
   "output": "_hex.brep",
-  "meniscus": {"points_per_slice": 10, "hex_blocks": true}
+  "meniscus": {"hex_blocks": true}
 }
 ```
 
@@ -106,7 +106,7 @@ Every mesh has named sets of faces on its surface, element sets, and of their no
 
 A face is an element of its own, a triangle or quadrilateral of the volume elements' order, numbered after the volume elements. The anterior horn is the one toward the patient's front, at lower y in the LPS physical space SimpleITK reads images into, so it relies on the image's orientation being right.
 
-`.vtu` and `.vtkhdf` hold the sets; gmsh's formats hold only the elements. In a `.vtu`, the faces are cells after the volume elements, and each set is a point or cell array, 1 for its members. A `.vtkhdf` is a multiblock: an `elements` grid of the volume elements, and `element_sets` and `node_sets` blocks holding a grid per set, of its faces or of vertices at its nodes. Every node and element carries its number, from 1, as `node_id` and `element_id`.
+`.vtu` and `.vtkhdf` hold the sets; gmsh's formats hold only the elements. In a `.vtu`, the faces are cells after the volume elements, and each set is a point or cell array, 1 for its members. A `.vtkhdf` is a multiblock: an `elements` grid of the volume elements, and `surfaces` and `node_sets` blocks holding a grid per set, of its faces or of vertices at its nodes. In an assembled `.vtkhdf` the set blocks are named `<structure>_<set>`, as in a `.vtu`, and every set grid's `node_id` is the same node, at the same coordinates, as in its structure's `elements` grid. Every node and element carries its number, from 1, as `node_id` and `element_id`.
 
 `--assembled-mesh` also writes every structure's mesh as one, as `.vtu` or `.vtkhdf`. Nodes and elements are numbered on through the structures in the order of `--breps`, each structure's volume elements before its faces, and sets are named `<structure>_<set>`, such as `lateral_meniscus_anterior_horn`. The `.vtu` is one grid with a `structure` cell array indexing the field array `structures`; the `.vtkhdf` has a block per structure, named for it. Structures share no nodes.
 

@@ -342,9 +342,9 @@ def test_write_mesh_vtkhdf_holds_blocks_of_elements_and_sets(tmp_path, small_tet
     write_mesh(small_tetrahedra, path)
     part = blocks(read_vtkhdf(path))
 
-    assert list(part) == ["elements", "element_sets", "node_sets"]
+    assert list(part) == ["elements", "surfaces", "node_sets"]
     assert part["elements"].GetNumberOfCells() == len(small_tetrahedra.elements["Tetrahedron 4"])
-    surface = blocks(part["element_sets"])["surface"]
+    surface = blocks(part["surfaces"])["surface"]
     assert array(surface.GetCellData(), "element_id").tolist() == (small_tetrahedra.element_sets["surface"] + 1).tolist()
     assert np.allclose(vtk_to_numpy(surface.GetPoints().GetData()), small_tetrahedra.nodes[array(surface.GetPointData(), "node_id") - 1])
     nodes = blocks(part["node_sets"])["surface"]
@@ -385,7 +385,27 @@ def test_write_meshes_vtkhdf_has_a_block_per_structure(tmp_path, small_tetrahedr
     assert node_ids.min() == len(small_tetrahedra.nodes) + 1
     assert element_ids.tolist() == list(range(small_tetrahedra.element_count + 1, small_tetrahedra.element_count + bone.element_count + 1))
     # A surface mesh's surface set is its own elements.
-    assert array(blocks(femur["element_sets"])["surface"].GetCellData(), "element_id").tolist() == element_ids.tolist()
+    assert array(blocks(femur["surfaces"])["femur_surface"].GetCellData(), "element_id").tolist() == element_ids.tolist()
+    assert list(blocks(femur["node_sets"])) == ["femur_surface"]
+
+
+def test_write_meshes_vtkhdf_set_nodes_are_the_elements_nodes(tmp_path, small_tetrahedra, bone_surface):
+    bone = surface_mesh(bone_surface, 3.0)
+    path = tmp_path / "knee.vtkhdf"
+
+    write_meshes({"lateral_meniscus": small_tetrahedra, "femur": bone}, path)
+
+    for structure in blocks(read_vtkhdf(path)).values():
+        part = blocks(structure)
+        elements = part["elements"]
+        element_nodes = array(elements.GetPointData(), "node_id")
+        coordinates = np.full((element_nodes.max() + 1, 3), np.nan)
+        coordinates[element_nodes] = vtk_to_numpy(elements.GetPoints().GetData())
+        for grid in [*blocks(part["surfaces"]).values(), *blocks(part["node_sets"]).values()]:
+            node_ids = array(grid.GetPointData(), "node_id")
+            assert len(np.unique(node_ids)) == len(node_ids)
+            assert np.isin(node_ids, element_nodes).all()
+            assert np.array_equal(coordinates[node_ids], vtk_to_numpy(grid.GetPoints().GetData()))
 
 
 @pytest.mark.parametrize("filename", ["knee.msh", "knee.vtk"])

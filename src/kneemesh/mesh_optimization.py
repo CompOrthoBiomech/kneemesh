@@ -58,6 +58,9 @@ _STEP_GROWTH = 1.5
 _CONVERGENCE = 1e-7
 _VOLUME_ROUNDS = 3
 _UNTANGLE_TARGET = 0.2
+# Smallest corner scaled Jacobian untangling stops at. Stopping as soon as none is inverted could leave a corner
+# at 1e-11, where 1 / SJ is so steep that optimization's first step backtracks below _MIN_STEP and stalls.
+_UNTANGLE_MARGIN = 0.01
 
 
 @dataclass(frozen=True)
@@ -202,9 +205,10 @@ def optimize_hexahedral_mesh(
     Smart Laplacian smoothing runs first, then optimization of the sum of
     1 / SJ over every element corner plus aspect_weight times the sum of their
     squared Frobenius aspect ratios. Optimization needs every element valid,
-    so elements smoothing leaves inverted are untangled first, by raising
-    every corner's scaled Jacobian toward 0.2, and optimization is skipped
-    with a warning if any stays inverted.
+    so if smoothing leaves any corner's scaled Jacobian below 0.01, inverted
+    or nearly, the mesh is untangled first, by raising every corner's toward
+    0.2 until all reach 0.01, and optimization is skipped with a warning if
+    any stays inverted.
 
     Boundary allowances scale with each node's local size, the mean length
     of the element edges at the node. Feature edges are boundary edges where
@@ -261,7 +265,7 @@ def optimize_hexahedral_mesh(
     if laplacian_iterations:
         positions = _smart_laplacian(positions, corners, constraints, laplacian_iterations)
     if optimization_iterations:
-        if (np.linalg.det(_corner_edges(positions, corners)) <= 0).any():
+        if _corner_scaled_jacobians(positions, corners).min() < _UNTANGLE_MARGIN:
             positions = _untangle(positions, corners, constraints, optimization_iterations)
         if (np.linalg.det(_corner_edges(positions, corners)) <= 0).any():
             logger.warning("Skipping optimization because untangling left inverted elements")
@@ -396,7 +400,7 @@ def _untangling_objective(nodes: np.ndarray, corners: np.ndarray) -> tuple[float
 
 
 def _untangle(positions: np.ndarray, corners: np.ndarray, constraints: _Constraints, iterations: int) -> np.ndarray:
-    """Raise every corner's scaled Jacobian toward _UNTANGLE_TARGET by projected gradient descent, stopping once none is inverted.
+    """Raise every corner's scaled Jacobian toward _UNTANGLE_TARGET by projected gradient descent, stopping once all reach _UNTANGLE_MARGIN.
 
     Only corners below the target contribute, so the rest of the mesh moves
     only as far as the poor corners' nodes pull it.
@@ -405,7 +409,7 @@ def _untangle(positions: np.ndarray, corners: np.ndarray, constraints: _Constrai
     energy, gradient = _untangling_objective(positions, corners)
     step = _INITIAL_STEP
     for iteration in range(iterations):
-        if (np.linalg.det(_corner_edges(positions, corners)) > 0).all():
+        if _corner_scaled_jacobians(positions, corners).min() >= _UNTANGLE_MARGIN:
             logger.debug("Untangled after {} steps", iteration)
             break
         direction = scale * constraints.line_gradient(gradient)

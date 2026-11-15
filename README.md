@@ -8,7 +8,7 @@ Generate B-rep geometry of knee structures from a segmentation LabelMap, and mes
 
 - **B-rep from segmentation labels.** Reads a LabelMap (`.nii`, `.nrrd`, or `.mhd`), fits a centerline through the labeled meniscus, slices its smoothed surface into cross-section contours, and lofts them into a solid B-spline B-rep (`.brep`) with planar or smooth end caps.
 - **Tetrahedral meshing** with linear 4-node or quadratic 10-node tetrahedra.
-- **Hexahedral meshing** with block-structured 8-node, 20-node, or 27-node hexahedra. The solid is split into a butterfly (O-grid) of five blocks, so elements stay well shaped at the meniscus's sharp corners. Optional node optimization (`--meniscus.optimize true`) then raises the scaled Jacobians further, roughly doubling the worst element's on the real test menisci.
+- **Hexahedral meshing** with 8-node, 20-node, or 27-node hexahedra. By default the middle cross-section is meshed with unstructured quadrilaterals and swept along the meniscus; `--meniscus.hex-design butterfly` instead splits the solid into a butterfly (O-grid) of five blocks of structured hexahedra. Node optimization, on by default for the meniscus, untangles any inverted elements and raises the scaled Jacobians: swept hexahedra reach minimum scaled Jacobians of about 0.45-0.58 on the real test menisci, against the butterfly's 0.29-0.42, with a quarter of the elements.
 
 For the tibial, patellar, and femoral cartilage:
 
@@ -55,11 +55,11 @@ Each run saves the configuration it used, so it can be repeated with `--config`.
 |---|---|---|
 | 4-node tetrahedra | | `--element-type tet4` (the default) |
 | 10-node tetrahedra | | `--element-type tet10` |
-| 8-node hexahedra | `--meniscus.hex-blocks true --meniscus.points-per-slice 10` | `--element-type hex8` |
-| 20-node hexahedra | `--meniscus.hex-blocks true --meniscus.points-per-slice 10` | `--element-type hex20` |
-| 27-node hexahedra | `--meniscus.hex-blocks true --meniscus.points-per-slice 10` | `--element-type hex27` |
+| 8-node hexahedra | `--meniscus.hex-blocks true` | `--element-type hex8` |
+| 20-node hexahedra | `--meniscus.hex-blocks true` | `--element-type hex20` |
+| 27-node hexahedra | `--meniscus.hex-blocks true` | `--element-type hex27` |
 
-For the cartilage, `--cartilage.hex-blocks true` builds the B-rep with the defaults that suit hexahedra; any cartilage B-rep can be meshed with either element shape.
+Add `--meniscus.hex-design butterfly --meniscus.points-per-slice 10` for the meniscus's structured butterfly blocks. For the cartilage, `--cartilage.hex-blocks true` builds the B-rep with the defaults that suit hexahedra; any cartilage B-rep can be meshed with either element shape.
 
 ## Development
 

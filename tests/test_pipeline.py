@@ -24,7 +24,7 @@ from kneemesh.pipeline import (
     configure,
     mesh_main,
 )
-from kneemesh.tet_meshing import Algorithm2D, Algorithm3D
+from kneemesh.tet_meshing import Algorithm2D, Algorithm3D, import_solid
 from kneemesh.vol import signed_distance_field
 
 LATERAL = '{"lateral_meniscus": 1}'
@@ -181,7 +181,8 @@ def test_pipelines_build_and_mesh_a_capped_solid(in_tmp_path, meniscus_label, ca
     assert len(list(in_tmp_path.glob("settings*.json"))) >= 1
 
 
-def test_pipelines_build_and_mesh_hexahedral_blocks(in_tmp_path, meniscus_label):
+@pytest.mark.parametrize(("design", "volumes"), [("swept_quads", 1), ("butterfly", 5)])
+def test_pipelines_build_and_mesh_hexahedral_blocks(in_tmp_path, meniscus_label, design, volumes):
     write_label_map(meniscus_label, in_tmp_path / "label.nii")
     brep_config = write_config(
         in_tmp_path / "brep.json",
@@ -189,7 +190,7 @@ def test_pipelines_build_and_mesh_hexahedral_blocks(in_tmp_path, meniscus_label)
             "label_map": "label.nii",
             "labels": {"lateral_meniscus": 1},
             "output": "_blocks.brep",
-            "meniscus": {"points_per_slice": 10, "hex_blocks": True},
+            "meniscus": {"points_per_slice": 10, "hex_blocks": True, "hex_design": design},
         },
     )
     mesh_config = write_config(
@@ -203,6 +204,9 @@ def test_pipelines_build_and_mesh_hexahedral_blocks(in_tmp_path, meniscus_label)
     )
 
     assert brep_main(["--config", str(brep_config)]) == 0
+    with gmsh_session():
+        import_solid(read_brep(in_tmp_path / "lateral_meniscus_blocks.brep"))
+        assert len(gmsh.model.getEntities(3)) == volumes
     assert mesh_main(["--config", str(mesh_config), "--meniscus.elements-per-edge", "2", "--meniscus.elements-along", "10"]) == 0
 
     assert (in_tmp_path / "out" / "lateral_meniscus_hex8.vtk").stat().st_size > 0

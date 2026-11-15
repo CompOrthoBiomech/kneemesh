@@ -270,11 +270,46 @@ def _extrude(side: _Side, through: int, order: int, incomplete: bool, top_is_art
 
     The meshed side is the top; top_is_articular says whether it is the articular side, naming the sides' sets.
     """
-    layers = through * order + 1
-    fractions = np.linspace(0.0, 1.0, layers)[:, np.newaxis, np.newaxis]
-    nodes = ((1 - fractions) * side.near + fractions * side.far).reshape(-1, 3)
-    count = len(side.near)
+    fractions = np.linspace(0.0, 1.0, through * order + 1)[:, np.newaxis, np.newaxis]
+    mesh, layer = stack_layers((1 - fractions) * side.near + fractions * side.far, side.quadrangles, order, incomplete, side.rim)
+    # The faces wholly in the first layer lie on the top side, those in the last on the bottom.
+    faces = boundary_faces(mesh.elements)
+    on_top = np.concatenate([np.all(layer[connectivity] == 0, axis=1) for connectivity in faces.values()])
+    on_bottom = np.concatenate([np.all(layer[connectivity] == through * order, axis=1) for connectivity in faces.values()])
+    mesh = mesh.with_face_sets(
+        {ARTICULAR_SIDE: on_top, BONE_SIDE: on_bottom} if top_is_articular else {ARTICULAR_SIDE: on_bottom, BONE_SIDE: on_top}, faces
+    )
+    logger.debug("Extruded {} hexahedra through {} layers", sum(len(rows) for rows in mesh.elements.values()), through)
+    return mesh
 
+
+def stack_layers(
+    layers: np.ndarray, quadrangles: np.ndarray, order: int, incomplete: bool, columns: np.ndarray | None = None
+) -> tuple[Mesh, np.ndarray]:
+    """Stack hexahedra on quadrilaterals through layers of their nodes' positions, without faces or sets.
+
+    Each hexahedron spans order + 1 consecutive layers, its nodes matched
+    to the quadrilateral's nodes at the same reference (u, v). The
+    quadrilaterals' orientation does not matter: if the hexahedra would come
+    out inverted, the layers are stacked in reverse.
+
+    Also used for the meniscus's swept hexahedra (mesh.meniscus).
+
+    Args:
+        layers: (L, N, 3) positions of the quadrilaterals' N nodes in each
+            layer, L = elements * order + 1, the middle layers of quadratic
+            elements included.
+        quadrangles: (Q, 4 or 9) indices of each quadrilateral's nodes, in gmsh's ordering.
+        order: Polynomial order of the quadrilaterals and hexahedra, 1 or 2.
+        incomplete: Make 20-node instead of 27-node hexahedra at order 2.
+        columns: Indices of corner nodes whose columns through the layers
+            stay straight, which become the mesh's straight_lines.
+
+    Returns:
+        The mesh, and the index of each of its nodes' layer in layers.
+    """
+    layer_count, count = layers.shape[:2]
+    through = (layer_count - 1) // order
     hexahedron_type = _HEXAHEDRON_TYPES[order, incomplete and order == 2]
     quadrangle_type = _QUADRANGLE_TYPES[order]
     with gmsh_session():
@@ -285,31 +320,24 @@ def _extrude(side: _Side, through: int, order: int, incomplete: bool, top_is_art
     matches = np.all(np.isclose(hexahedron_local[:, np.newaxis, :2], quadrangle_local[np.newaxis]), axis=-1)
     which = np.argmax(matches, axis=1)
     rise = np.rint((hexahedron_local[:, 2] + 1) / 2 * order).astype(np.int64)
-    elements = np.vstack([(layer * order + rise) * count + side.quadrangles[:, which] for layer in range(through)])
+    elements = np.vstack([(layer * order + rise) * count + quadrangles[:, which] for layer in range(through)])
 
+    order_of_layers = np.arange(layer_count)
+    nodes = layers.reshape(-1, 3)
     corners = nodes[elements[:, :8]]
     determinants = np.einsum("ij,ij->i", np.cross(corners[:, 1] - corners[:, 0], corners[:, 3] - corners[:, 0]), corners[:, 4] - corners[:, 0])
-    reversed_layers = bool(np.median(determinants) < 0)
-    if reversed_layers:
-        # The meshed side is the higher one, so the columns run down: reverse the layers.
-        nodes = nodes.reshape(layers, count, 3)[::-1].reshape(-1, 3)
-    lines = np.stack([side.rim + layer * count for layer in range(0, layers, order)], axis=1)
+    if np.median(determinants) < 0:
+        order_of_layers = order_of_layers[::-1]
+        nodes = layers[order_of_layers].reshape(-1, 3)
+    lines = np.zeros((0, 2), dtype=np.int64)
+    if columns is not None and len(columns):
+        lines = np.stack([columns + layer * count for layer in range(0, layer_count, order)], axis=1)
 
     used, elements = np.unique(elements, return_inverse=True)
     remap = np.full(len(nodes), -1, dtype=np.int64)
     remap[used] = np.arange(len(used))
     mesh = Mesh(nodes[used], {name: elements.reshape(-1, len(hexahedron_local))}, {name: hexahedron_type}, remap[lines])
-    # The faces wholly in the first layer of node indices lie on the top side, or on the bottom if the layers were reversed.
-    faces = boundary_faces(mesh.elements)
-    layer = used // count
-    first = np.concatenate([np.all(layer[connectivity] == 0, axis=1) for connectivity in faces.values()])
-    last = np.concatenate([np.all(layer[connectivity] == layers - 1, axis=1) for connectivity in faces.values()])
-    on_top, on_bottom = (last, first) if reversed_layers else (first, last)
-    mesh = mesh.with_face_sets(
-        {ARTICULAR_SIDE: on_top, BONE_SIDE: on_bottom} if top_is_articular else {ARTICULAR_SIDE: on_bottom, BONE_SIDE: on_top}, faces
-    )
-    logger.debug("Extruded {} {} through {} layers", len(mesh.elements[name]), name, through)
-    return mesh
+    return mesh, order_of_layers[used // count]
 
 
 def sheet_partition_brep(brep: BRep, element_size: float, quad_algorithm: QuadAlgorithm = "quasi_structured") -> BRep:

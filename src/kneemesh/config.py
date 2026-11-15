@@ -162,17 +162,27 @@ class SurfaceBrep(BaseConfig):
     )
 
 
+type MeniscusHexDesign = Literal["swept_quads", "butterfly"]
+"""The solid a meniscus's hexahedra are made from: the lofted solid to sweep quadrilaterals through, or five butterfly blocks."""
+
+
 class MeniscusBrep(SurfaceBrep):
     """Settings for building the lateral and medial meniscus B-reps, with the defaults of each step."""
 
     spacing: float = Field(default=5.0, description="Arc-length distance between slices along the centerline, in physical units")
-    points_per_slice: int = Field(default=32, description="Points on each slice contour. Use about 10 for hexahedral blocks")
+    points_per_slice: int = Field(default=32, description="Points on each slice contour. Use about 10 for butterfly blocks")
     spline_order: int = Field(default=3, description="Polynomial degree of the B-spline geometry")
-    cap: Literal["none", "planar", "smooth"] = Field(default="planar", description="How to close the ends; ignored for hexahedral blocks")
+    cap: Literal["none", "planar", "smooth"] = Field(default="planar", description="How to close the ends; hex_blocks are always planar")
     cap_offset: OptionalFloat = Field(
         default=None, description="Apex offset of smooth caps in physical units. None is a quarter of the equivalent radius"
     )
-    hex_blocks: bool = Field(default=False, description="Build the five-block butterfly solid with planar caps that hexahedral meshing needs")
+    hex_blocks: bool = Field(default=False, description="Build a solid for hexahedral meshing, as hex_design says, with planar caps")
+    hex_design: MeniscusHexDesign = Field(
+        default="swept_quads",
+        description="With hex_blocks, which hexahedra the solid is for: swept_quads, the lofted solid, whose cross-section is meshed "
+        + "with unstructured quadrilaterals swept along it, or butterfly, five blocks of structured hexahedra. Swept quadrilaterals "
+        + "optimized to higher scaled Jacobians and lower aspect ratios on the real menisci, with a quarter of the elements",
+    )
 
 
 class CartilageBrep(SurfaceBrep):
@@ -302,7 +312,9 @@ class StructureMesh(BaseConfig):
     elements_per_circle: int = Field(default=0, description="Tetrahedra per circle of surface curvature; 0 disables curvature sizing")
     algorithm_2d: Algorithm2D = Field(default=Algorithm2D.FRONTAL_DELAUNAY, description="gmsh surface algorithm for tetrahedral meshing")
     algorithm_3d: Algorithm3D = Field(default=Algorithm3D.DELAUNAY, description="gmsh volume algorithm for tetrahedral meshing")
-    optimize: bool = Field(default=False, description="Move hexahedral mesh nodes to raise the elements' scaled Jacobians after meshing")
+    optimize: bool = Field(
+        default=False, description="Move hexahedral mesh nodes to raise the elements' scaled Jacobians after meshing; ignored for tetrahedra"
+    )
     laplacian_iterations: int = Field(default=DEFAULT_LAPLACIAN_ITERATIONS, ge=0, description="Smart Laplacian sweeps when optimizing")
     optimization_iterations: int = Field(
         default=DEFAULT_OPTIMIZATION_ITERATIONS,
@@ -337,11 +349,20 @@ class StructureMesh(BaseConfig):
 class MeniscusMesh(StructureMesh):
     """Settings for meshing the lateral and medial meniscus B-reps, with the defaults of each meshing function.
 
-    Hexahedral element types need B-reps built with hex_blocks.
+    Hexahedral element types need B-reps with planar caps, which hex_blocks
+    gives: a lofted solid is swept with unstructured quadrilaterals, and
+    butterfly blocks are meshed with structured hexahedra (see hex_design).
     """
 
-    elements_per_edge: int = Field(default=4, description="Hexahedra along each edge of a cap")
+    elements_per_edge: int = Field(
+        default=4, description="Hexahedra along each edge of a butterfly block's cap, or a quarter of the edges around a swept cross-section"
+    )
     elements_along: int = Field(default=20, description="Hexahedra along the solid between the caps")
+    optimize: bool = Field(
+        default=True,
+        description="Move hexahedral mesh nodes to raise the elements' scaled Jacobians after meshing; ignored for tetrahedra. "
+        + "Swept hexahedra can start inverted",
+    )
 
 
 DEFAULT_CARTILAGE_ASPECT_WEIGHT = 0.5
@@ -599,8 +620,6 @@ class BrepMesh(BaseConfig):
         _check_suffix(suffix)
         if self.assembled_mesh is not None and self.assembled_mesh.suffix.lower() not in MESH_SET_SUFFIXES:
             raise ValueError(f"assembled_mesh needs extension {' or '.join(sorted(MESH_SET_SUFFIXES))}, got {self.assembled_mesh.name!r}")
-        if (self.meniscus.optimize or self.cartilage.optimize or self.femoral_cartilage.optimize) and self.element_shape != "hexahedral":
-            raise ValueError("optimize applies only to hexahedral meshes")
         if (self.cartilage.save_partition or self.femoral_cartilage.save_partition) and self.element_shape != "hexahedral":
             raise ValueError("save_partition applies only to hexahedral meshes")
         return self

@@ -7,7 +7,7 @@ For the meniscus, {py:func}`kneemesh.pipeline.run_brep` turns a LabelMap into a 
 3. {py:func}`~kneemesh.vol.extract_isocontour` extracts a closed triangle mesh at a level of that field.
 4. {py:func}`~kneemesh.vol.smooth_isocontour` smooths the mesh with a windowed sinc filter.
 5. {py:func}`~kneemesh.geo.meniscus.slice_isocontour` cuts the mesh with planes normal to the centerline.
-6. {py:func}`~kneemesh.geo.meniscus.contours_to_brep` lofts the slices into a capped solid, or {py:func}`~kneemesh.geo.meniscus.contours_to_hex_blocks` builds the five-block butterfly solid for hexahedral meshing.
+6. {py:func}`~kneemesh.geo.meniscus.contours_to_brep` lofts the slices into a capped solid, which tetrahedral meshing and swept hexahedra take, or {py:func}`~kneemesh.geo.meniscus.contours_to_hex_blocks` builds the five-block butterfly solid for structured hexahedra. {py:func}`kneemesh.mesh.meniscus.hexahedral_mesh` takes either: it sweeps quadrilaterals of the loft's middle cross-section along it, or meshes the blocks with transfinite hexahedra.
 
 For the lateral and medial tibial and the patellar cartilage, each a sheet over its bone, it takes these steps:
 

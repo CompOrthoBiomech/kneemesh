@@ -143,10 +143,18 @@ def test_mesh_config_restricts_brep_keys_and_element_types():
         BrepMesh.model_validate({"element_type": "hex64"})
 
 
-def test_mesh_optimization_applies_only_to_hexahedra():
-    assert BrepMesh(element_type="hex8", meniscus=MeniscusMesh(optimize=True)).meniscus.optimize
-    with pytest.raises(pydantic.ValidationError, match="only to hexahedral"):
-        BrepMesh(meniscus=MeniscusMesh(optimize=True))
+def test_meniscus_optimizes_by_default_and_tetrahedra_ignore_it():
+    assert MeniscusMesh().optimize
+    assert not CartilageMesh().optimize
+    # Saved tetrahedral settings hold the meniscus's optimize too, so they must load again.
+    assert BrepMesh.model_validate_json(BrepMesh().model_dump_json()).meniscus.optimize
+
+
+def test_meniscus_hex_blocks_default_to_swept_quadrilaterals():
+    assert MeniscusBrep().hex_design == "swept_quads"
+    assert MeniscusBrep.model_validate({"hex_blocks": True, "hex_design": "butterfly"}).hex_design == "butterfly"
+    with pytest.raises(pydantic.ValidationError):
+        MeniscusBrep.model_validate({"hex_design": "o_grid"})
 
 
 def test_structures_list_every_name():
@@ -184,10 +192,8 @@ def test_cartilage_config_rejects_out_of_range_values(values):
         CartilageBrep.model_validate(values)
 
 
-def test_cartilage_optimization_applies_only_to_hexahedra():
+def test_cartilage_optimization_is_optional():
     assert BrepMesh(element_type="hex8", cartilage=CartilageMesh(optimize=True)).cartilage.optimize
-    with pytest.raises(pydantic.ValidationError, match="only to hexahedral"):
-        BrepMesh(cartilage=CartilageMesh(optimize=True))
 
 
 def test_sections_share_surface_and_meshing_settings():
@@ -222,8 +228,6 @@ def test_femoral_tetrahedra_default_to_the_element_size():
     assert FemoralCartilageMesh(element_size=3.0).resolved_max_size == 3.0
     assert FemoralCartilageMesh(element_size=2.0, max_size=3.0).resolved_max_size == 3.0
     assert FemoralCartilageMesh().aspect_weight == 0.5
-    with pytest.raises(pydantic.ValidationError, match="only to hexahedral"):
-        BrepMesh(femoral_cartilage=FemoralCartilageMesh(optimize=True))
 
 
 def test_cartilage_hexahedra_settings():

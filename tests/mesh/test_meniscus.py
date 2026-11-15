@@ -3,7 +3,8 @@ import numpy as np
 import pytest
 
 from kneemesh.disk import write_brep
-from kneemesh.mesh.meniscus import hexahedral_mesh, meniscus_face_groups
+from kneemesh.mesh.meniscus import _mean_value_coordinates, hexahedral_mesh, meniscus_face_groups
+from kneemesh.mesh_optimization import mesh_quality, optimize_hexahedral_mesh
 from kneemesh.tet_meshing import tetrahedral_mesh
 from kneemesh.vol import extract_isocontour, signed_distance_field, smooth_isocontour
 
@@ -91,9 +92,69 @@ def test_mesh_records_gmsh_element_types(meniscus_tetrahedra, meniscus_hexahedra
     assert meniscus_hexahedra.element_types == {"Hexahedron 8": 5, "Quadrilateral 4": 3}
 
 
-def test_hexahedral_mesh_rejects_single_block_solid(meniscus_solid):
-    with pytest.raises(ValueError, match="six-sided blocks"):
-        hexahedral_mesh(meniscus_solid)
+def test_hexahedral_mesh_rejects_smooth_caps(meniscus_domed_solid):
+    with pytest.raises(ValueError, match="planar caps"):
+        hexahedral_mesh(meniscus_domed_solid)
+
+
+@pytest.fixture(scope="module")
+def swept_hexahedra(meniscus_solid):
+    """Swept hexahedra of the planar-capped meniscus_solid, about 16 edges around and 30 along."""
+    return hexahedral_mesh(meniscus_solid, elements_per_edge=4, elements_along=30)
+
+
+def test_swept_hexahedral_mesh_stacks_one_section(swept_hexahedra):
+    assert swept_hexahedra.element_types == {"Hexahedron 8": 5, "Quadrilateral 4": 3}
+    hexahedra = swept_hexahedra.elements["Hexahedron 8"]
+    # One section's quadrilaterals per layer, between 31 stations of the same nodes.
+    assert len(hexahedra) % 30 == 0
+    assert len(swept_hexahedra.nodes) % 31 == 0
+    section = len(hexahedra) // 30
+    # Frontal-Delaunay fills the section with fewer quadrilaterals than the butterfly's 5 * 4 * 4.
+    assert 8 <= section < 5 * 16
+    # About 4 * elements_per_edge edges around each cap.
+    assert len(swept_hexahedra.element_sets["anterior_horn"]) == len(swept_hexahedra.element_sets["posterior_horn"]) == section
+
+
+def test_swept_hexahedral_mesh_fills_the_solid(swept_hexahedra, meniscus_solid, tmp_path):
+    volumes = hexahedron_volumes(swept_hexahedra, "Hexahedron 8")
+
+    # As for the butterfly, about 16 linear faces span each section's curved boundary, and the chords cut off about 4%.
+    assert volumes.sum() == pytest.approx(brep_volume(meniscus_solid, tmp_path), rel=0.05)
+
+
+def test_swept_hexahedral_mesh_optimizes_to_valid_elements(swept_hexahedra):
+    quality = mesh_quality(optimize_hexahedral_mesh(swept_hexahedra))
+
+    assert quality.inverted == 0
+    assert quality.minimum > 0.3
+
+
+def test_swept_hexahedral_mesh_names_the_horns_and_body(swept_hexahedra):
+    check_horns(swept_hexahedra)
+
+
+@pytest.mark.parametrize(("incomplete", "name", "nodes"), [(False, "Hexahedron 27", 27), (True, "Hexahedron 20", 20)])
+def test_swept_hexahedral_mesh_second_order(meniscus_solid, incomplete, name, nodes):
+    linear = hexahedral_mesh(meniscus_solid, elements_per_edge=2, elements_along=10)
+    mesh = hexahedral_mesh(meniscus_solid, elements_per_edge=2, elements_along=10, element_order=2, second_order_incomplete=incomplete)
+
+    assert list(mesh.elements) == [name]
+    assert mesh.elements[name].shape == (len(linear.elements["Hexahedron 8"]), nodes)
+    # The corners are the linear mesh's nodes, and the middle nodes lie between them.
+    assert np.isin(np.round(mesh.nodes[mesh.elements[name][:, :8]], 9).reshape(-1, 3), np.round(linear.nodes, 9)).all()
+    check_horns(mesh)
+
+
+def test_mean_value_coordinates_reproduce_points():
+    square = np.array([[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]])
+    points = np.array([[0.5, 0.5], [0.1, 0.8], [0.9, 0.05]])
+
+    weights = _mean_value_coordinates(points, square)
+
+    assert np.allclose(weights.sum(axis=1), 1.0)
+    assert np.allclose(weights @ square, points)
+    assert np.all(weights > 0)
 
 
 @pytest.mark.parametrize(
@@ -127,6 +188,20 @@ def test_hexahedral_mesh_of_real_meniscus_has_no_inverted_elements(real_label):
     mesh = hexahedral_mesh(contours_to_hex_blocks(slices), elements_per_edge=4, elements_along=20)
 
     assert scaled_corner_jacobians(mesh, "Hexahedron 8").min() > 0.1
+
+
+def test_swept_hexahedral_mesh_of_real_meniscus_optimizes_well(real_medial_label):
+    from kneemesh.geo.meniscus import centerline, contours_to_brep, slice_isocontour
+
+    surface = smooth_isocontour(extract_isocontour(signed_distance_field(real_medial_label)))
+    slices = slice_isocontour(surface, centerline(real_medial_label), spacing=5.0)
+
+    mesh = hexahedral_mesh(contours_to_brep(slices, cap="planar"), elements_per_edge=4, elements_along=20)
+    quality = mesh_quality(optimize_hexahedral_mesh(mesh))
+
+    # The section mapped from the middle starts with two barely inverted elements, which untangle; the butterfly reaches 0.35.
+    assert quality.inverted == 0
+    assert quality.minimum > 0.45
 
 
 def face_centers(mesh, name):

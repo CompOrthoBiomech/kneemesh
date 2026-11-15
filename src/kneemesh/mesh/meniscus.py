@@ -1,4 +1,13 @@
-"""Hexahedral meshing of the meniscus's five-block butterfly solid, and the meniscus's named sets of faces.
+"""Hexahedral meshing of the meniscus, swept or in butterfly blocks, and the meniscus's named sets of faces.
+
+hexahedral_mesh takes either B-rep a meniscus's hexahedra are made from:
+
+- The lofted solid with planar caps (geo.meniscus.contours_to_brep). One
+  cross-section is meshed with unstructured quadrilaterals (gmsh's
+  Frontal-Delaunay for quads), and its nodes are mapped onto stations
+  evenly spaced along the loft and joined into hexahedra.
+- The five-block butterfly solid (geo.meniscus.contours_to_hex_blocks),
+  whose blocks are meshed with structured, transfinite hexahedra.
 
 Both meshes of a meniscus have the sets "anterior_horn", "posterior_horn",
 and "body" besides "surface" (mesh_sets): the faces on the caps at either
@@ -7,9 +16,16 @@ end and on the rest of its surface.
 
 import gmsh
 import numpy as np
+from loguru import logger
 
 from kneemesh.brep import BRep, gmsh_session
+from kneemesh.mesh.sheet import quadrangulate, stack_layers
+from kneemesh.mesh_sets import boundary_faces
 from kneemesh.tet_meshing import Mesh, gmsh_mesh, gmsh_options, import_solid, require_element_order
+
+# Points sampled around each station of the loft, as the polygon interior nodes are mapped by.
+_RING_SAMPLES = 400
+_QUADRANGLE_TYPES = {1: 3, 2: 10}
 
 
 def hexahedral_mesh(
@@ -19,17 +35,28 @@ def hexahedral_mesh(
     element_order: int = 1,
     second_order_incomplete: bool = False,
 ) -> Mesh:
-    """Mesh a solid of six-sided blocks with hexahedra, using transfinite surfaces and volumes.
+    """Mesh a meniscus's lofted solid with swept hexahedra, or its butterfly blocks with structured ones.
 
-    Every block must have six faces, such as the five blocks from
-    contours_to_hex_blocks. Edges on the planar end caps get
-    elements_per_edge elements, and the edges running between the caps get
-    elements_along, so each block is a grid of elements_per_edge by
-    elements_per_edge quadrilaterals swept elements_along times.
+    A solid of one lofted face and two planar caps, as
+    geo.meniscus.contours_to_brep makes with planar caps, is swept: its
+    middle cross-section is meshed with quadrilaterals about a quarter of
+    elements_per_edge-th of its perimeter across, so about
+    4 * elements_per_edge edges go around it, and the section's nodes are
+    mapped onto elements_along + 1 stations evenly spaced along the loft
+    (see _swept_mesh). These hexahedra can start inverted, so optimize them
+    (mesh_optimization.optimize_hexahedral_mesh).
+
+    A solid of six-sided blocks with planar caps, such as the five blocks
+    from geo.meniscus.contours_to_hex_blocks, is meshed with transfinite
+    surfaces and volumes: edges on the caps get elements_per_edge elements,
+    and the edges running between the caps get elements_along, so each
+    block is a grid of elements_per_edge by elements_per_edge
+    quadrilaterals swept elements_along times.
 
     Args:
-        brep: A solid of six-sided blocks with planar caps.
-        elements_per_edge: Elements along each edge of a cap.
+        brep: A meniscus's lofted solid with planar caps, or its butterfly blocks.
+        elements_per_edge: Elements along each edge of a butterfly block's
+            cap, or a quarter of the edges around the swept cross-section.
         elements_along: Elements along the solid between the caps.
         element_order: Polynomial order of the elements. 2 gives 27-node hexahedra.
         second_order_incomplete: Omit face and interior nodes from high-order
@@ -39,22 +66,38 @@ def hexahedral_mesh(
         The hexahedral mesh.
 
     Raises:
-        ValueError: If a count is below 1, or brep is not a solid of six-sided
-            blocks with planar caps.
+        ValueError: If a count is below 1, element_order is out of range, or
+            brep is neither a lofted solid with planar caps nor a solid of
+            six-sided blocks with planar caps.
     """
     if elements_per_edge < 1 or elements_along < 1:
         raise ValueError(f"Element counts must be at least 1, got {elements_per_edge} and {elements_along}")
     require_element_order(element_order)
 
-    options: dict[str, float | bool] = {"Mesh.ElementOrder": element_order, "Mesh.SecondOrderIncomplete": second_order_incomplete}
-    with gmsh_session(), gmsh_options(options):
+    with gmsh_session():
         import_solid(brep)
         volumes = [tag for _, tag in gmsh.model.getEntities(3)]
         caps = [tag for _, tag in gmsh.model.getEntities(2) if gmsh.model.getType(2, tag) == "Plane"]
-        six_sided = all(len(gmsh.model.getBoundary([(3, volume)], oriented=False)) == 6 for volume in volumes)
-        if not six_sided or len(caps) != 2 * len(volumes):
-            raise ValueError("Hexahedral meshing needs a solid of six-sided blocks with planar caps, such as contours_to_hex_blocks gives")
+        others = [tag for _, tag in gmsh.model.getEntities(2) if tag not in caps]
+        if len(volumes) == 1 and len(caps) == 2 and len(others) == 1:
+            if element_order > 2:
+                raise ValueError(f"Swept meniscus hexahedra are linear or quadratic, got element_order {element_order}")
+            layers, quadrangles = _swept_layers(others[0], elements_per_edge, elements_along * element_order + 1, element_order)
+        else:
+            return _block_mesh(volumes, caps, elements_per_edge, elements_along, element_order, second_order_incomplete)
+    return _swept_mesh(layers, quadrangles, element_order, second_order_incomplete)
 
+
+def _block_mesh(volumes: list[int], caps: list[int], elements_per_edge: int, elements_along: int, order: int, incomplete: bool) -> Mesh:
+    """Mesh the current model's six-sided blocks with transfinite hexahedra."""
+    six_sided = all(len(gmsh.model.getBoundary([(3, volume)], oriented=False)) == 6 for volume in volumes)
+    if not six_sided or len(caps) != 2 * len(volumes):
+        raise ValueError(
+            "Hexahedral meshing needs a lofted solid with planar caps, as contours_to_brep makes, "
+            + "or a solid of six-sided blocks with planar caps, as contours_to_hex_blocks makes"
+        )
+    options: dict[str, float | bool] = {"Mesh.ElementOrder": order, "Mesh.SecondOrderIncomplete": incomplete}
+    with gmsh_options(options):
         cap_edges = {abs(tag) for _, tag in gmsh.model.getBoundary([(2, cap) for cap in caps], combined=False, oriented=False)}
         for _, curve in gmsh.model.getEntities(1):
             gmsh.model.mesh.setTransfiniteCurve(curve, (elements_per_edge if curve in cap_edges else elements_along) + 1)
@@ -68,6 +111,138 @@ def hexahedral_mesh(
 
         gmsh.model.mesh.generate(3)
         return gmsh_mesh(3, groups)
+
+
+def _swept_layers(loft: int, elements_per_edge: int, station_count: int, order: int) -> tuple[np.ndarray, np.ndarray]:
+    """Return the swept nodes' positions at every station, (stations, N, 3), and the cross-section's quadrilaterals.
+
+    The stations are evenly spaced in the loft's parameter along the
+    curve, which interpolates the slices at their centers' chord
+    parameters, so they are about evenly spaced in length. The middle
+    station's section is meshed with quadrilaterals. Its boundary nodes
+    keep their parameter around the loft at every station and lie exactly
+    on the loft. Its interior nodes keep their mean value coordinates in a
+    polygon of _RING_SAMPLES points around the station, which reproduce the
+    middle section exactly and deform it smoothly with the others, and
+    which lie in a station's plane wherever its polygon does: the end
+    stations are the caps' rims.
+    """
+    around, along = _loft_directions(loft)
+    low, high = (np.asarray(bound) for bound in gmsh.model.getParametrizationBounds(2, loft))
+    stations = np.linspace(low[along], high[along], station_count)
+    turns = low[around] + (high[around] - low[around]) * np.arange(_RING_SAMPLES) / _RING_SAMPLES
+    rings = _evaluate(loft, around, np.tile(turns, station_count), np.repeat(stations, _RING_SAMPLES)).reshape(station_count, _RING_SAMPLES, 3)
+
+    reference = rings[station_count // 2]
+    center = reference.mean(axis=0)
+    axes = np.linalg.svd(reference - center)[2][:2]
+    polygon = (reference - center) @ axes.T
+    perimeter = float(np.linalg.norm(np.roll(polygon, -1, axis=0) - polygon, axis=1).sum())
+    with gmsh_session():
+        points, quadrangles, boundary = _section_quadrangles(polygon, perimeter / (4 * elements_per_edge), order)
+
+    interior = np.setdiff1d(np.arange(len(points)), boundary)
+    layers = np.zeros((station_count, len(points), 3))
+    layers[:, interior] = np.einsum("np,spd->snd", _mean_value_coordinates(points[interior], polygon), rings)
+    fractions = _polygon_fractions(points[boundary], polygon)
+    boundary_turns = low[around] + (high[around] - low[around]) * fractions / _RING_SAMPLES
+    on_loft = _evaluate(loft, around, np.tile(boundary_turns, station_count), np.repeat(stations, len(boundary)))
+    layers[:, boundary] = on_loft.reshape(station_count, len(boundary), 3)
+    logger.debug(
+        "Meshed the meniscus's cross-section with {} quadrilaterals, {} nodes on its boundary, for {} stations",
+        len(quadrangles),
+        len(boundary),
+        station_count,
+    )
+    return layers, quadrangles
+
+
+def _loft_directions(loft: int) -> tuple[int, int]:
+    """Return the indices of the loft's parameters around and along it: the closed direction is around."""
+    low, high = gmsh.model.getParametrizationBounds(2, loft)
+    middles = [(low[axis] + high[axis]) / 2 for axis in range(2)]
+    gaps = []
+    for axis in range(2):
+        ends = [[*middles] for _ in range(2)]
+        ends[0][axis], ends[1][axis] = low[axis], high[axis]
+        values = np.reshape(gmsh.model.getValue(2, loft, [*ends[0], *ends[1]]), (2, 3))
+        gaps.append(float(np.linalg.norm(values[0] - values[1])))
+    around = int(np.argmin(gaps))
+    return around, 1 - around
+
+
+def _evaluate(loft: int, around: int, turns: np.ndarray, stations: np.ndarray) -> np.ndarray:
+    """Evaluate the loft at parameters around and along it, (N, 3)."""
+    parameters = np.column_stack((turns, stations) if around == 0 else (stations, turns))
+    return np.reshape(gmsh.model.getValue(2, loft, parameters.ravel().tolist()), (-1, 3))
+
+
+def _section_quadrangles(polygon: np.ndarray, size: float, order: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Mesh a closed 2D polygon's interior with quadrilaterals in the current model.
+
+    Returns:
+        The nodes' (N, 2) coordinates, the (Q, 4 or 9) quadrilaterals in
+        gmsh's node ordering, and the indices of the nodes on the boundary.
+    """
+    occ = gmsh.model.occ
+    tags = [occ.addPoint(x, y, 0.0) for x, y in polygon]
+    curve = occ.addSpline([*tags, tags[0]])
+    surface = occ.addPlaneSurface([occ.addCurveLoop([curve])])
+    occ.synchronize()
+    quadrangulate([surface], size, "frontal_delaunay", "the meniscus's cross-section")
+    if order == 2:
+        with gmsh_options({"Mesh.SecondOrderIncomplete": 0}):
+            gmsh.model.mesh.setOrder(2)
+    element_tags, element_nodes = gmsh.model.mesh.getElementsByType(_QUADRANGLE_TYPES[order], surface)
+    # Only the quadrilaterals' nodes: the points the spline passes through are free vertices with nodes of their own.
+    used, quadrangles = np.unique(np.asarray(element_nodes, dtype=np.int64), return_inverse=True)
+    points = np.reshape([gmsh.model.mesh.getNode(int(tag))[0] for tag in used], (-1, 3))[:, :2]
+    boundary = np.flatnonzero(np.isin(used, gmsh.model.mesh.getNodes(1, curve, includeBoundary=True)[0]))
+    return points, quadrangles.reshape(len(element_tags), -1), boundary
+
+
+def _mean_value_coordinates(points: np.ndarray, polygon: np.ndarray) -> np.ndarray:
+    """Return the (N, P) mean value coordinates of 2D points inside a closed polygon of P vertices.
+
+    Each row sums to 1 and reproduces its point from the polygon's vertices.
+    tan(a / 2) is computed as sin(a) / (1 + cos(a)), which stays finite for
+    points in line with an edge.
+    """
+    offsets = polygon[np.newaxis] - points[:, np.newaxis]
+    distances = np.linalg.norm(offsets, axis=2)
+    following = np.roll(offsets, -1, axis=1)
+    sines = offsets[..., 0] * following[..., 1] - offsets[..., 1] * following[..., 0]
+    cosines = np.einsum("npd,npd->np", offsets, following)
+    half_tangents = sines / (distances * np.roll(distances, -1, axis=1) + cosines)
+    weights = (np.roll(half_tangents, 1, axis=1) + half_tangents) / distances
+    return weights / weights.sum(axis=1, keepdims=True)
+
+
+def _polygon_fractions(points: np.ndarray, polygon: np.ndarray) -> np.ndarray:
+    """Return where points lie around a closed polygon, as fractional vertex indices of their nearest points on it."""
+    edges = np.roll(polygon, -1, axis=0) - polygon
+    offsets = points[:, np.newaxis] - polygon[np.newaxis]
+    along = np.clip(np.einsum("npd,pd->np", offsets, edges) / np.einsum("pd,pd->p", edges, edges), 0.0, 1.0)
+    distances = np.linalg.norm(offsets - along[..., np.newaxis] * edges, axis=2)
+    nearest = np.argmin(distances, axis=1)
+    return nearest + along[np.arange(len(points)), nearest]
+
+
+def _swept_mesh(layers: np.ndarray, quadrangles: np.ndarray, order: int, incomplete: bool) -> Mesh:
+    """Join the section's nodes at every station into hexahedra, naming the caps by the stations at either end."""
+    mesh, layer = stack_layers(layers, quadrangles, order, incomplete)
+    faces = boundary_faces(mesh.elements)
+    ends = [np.concatenate([np.all(layer[connectivity] == end, axis=1) for connectivity in faces.values()]) for end in (0, len(layers) - 1)]
+    anterior, posterior = sorted(ends, key=lambda on_cap: float(_cap_y(mesh, faces, on_cap)))
+    groups = {ANTERIOR_HORN: anterior, POSTERIOR_HORN: posterior, BODY: ~(anterior | posterior)}
+    logger.debug("Swept {} hexahedra through {} layers", sum(len(rows) for rows in mesh.elements.values()), (len(layers) - 1) // order)
+    return mesh.with_face_sets(groups, faces)
+
+
+def _cap_y(mesh: Mesh, faces: dict[str, np.ndarray], on_cap: np.ndarray) -> float:
+    """Return the mean y of the nodes of the faces on a cap."""
+    connectivity = np.concatenate([rows[:, :4] for rows in faces.values()])
+    return float(mesh.nodes[np.unique(connectivity[on_cap]), 1].mean())
 
 
 ANTERIOR_HORN = "anterior_horn"
