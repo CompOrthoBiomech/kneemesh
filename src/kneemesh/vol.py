@@ -39,6 +39,11 @@ class ContourSlice:
         v_axis: Unit vector in the plane. (u_axis, v_axis, normal) is right-handed.
         normal: Unit tangent of the curve at center.
         area: Area enclosed by the contour.
+        straight_from: For a contour whose thin inner edge was clipped, the
+            index of the cut's first corner: the contour is curved from
+            points[0], the cut's other corner, to points[straight_from], and
+            straight from there through the remaining points back to points[0].
+            None for a contour that is curved all the way around.
     """
 
     points: np.ndarray
@@ -47,6 +52,7 @@ class ContourSlice:
     v_axis: np.ndarray
     normal: np.ndarray
     area: float
+    straight_from: int | None = None
 
 
 def signed_distance_field(label_map: sitk.Image, label: int = 1, sigma: float | None = None) -> sitk.Image:

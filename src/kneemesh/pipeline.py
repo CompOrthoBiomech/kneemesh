@@ -194,7 +194,10 @@ def _meniscus_brep(segmentation: Segmentation, structure: Structure, brep_config
     logger.info("Smoothing the surface with {} iterations and pass band {}", config.smoothing_iterations, config.smoothing_pass_band)
     surface = smooth_isocontour(surface, config.smoothing_iterations, config.smoothing_pass_band)
     logger.info("Slicing every {} along the centerline", config.spacing)
-    slices = slice_isocontour(surface, curve, config.spacing, config.points_per_slice)
+    if config.inner_clip_height or config.resolved_inner_clip_ratio:
+        clip = f"{config.inner_clip_height} mm" if config.inner_clip_height else f"{config.resolved_inner_clip_ratio} of the outer height"
+        logger.info("Clipping the thin inner edge at {}", clip)
+    slices = slice_isocontour(surface, curve, config.spacing, config.points_per_slice, config.inner_clip_height, config.resolved_inner_clip_ratio)
     if config.hex_blocks and config.hex_design == "butterfly":
         logger.info("Building butterfly hexahedral blocks through {} slices", len(slices))
         return contours_to_hex_blocks(slices, config.spline_order)

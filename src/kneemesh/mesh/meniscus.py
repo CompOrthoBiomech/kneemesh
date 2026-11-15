@@ -14,6 +14,9 @@ and "body" besides "surface" (mesh_sets): the faces on the caps at either
 end and on the rest of its surface.
 """
 
+from dataclasses import dataclass, replace
+from itertools import pairwise
+
 import gmsh
 import numpy as np
 from loguru import logger
@@ -25,6 +28,8 @@ from kneemesh.tet_meshing import Mesh, gmsh_mesh, gmsh_options, import_solid, re
 
 # Points sampled around each station of the loft, as the polygon interior nodes are mapped by.
 _RING_SAMPLES = 400
+# Fewest ring samples on any wall, such as a clipped inner edge's narrow face.
+_MIN_WALL_SAMPLES = 16
 # Stations along the loft its length is measured through, and samples along each butterfly face's sides.
 _LENGTH_SAMPLES = 200
 _BLOCK_SAMPLES = 33
@@ -83,10 +88,10 @@ def hexahedral_mesh(
         volumes = [tag for _, tag in gmsh.model.getEntities(3)]
         caps = [tag for _, tag in gmsh.model.getEntities(2) if gmsh.model.getType(2, tag) == "Plane"]
         others = [tag for _, tag in gmsh.model.getEntities(2) if tag not in caps]
-        if len(volumes) == 1 and len(caps) == 2 and len(others) == 1:
+        if len(volumes) == 1 and len(caps) == 2 and others:
             if element_order > 2:
                 raise ValueError(f"Swept meniscus hexahedra are linear or quadratic, got element_order {element_order}")
-            layers, quadrangles = _swept_layers(others[0], transverse_size, circumferential_size, element_order)
+            layers, quadrangles = _swept_layers(_walls(others, caps), transverse_size, circumferential_size, element_order)
         else:
             return _block_mesh(volumes, caps, transverse_size, circumferential_size, element_order, second_order_incomplete)
     return _swept_mesh(layers, quadrangles, element_order, second_order_incomplete)
@@ -148,32 +153,101 @@ def _block_dimensions(caps: list[int]) -> tuple[float, float]:
     return float(np.sum(arcs)), float(np.mean(lengths))
 
 
-def _swept_layers(loft: int, transverse_size: float, circumferential_size: float, order: int) -> tuple[np.ndarray, np.ndarray]:
+@dataclass(frozen=True)
+class _Wall:
+    """One side face of a swept solid, running around its section from start to end and along it from cap to cap."""
+
+    face: int
+    around: int  # index of the face's parameter around the section
+    start: float  # parameter around where the wall begins, going around
+    end: float
+    first: float  # parameter along at the first cap
+    last: float  # parameter along at the other cap
+
+    def evaluate(self, turns: np.ndarray, stations: np.ndarray) -> np.ndarray:
+        """Evaluate the wall at fractions of the way around it and along the solid, (N, 3)."""
+        around = self.start + (self.end - self.start) * turns
+        along = self.first + (self.last - self.first) * stations
+        parameters = np.column_stack((around, along) if self.around == 0 else (along, around))
+        return np.reshape(gmsh.model.getValue(2, self.face, parameters.ravel().tolist()), (-1, 3))
+
+
+def _walls(sides: list[int], caps: list[int]) -> list[_Wall]:
+    """Return a swept solid's side faces in order around its section, all running the same way.
+
+    A face's parameter along the solid is the one whose ends lie on the
+    caps; the first cap is caps[0]. A single closed face, the loft of
+    unclipped contours, runs around its whole parameter range; several, as
+    with a clipped inner edge, are chained where their ends meet midway
+    along.
+    """
+    walls = []
+    for face in sides:
+        low, high = gmsh.model.getParametrizationBounds(2, face)
+        middle = [(low[axis] + high[axis]) / 2 for axis in range(2)]
+        gaps = []
+        for axis in range(2):
+            ends = [list(middle), list(middle)]
+            ends[0][axis], ends[1][axis] = low[axis], high[axis]
+            points = np.reshape(gmsh.model.getValue(2, face, [*ends[0], *ends[1]]), (2, 3))
+            gaps.append([[_distance_to(cap, point) for cap in caps] for point in points])
+        distances = np.array(gaps)  # (axis, end, cap)
+        along = int(np.argmin(distances.min(axis=2).sum(axis=1)))
+        on_first = distances[along, 0, 0] <= distances[along, 1, 0]
+        first, last = (low[along], high[along]) if on_first else (high[along], low[along])
+        walls.append(_Wall(face, 1 - along, low[1 - along], high[1 - along], first, last))
+    if len(walls) == 1:
+        return walls
+
+    ordered = [walls.pop(0)]
+    while walls:
+        end = ordered[-1].evaluate(np.array([1.0]), np.array([0.5]))[0]
+        gaps = [[float(np.linalg.norm(wall.evaluate(np.array([fraction]), np.array([0.5]))[0] - end)) for fraction in (0.0, 1.0)] for wall in walls]
+        index, side = np.unravel_index(int(np.argmin(gaps)), (len(walls), 2))
+        wall = walls.pop(int(index))
+        ordered.append(wall if side == 0 else replace(wall, start=wall.end, end=wall.start))
+    return ordered
+
+
+def _distance_to(face: int, point: np.ndarray) -> float:
+    """Return the distance from a point to its closest point on a face."""
+    closest = np.asarray(gmsh.model.getClosestPoint(2, face, point.tolist())[0])
+    return float(np.linalg.norm(closest - point))
+
+
+def _swept_layers(walls: list[_Wall], transverse_size: float, circumferential_size: float, order: int) -> tuple[np.ndarray, np.ndarray]:
     """Return the swept nodes' positions at every station, (stations, N, 3), and the cross-section's quadrilaterals.
 
-    The stations are evenly spaced in length along the curve through the
-    rings' centroids, about circumferential_size apart, with order - 1
-    more between each pair for high-order nodes. The middle station's
-    section is meshed with quadrilaterals of transverse_size. Its boundary
-    nodes keep their parameter around the loft at every station and lie
-    exactly on the loft. Its interior nodes keep their mean value
-    coordinates in a polygon of _RING_SAMPLES points around the station,
-    which reproduce the middle section exactly and deform it smoothly with
-    the others, and which lie in a station's plane wherever its polygon
-    does: the end stations are the caps' rims.
+    Each station is a ring of about _RING_SAMPLES points around the walls,
+    shared among them by length. The stations are evenly spaced in length
+    along the curve through the rings' centroids, about
+    circumferential_size apart, with order - 1 more between each pair for
+    high-order nodes. The largest station's section is meshed with
+    quadrilaterals of transverse_size, each wall's stretch of its boundary
+    a curve of its own, so nodes lie on the corners between walls. Its
+    boundary nodes keep their wall and fraction of the way around it at
+    every station and lie exactly on the walls. Its interior nodes keep
+    their mean value coordinates in the ring, which reproduce the largest
+    section exactly and deform it smoothly with the others, and which lie
+    in a station's plane wherever its ring does: the end stations are the
+    caps' rims.
     """
-    around, along = _loft_directions(loft)
-    low, high = (np.asarray(bound) for bound in gmsh.model.getParametrizationBounds(2, loft))
-    turns = low[around] + (high[around] - low[around]) * np.arange(_RING_SAMPLES) / _RING_SAMPLES
+    samples = np.linspace(0.0, 1.0, _LENGTH_SAMPLES)
+    lengths = [float(np.linalg.norm(np.diff(wall.evaluate(samples, np.full(len(samples), 0.5)), axis=0), axis=1).sum()) for wall in walls]
+    counts = np.maximum(_MIN_WALL_SAMPLES, np.round(np.array(lengths) / sum(lengths) * _RING_SAMPLES)).astype(np.int64)
+    offsets = np.concatenate(([0], np.cumsum(counts)))
 
     def rings_at(stations: np.ndarray) -> np.ndarray:
-        return _evaluate(loft, around, np.tile(turns, len(stations)), np.repeat(stations, _RING_SAMPLES)).reshape(len(stations), _RING_SAMPLES, 3)
+        rings = []
+        for wall, count in zip(walls, counts, strict=True):
+            turns = np.arange(count) / count
+            rings.append(wall.evaluate(np.tile(turns, len(stations)), np.repeat(stations, count)).reshape(len(stations), count, 3))
+        return np.concatenate(rings, axis=1)
 
-    fine = np.linspace(low[along], high[along], _LENGTH_SAMPLES)
-    centroids = rings_at(fine).mean(axis=1)
+    centroids = rings_at(samples).mean(axis=1)
     distances = np.concatenate(([0.0], np.cumsum(np.linalg.norm(np.diff(centroids, axis=0), axis=1))))
     elements = max(1, round(distances[-1] / circumferential_size))
-    stations = np.interp(np.linspace(0.0, distances[-1], elements * order + 1), distances, fine)
+    stations = np.interp(np.linspace(0.0, distances[-1], elements * order + 1), distances, samples)
     rings = rings_at(stations)
     station_count = len(stations)
 
@@ -183,17 +257,22 @@ def _swept_layers(loft: int, transverse_size: float, circumferential_size: float
     axes = np.linalg.svd(reference - center)[2][:2]
     polygon = (reference - center) @ axes.T
     with gmsh_session():
-        points, quadrangles, boundary = _section_quadrangles(polygon, transverse_size, order)
+        points, quadrangles, boundary = _section_quadrangles(polygon, offsets, transverse_size, order)
 
     interior = np.setdiff1d(np.arange(len(points)), boundary)
     layers = np.zeros((station_count, len(points), 3))
     layers[:, interior] = np.einsum("np,spd->snd", _mean_value_coordinates(points[interior], polygon), rings)
-    fractions = _polygon_fractions(points[boundary], polygon)
-    boundary_turns = low[around] + (high[around] - low[around]) * fractions / _RING_SAMPLES
-    on_loft = _evaluate(loft, around, np.tile(boundary_turns, station_count), np.repeat(stations, len(boundary)))
-    layers[:, boundary] = on_loft.reshape(station_count, len(boundary), 3)
+    fractions = _polygon_fractions(points[boundary], polygon) % offsets[-1]
+    which = np.searchsorted(offsets, fractions, side="right") - 1
+    for index, (wall, count) in enumerate(zip(walls, counts, strict=True)):
+        nodes = boundary[which == index]
+        turns = (fractions[which == index] - offsets[index]) / count
+        on_wall = wall.evaluate(np.tile(turns, station_count), np.repeat(stations, len(nodes)))
+        layers[:, nodes] = on_wall.reshape(station_count, len(nodes), 3)
     logger.debug(
-        "Meshed the meniscus's cross-section with {} quadrilaterals, {} nodes on its boundary, for {} elements along its length of {:.3g}",
+        "Meshed the meniscus's cross-section, bounded by {} faces, with {} quadrilaterals, {} nodes on its boundary, "
+        + "for {} elements along its length of {:.3g}",
+        len(walls),
         len(quadrangles),
         len(boundary),
         elements,
@@ -202,28 +281,12 @@ def _swept_layers(loft: int, transverse_size: float, circumferential_size: float
     return layers, quadrangles
 
 
-def _loft_directions(loft: int) -> tuple[int, int]:
-    """Return the indices of the loft's parameters around and along it: the closed direction is around."""
-    low, high = gmsh.model.getParametrizationBounds(2, loft)
-    middles = [(low[axis] + high[axis]) / 2 for axis in range(2)]
-    gaps = []
-    for axis in range(2):
-        ends = [[*middles] for _ in range(2)]
-        ends[0][axis], ends[1][axis] = low[axis], high[axis]
-        values = np.reshape(gmsh.model.getValue(2, loft, [*ends[0], *ends[1]]), (2, 3))
-        gaps.append(float(np.linalg.norm(values[0] - values[1])))
-    around = int(np.argmin(gaps))
-    return around, 1 - around
-
-
-def _evaluate(loft: int, around: int, turns: np.ndarray, stations: np.ndarray) -> np.ndarray:
-    """Evaluate the loft at parameters around and along it, (N, 3)."""
-    parameters = np.column_stack((turns, stations) if around == 0 else (stations, turns))
-    return np.reshape(gmsh.model.getValue(2, loft, parameters.ravel().tolist()), (-1, 3))
-
-
-def _section_quadrangles(polygon: np.ndarray, size: float, order: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+def _section_quadrangles(polygon: np.ndarray, offsets: np.ndarray, size: float, order: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Mesh a closed 2D polygon's interior with quadrilaterals in the current model.
+
+    The polygon's points from each offset to the next are one curve, a
+    spline through them to the next curve's first point, so mesh nodes lie
+    where curves meet; a single stretch is one closed spline.
 
     Returns:
         The nodes' (N, 2) coordinates, the (Q, 4 or 9) quadrilaterals in
@@ -231,18 +294,22 @@ def _section_quadrangles(polygon: np.ndarray, size: float, order: int) -> tuple[
     """
     occ = gmsh.model.occ
     tags = [occ.addPoint(x, y, 0.0) for x, y in polygon]
-    curve = occ.addSpline([*tags, tags[0]])
-    surface = occ.addPlaneSurface([occ.addCurveLoop([curve])])
+    if len(offsets) == 2:
+        curves = [occ.addSpline([*tags, tags[0]])]
+    else:
+        curves = [occ.addSpline([*tags[begin:finish], tags[finish % len(tags)]]) for begin, finish in pairwise(offsets.tolist())]
+    surface = occ.addPlaneSurface([occ.addCurveLoop(curves)])
     occ.synchronize()
     quadrangulate([surface], size, "frontal_delaunay", "the meniscus's cross-section")
     if order == 2:
         with gmsh_options({"Mesh.SecondOrderIncomplete": 0}):
             gmsh.model.mesh.setOrder(2)
     element_tags, element_nodes = gmsh.model.mesh.getElementsByType(_QUADRANGLE_TYPES[order], surface)
-    # Only the quadrilaterals' nodes: the points the spline passes through are free vertices with nodes of their own.
+    # Only the quadrilaterals' nodes: the points the splines pass through are free vertices with nodes of their own.
     used, quadrangles = np.unique(np.asarray(element_nodes, dtype=np.int64), return_inverse=True)
     points = np.reshape([gmsh.model.mesh.getNode(int(tag))[0] for tag in used], (-1, 3))[:, :2]
-    boundary = np.flatnonzero(np.isin(used, gmsh.model.mesh.getNodes(1, curve, includeBoundary=True)[0]))
+    on_curves = np.concatenate([gmsh.model.mesh.getNodes(1, curve, includeBoundary=True)[0] for curve in curves])
+    boundary = np.flatnonzero(np.isin(used, on_curves))
     return points, quadrangles.reshape(len(element_tags), -1), boundary
 
 

@@ -128,6 +128,18 @@ def meniscus_solid(meniscus_slices: list[ContourSlice]) -> BRep:
 
 
 @pytest.fixture(scope="session")
+def meniscus_clipped_slices(meniscus_mesh: vtkPolyData, meniscus_centerline: BSpline) -> list[ContourSlice]:
+    """Slices of meniscus_mesh every 5 mm with the thin inner edge cut off 2 mm high."""
+    return slice_isocontour(meniscus_mesh, meniscus_centerline, spacing=5.0, clip_height=2.0)
+
+
+@pytest.fixture(scope="session")
+def meniscus_clipped_solid(meniscus_clipped_slices: list[ContourSlice]) -> BRep:
+    """Solid lofted through meniscus_clipped_slices with planar caps: a curved face, the cut's face, and the caps."""
+    return contours_to_brep(meniscus_clipped_slices, cap="planar")
+
+
+@pytest.fixture(scope="session")
 def meniscus_domed_solid(meniscus_slices: list[ContourSlice]) -> BRep:
     """Cubic solid lofted through meniscus_slices with smooth caps."""
     return contours_to_brep(meniscus_slices, cap="smooth")

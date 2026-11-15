@@ -181,8 +181,9 @@ def test_pipelines_build_and_mesh_a_capped_solid(in_tmp_path, meniscus_label, ca
     assert len(list(in_tmp_path.glob("settings*.json"))) >= 1
 
 
-@pytest.mark.parametrize(("design", "volumes"), [("swept_quads", 1), ("butterfly", 5)])
-def test_pipelines_build_and_mesh_hexahedral_blocks(in_tmp_path, meniscus_label, design, volumes):
+# The swept design clips the inner edge by default, adding a face for the cut to the loft and caps.
+@pytest.mark.parametrize(("design", "volumes", "faces"), [("swept_quads", 1, 4), ("butterfly", 5, 22)])
+def test_pipelines_build_and_mesh_hexahedral_blocks(in_tmp_path, meniscus_label, design, volumes, faces):
     write_label_map(meniscus_label, in_tmp_path / "label.nii")
     brep_config = write_config(
         in_tmp_path / "brep.json",
@@ -207,6 +208,7 @@ def test_pipelines_build_and_mesh_hexahedral_blocks(in_tmp_path, meniscus_label,
     with gmsh_session():
         import_solid(read_brep(in_tmp_path / "lateral_meniscus_blocks.brep"))
         assert len(gmsh.model.getEntities(3)) == volumes
+        assert len(gmsh.model.getEntities(2)) == faces
     assert mesh_main(["--config", str(mesh_config), "--meniscus.transverse-size", "3.6", "--meniscus.circumferential-size", "7.5"]) == 0
 
     assert (in_tmp_path / "out" / "lateral_meniscus_hex8.vtk").stat().st_size > 0

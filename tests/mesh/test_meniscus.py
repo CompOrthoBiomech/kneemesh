@@ -185,6 +185,45 @@ def test_swept_hexahedral_mesh_second_order(meniscus_solid, incomplete, name, no
     check_horns(mesh)
 
 
+def distances_to_brep(brep, points, tmp_path):
+    """Distance from each point to its nearest face of a B-rep."""
+    from kneemesh.brep import gmsh_session
+
+    path = tmp_path / "shape.brep"
+    write_brep(brep, path)
+    with gmsh_session():
+        gmsh.model.occ.importShapes(str(path))
+        gmsh.model.occ.synchronize()
+        faces = [face for _, face in gmsh.model.getEntities(2)]
+        closest = [np.reshape(gmsh.model.getClosestPoint(2, face, points.ravel().tolist())[0], (-1, 3)) for face in faces]
+    return np.min([np.linalg.norm(points - near, axis=1) for near in closest], axis=0)
+
+
+@pytest.mark.parametrize("solid", ["meniscus_solid", "meniscus_clipped_solid"])
+def test_swept_hexahedra_lie_on_the_loft(request, solid, tmp_path):
+    brep = request.getfixturevalue(solid)
+    mesh = hexahedral_mesh(brep, transverse_size=1.8, circumferential_size=2.5)
+
+    surface = mesh.nodes[mesh.node_sets["surface"]]
+    assert distances_to_brep(brep, surface, tmp_path).max() < 1e-6
+
+
+def test_swept_hexahedra_of_a_clipped_loft_have_nodes_on_the_cut_edges(meniscus_clipped_solid, meniscus_clipped_slices):
+    mesh = hexahedral_mesh(meniscus_clipped_solid, transverse_size=1.8, circumferential_size=2.5)
+    quality = mesh_quality(optimize_hexahedral_mesh(mesh))
+
+    assert quality.inverted == 0
+    assert quality.minimum > 0.3
+    check_horns(mesh)
+    # Each cap's rim has a node at both corners of the cut.
+    nodes = mesh.nodes[mesh.node_sets["surface"]]
+    for contour in (meniscus_clipped_slices[0], meniscus_clipped_slices[-1]):
+        end = contour.straight_from
+        assert end is not None
+        for corner in (contour.points[0], contour.points[end]):
+            assert np.linalg.norm(nodes - corner, axis=1).min() < 1e-6
+
+
 def test_mean_value_coordinates_reproduce_points():
     square = np.array([[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]])
     points = np.array([[0.5, 0.5], [0.1, 0.8], [0.9, 0.05]])

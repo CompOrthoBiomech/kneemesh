@@ -150,6 +150,19 @@ def test_meniscus_optimizes_by_default_and_tetrahedra_ignore_it():
     assert BrepMesh.model_validate_json(BrepMesh().model_dump_json()).meniscus.optimize
 
 
+def test_meniscus_clips_its_inner_edge_for_swept_hexahedra_by_default():
+    assert MeniscusBrep().resolved_inner_clip_ratio == 0.0
+    assert MeniscusBrep(hex_blocks=True).resolved_inner_clip_ratio == 0.25
+    assert MeniscusBrep(hex_blocks=True, hex_design="butterfly").resolved_inner_clip_ratio == 0.0
+    assert MeniscusBrep(hex_blocks=True, inner_clip_ratio=0.0).resolved_inner_clip_ratio == 0.0
+    assert MeniscusBrep(hex_blocks=True, inner_clip_height=1.5).resolved_inner_clip_ratio == 0.0
+    assert MeniscusBrep(inner_clip_ratio=0.3).resolved_inner_clip_ratio == 0.3
+    with pytest.raises(pydantic.ValidationError, match="not both"):
+        MeniscusBrep(inner_clip_height=1.0, inner_clip_ratio=0.2)
+    with pytest.raises(pydantic.ValidationError, match="planar caps or none"):
+        MeniscusBrep(inner_clip_ratio=0.2, cap="smooth")
+
+
 def test_meniscus_hex_blocks_default_to_swept_quadrilaterals():
     assert MeniscusBrep().hex_design == "swept_quads"
     assert MeniscusBrep.model_validate({"hex_blocks": True, "hex_design": "butterfly"}).hex_design == "butterfly"

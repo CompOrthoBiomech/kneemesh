@@ -1,7 +1,7 @@
 """B-rep generation for the meniscus, a curved tube lofted through sections normal to its centerline."""
 
 import math
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from itertools import pairwise
 from typing import Literal
 
@@ -62,6 +62,12 @@ _CORNER_DRIFT_WEIGHT = 0.1
 _MIN_CORNER_TURN = math.radians(35.0)
 _MAX_CORNERS = 4
 _CORNER_SEPARATION = 1 / 8
+# Inner edge clipping: chord heights at _CLIP_STATIONS distances across each section, a cut at most
+# _MAX_CLIP_HEIGHT of the section's greatest height, and tracked corners kept only beyond _CLIP_CORNER_MARGIN
+# of the curved part's length from the cut's corners.
+_CLIP_STATIONS = 400
+_MAX_CLIP_HEIGHT = 0.5
+_CLIP_CORNER_MARGIN = 0.05
 
 _DEFAULT_CAP_OFFSET_RADII = 0.25
 _PIECE_SAMPLES = 20
@@ -118,7 +124,14 @@ def centerline(label_map: sitk.Image, label: int = 1) -> BSpline:
     return spline
 
 
-def slice_isocontour(mesh: vtkPolyData, curve: BSpline, spacing: float, points_per_slice: int = 32) -> list[ContourSlice]:
+def slice_isocontour(
+    mesh: vtkPolyData,
+    curve: BSpline,
+    spacing: float,
+    points_per_slice: int = 32,
+    clip_height: float | None = None,
+    clip_ratio: float = 0.0,
+) -> list[ContourSlice]:
     """Slice a mesh with planes normal to a curve at uniform arc-length spacing.
 
     Slices are spaced exactly spacing apart along the curve, with any remainder
@@ -132,23 +145,37 @@ def slice_isocontour(mesh: vtkPolyData, curve: BSpline, spacing: float, points_p
     In-plane axes are defined from the curve's best-fit plane, so they do not
     twist along a roughly planar curve.
 
+    With clip_height or clip_ratio, each section's thin inner edge, its
+    sharpest corner, is cut off straight where the section first reaches
+    that height, measured across the direction from its centroid to the
+    corner (see _clip_inner_edges). The contour is then its curved part,
+    from one corner of the cut to the other, and a straight run back.
+
     Args:
         mesh: Closed surface from extract_isocontour or smooth_isocontour.
         curve: Curve from centerline.
         spacing: Arc-length distance between slices, in physical units.
         points_per_slice: Number of points on each contour.
+        clip_height: Height in physical units at which to cut off the
+            sections' thin inner edges, or None to use clip_ratio.
+        clip_ratio: Height at which to cut off the sections' thin inner edges,
+            as a fraction of the mean of the sections' greatest heights,
+            those of their outer sides. 0 keeps the inner edges.
 
     Returns:
         The retained ContourSlices.
 
     Raises:
         ValueError: If spacing is not positive, points_per_slice is below 3,
-            or a retained plane does not cut the mesh in a closed contour.
+            a clipping height or ratio is negative, or a retained plane does
+            not cut the mesh in a closed contour.
     """
     if spacing <= 0:
         raise ValueError("Slice spacing must be positive")
     if points_per_slice < 3:
         raise ValueError("Slices need at least 3 points")
+    if (clip_height is not None and clip_height < 0) or clip_ratio < 0:
+        raise ValueError(f"Clipping heights must not be negative, got {clip_height} and {clip_ratio}")
 
     curve_u, lengths = _arc_lengths(curve)
     count = math.floor(lengths[-1] / spacing) + 1
@@ -174,7 +201,10 @@ def slice_isocontour(mesh: vtkPolyData, curve: BSpline, spacing: float, points_p
     if any(contour is None for contour in retained):
         raise ValueError("A plane along the curve does not cut the mesh in a closed contour")
     logger.debug("Kept {} of {} slices after clipping ends below {:.0%} of the mean area", len(retained), len(slices), _MIN_END_AREA_RATIO)
-    return _follow_corners(_align_with_previous(retained), points_per_slice)  # pyright: ignore[reportArgumentType]
+    aligned = _align_with_previous(retained)  # pyright: ignore[reportArgumentType]
+    if clip_height or clip_ratio:
+        return _clip_inner_edges(aligned, points_per_slice, clip_height, clip_ratio)
+    return _follow_corners(aligned, points_per_slice)
 
 
 def contours_to_brep(
@@ -220,6 +250,12 @@ def contours_to_brep(
 
     if len({len(contour.points) for contour in slices}) > 1:
         raise ValueError("Lofting needs the same number of points on every contour")
+    if len({contour.straight_from for contour in slices}) > 1:
+        raise ValueError("Lofting needs every contour clipped alike, or none")
+    if slices[0].straight_from is not None:
+        if cap == "smooth":
+            raise ValueError("Contours with clipped inner edges take planar caps or none, not smooth ones")
+        return _clipped_loft(slices, spline_order, cap == "planar")
 
     point_count = len(slices[0].points)
     projected = [_project_onto_plane(contour) for contour in slices]
@@ -243,6 +279,42 @@ def contours_to_brep(
             # The caps' rims are the loft's end sections, so sewing joins them.
             shell = gmsh.model.occ.addSurfaceLoop([loft, *caps], sewing=True)
             gmsh.model.occ.addVolume([shell])
+        gmsh.model.occ.synchronize()
+        return export_brep()
+
+
+def _clipped_loft(slices: list[ContourSlice], spline_order: int, planar_caps: bool) -> BRep:
+    """Loft contours with clipped inner edges: a surface through their curved parts and a ruled one through their cuts.
+
+    Each curved part, from points[0] to points[straight_from], is a clamped
+    B-spline at parameters shared by every contour, and the cut a straight
+    line between the same two corners. Both surfaces interpolate their
+    sections' poles along the curve at the same parameters, so their edges,
+    the inner edge's top and bottom, depend only on the corners and match
+    exactly.
+    """
+    end = slices[0].straight_from
+    assert end is not None
+    projected = [_project_onto_plane(contour) for contour in slices]
+    curved = [points[: end + 1] for points in projected]
+    parameters = np.mean([open_chord_parameters(points) for points in curved], axis=0)
+    degree = min(spline_order, 3, end)
+    rows = [clamped_interpolation(parameters, points, degree) for points in curved]
+    lines = [(np.array([0.0, 0.0, 1.0, 1.0]), np.array([points[-1], points[0]])) for points in curved]
+    along = open_chord_parameters(np.array([contour.center for contour in slices]))
+    along_degree = min(spline_order, 3, len(slices) - 1)
+
+    with gmsh_session():
+        faces = [add_swept_surface(rows, degree, along, along_degree), add_swept_surface(lines, 1, along, along_degree)]
+        if planar_caps:
+            for (knots, poles), (_, ends) in ((rows[0], lines[0]), (rows[-1], lines[-1])):
+                wire = gmsh.model.occ.addCurveLoop(
+                    [add_bspline_curve(knots, poles, degree), add_bspline_curve(np.array([0.0, 0.0, 1.0, 1.0]), ends, 1)]
+                )
+                faces.append(gmsh.model.occ.addPlaneSurface([wire]))
+            gmsh.model.occ.addVolume([gmsh.model.occ.addSurfaceLoop(faces, sewing=True)])
+        else:
+            gmsh.model.occ.addSurfaceLoop(faces, sewing=True)
         gmsh.model.occ.synchronize()
         return export_brep()
 
@@ -422,6 +494,146 @@ def _follow_corners(slices: list[ContourSlice], count: int) -> list[ContourSlice
         fractions = corners[0] / dense + np.interp(np.arange(count) + 0.5, starts[anchors], positions)
         resampled.append(replace(contour, points=sample_closed(contour.points, fractions)))
     return resampled
+
+
+def _clip_inner_edges(slices: list[ContourSlice], count: int, clip_height: float | None, clip_ratio: float) -> list[ContourSlice]:
+    """Cut off each aligned dense contour's thin inner edge straight, and resample it to count points.
+
+    The inner edge is the sharpest tracked corner. Each section's height at a
+    distance r along the direction from its area centroid to that corner is
+    the length of its chord across that direction there; the cut is the
+    chord nearest the corner at least the clipping height, clip_height or
+    clip_ratio times the mean of the sections' greatest heights, but at most
+    _MAX_CLIP_HEIGHT of the section's own greatest height, so small sections
+    toward the horns keep their shape. The cut's corners are exact points,
+    shared by index across slices: the curved part runs from points[0] to
+    points[straight_from], with the other tracked corners between them as
+    _follow_corners places them, and the straight part's points are evenly
+    spaced on the cut.
+    """
+    tracks, pinned = _corner_tracks(slices)
+    if not tracks.shape[1]:
+        logger.warning("Found no inner edge to clip, so the contours keep theirs")
+        return _follow_corners(slices, count)
+    sections = [_section_heights(contour, int(tip)) for contour, tip in zip(slices, tracks[:, 0], strict=True)]
+    target = clip_height if clip_height is not None else clip_ratio * float(np.mean([heights.max() for _, heights, _ in sections]))
+    cuts = []
+    for contour, (stations, heights, frame), tip in zip(slices, sections, tracks[:, 0], strict=True):
+        height = min(target, _MAX_CLIP_HEIGHT * float(heights.max()))
+        cuts.append(_cut(contour, frame, float(stations[int(np.argmax(heights >= height))]), int(tip)))
+
+    # Arc-length fractions of the other tracked corners along each curved part, kept where they stay well inside it on every slice.
+    others = []
+    for track in range(1, tracks.shape[1]):
+        fractions = np.array([cut.fraction_of(int(index)) for cut, index in zip(cuts, tracks[:, track], strict=True)])
+        if np.all((fractions > _CLIP_CORNER_MARGIN) & (fractions < 1 - _CLIP_CORNER_MARGIN)):
+            others.append((fractions, pinned[:, track]))
+    others.sort(key=lambda other: float(other[0].mean()))
+    straight = np.mean([cut.straight_length / (cut.curved_length + cut.straight_length) for cut in cuts])
+    straight_count = min(count - 2 - len(others), max(1, round(straight * count) - 1))
+    curved_count = count - straight_count
+    bounds = np.array([0.0, *(float(fractions.mean()) for fractions, _ in others), 1.0])
+    shares = _largest_remainders(np.diff(bounds), curved_count - 1)
+    starts = np.concatenate(([0], np.cumsum(shares)))
+    logger.debug(
+        "Clipped the inner edges at height {:.3g}, cutting {:.1%} of the perimeter on average, with {} corners between the cut's, "
+        + "and {} points on the curved part and {} on the cut",
+        target,
+        straight,
+        len(others),
+        curved_count,
+        straight_count,
+    )
+    clipped = []
+    for index, (contour, cut) in enumerate(zip(slices, cuts, strict=True)):
+        anchors = [0, *(position + 1 for position, (_, strong) in enumerate(others) if strong[index]), len(others) + 1]
+        positions = np.array([0.0, *(fractions[index] for fractions, _ in others), 1.0])[anchors]
+        # The cut's corners are exact points; the other corners lie between points, as in _follow_corners.
+        points_at = np.array([starts[anchor] - (0.5 if 0 < anchor <= len(others) else 0.0) for anchor in anchors])
+        curved = cut.along(np.interp(np.arange(curved_count), points_at, positions))
+        on_cut = curved[-1] + np.outer(np.arange(1, straight_count + 1) / (straight_count + 1), curved[0] - curved[-1])
+        points = np.vstack((curved, on_cut))
+        clipped.append(replace(contour, points=points, area=_polygon_area(contour, points), straight_from=curved_count - 1))
+    return clipped
+
+
+@dataclass(frozen=True)
+class _Cut:
+    """A dense contour with its thin inner edge cut off: the curved part from one corner of the cut to the other."""
+
+    curved: np.ndarray  # (M, 3) dense points from the cut's corner after the tip, around, to the one before it
+    lengths: np.ndarray  # (M,) arc length from curved[0]
+    indices: np.ndarray  # (M,) the dense contour's index of each point, -1 for the two corners
+    straight_length: float
+
+    @property
+    def curved_length(self) -> float:
+        return float(self.lengths[-1])
+
+    def along(self, fractions: np.ndarray) -> np.ndarray:
+        """Return points at fractions of the curved part's length, linearly between its dense points."""
+        distances = np.asarray(fractions) * self.lengths[-1]
+        return np.column_stack([np.interp(distances, self.lengths, self.curved[:, axis]) for axis in range(3)])
+
+    def fraction_of(self, index: int) -> float:
+        """Return the fraction of the curved part's length at which a dense point lies, or -1 if the cut removed it."""
+        where = np.flatnonzero(self.indices == index)
+        return float(self.lengths[where[0]] / self.lengths[-1]) if len(where) else -1.0
+
+
+def _section_heights(contour: ContourSlice, tip: int) -> tuple[np.ndarray, np.ndarray, tuple[np.ndarray, np.ndarray, np.ndarray]]:
+    """Return distances from the area centroid toward a contour's tip, from the tip inward, the cut's length at each, and the frame (centroid, direction, across).
+
+    The cut at each distance is the chord _cut would make there, between
+    the first crossings walking each way around the contour from the tip,
+    so a far crossing of a blunt section cannot pass for a tall cut.
+    """
+    centroid = _section_centroid(contour)
+    direction = contour.points[tip] - centroid
+    direction -= (direction @ contour.normal) * contour.normal
+    direction /= np.linalg.norm(direction)
+    across = np.cross(contour.normal, direction)
+    radial = (contour.points - centroid) @ direction
+    stations = np.linspace(radial.max(), radial.min(), _CLIP_STATIONS)[1:-1]
+    ends = [_crossings(contour, radial, tip, stations, step) for step in (1, -1)]
+    return stations, np.linalg.norm(ends[0] - ends[1], axis=1), (centroid, direction, across)
+
+
+def _crossings(contour: ContourSlice, radial: np.ndarray, tip: int, stations: np.ndarray, step: int) -> np.ndarray:
+    """Return where walking around a contour from its tip, one way, first crosses below each station, (S, 3)."""
+    count = len(contour.points)
+    walk = (tip + step * np.arange(count)) % count
+    below = radial[walk][None] < stations[:, None]
+    below[:, 0] = False
+    inside = np.argmax(below, axis=1)
+    inside[~below.any(axis=1)] = count - 1
+    previous = walk[inside - 1]
+    current = walk[inside]
+    weights = (stations - radial[previous]) / (radial[current] - radial[previous])
+    return contour.points[previous] + weights[:, None] * (contour.points[current] - contour.points[previous])
+
+
+def _cut(contour: ContourSlice, frame: tuple[np.ndarray, np.ndarray, np.ndarray], station: float, tip: int) -> _Cut:
+    """Cut a dense contour across its frame's direction at station, keeping the side away from the tip."""
+    centroid, direction, _ = frame
+    count = len(contour.points)
+    radial = (contour.points - centroid) @ direction
+    # Walk from the tip each way to the first point inside the cut; the edges just before them cross it.
+    after = next(step for step in range(1, count) if radial[(tip + step) % count] < station)
+    before = next(step for step in range(1, count) if radial[(tip - step) % count] < station)
+    first, last = (tip + after) % count, (tip - before) % count
+    start, end = (_crossings(contour, radial, tip, np.array([station]), step)[0] for step in (1, -1))
+    indices = np.concatenate(([-1], (first + np.arange((last - first) % count + 1)) % count, [-1]))
+    curved = np.vstack((start, contour.points[indices[1:-1]], end))
+    lengths = np.concatenate(([0.0], np.cumsum(np.linalg.norm(np.diff(curved, axis=0), axis=1))))
+    return _Cut(curved, lengths, indices, float(np.linalg.norm(start - end)))
+
+
+def _polygon_area(contour: ContourSlice, points: np.ndarray) -> float:
+    """Return the area a closed polygon of points encloses in a contour's plane."""
+    offsets = points - contour.center
+    u, v = offsets @ contour.u_axis, offsets @ contour.v_axis
+    return abs(0.5 * float(np.sum(u * np.roll(v, -1) - np.roll(u, -1) * v)))
 
 
 def _corner_tracks(slices: list[ContourSlice]) -> tuple[np.ndarray, np.ndarray]:

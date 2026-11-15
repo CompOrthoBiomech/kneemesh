@@ -162,6 +162,9 @@ class SurfaceBrep(BaseConfig):
     )
 
 
+DEFAULT_INNER_CLIP_RATIO = 0.25
+"""Default height of the cut off the meniscus's thin inner edge for swept hexahedra, as a fraction of its sections' mean greatest height."""
+
 type MeniscusHexDesign = Literal["swept_quads", "butterfly"]
 """The solid a meniscus's hexahedra are made from: the lofted solid to sweep quadrilaterals through, or five butterfly blocks."""
 
@@ -177,12 +180,42 @@ class MeniscusBrep(SurfaceBrep):
         default=None, description="Apex offset of smooth caps in physical units. None is a quarter of the equivalent radius"
     )
     hex_blocks: bool = Field(default=False, description="Build a solid for hexahedral meshing, as hex_design says, with planar caps")
+    inner_clip_height: OptionalFloat = Field(
+        default=None,
+        ge=0,
+        description="Height in physical units at which to cut the sections' thin inner edge off straight, making the cut's top "
+        + "and bottom feature edges, or None to use inner_clip_ratio",
+    )
+    inner_clip_ratio: OptionalFloat = Field(
+        default=None,
+        ge=0,
+        description="Height at which to cut the sections' thin inner edge off straight, as a fraction of the mean of the sections' "
+        + "greatest heights, measured across the direction from each section's centroid to its inner edge, so near its outer side. "
+        + f"None is {DEFAULT_INNER_CLIP_RATIO} for swept_quads hex_blocks and 0, no cut, otherwise. Each cut is at most half its "
+        + "section's greatest height",
+    )
     hex_design: MeniscusHexDesign = Field(
         default="swept_quads",
         description="With hex_blocks, which hexahedra the solid is for: swept_quads, the lofted solid, whose cross-section is meshed "
         + "with unstructured quadrilaterals swept along it, or butterfly, five blocks of structured hexahedra. Swept quadrilaterals "
         + "optimized to higher scaled Jacobians and lower aspect ratios on the real menisci, with a quarter of the elements",
     )
+
+    @model_validator(mode="after")
+    def _check_clipping(self) -> Self:
+        if self.inner_clip_height is not None and self.inner_clip_ratio is not None:
+            raise ValueError("Give inner_clip_height or inner_clip_ratio, not both")
+        clipped = bool(self.inner_clip_height) or bool(self.resolved_inner_clip_ratio)
+        if clipped and not self.hex_blocks and self.cap == "smooth":
+            raise ValueError("A clipped inner edge takes planar caps or none, not smooth ones")
+        return self
+
+    @property
+    def resolved_inner_clip_ratio(self) -> float:
+        """inner_clip_ratio, or its default: DEFAULT_INNER_CLIP_RATIO for swept_quads hex_blocks and 0 otherwise."""
+        if self.inner_clip_ratio is not None:
+            return self.inner_clip_ratio
+        return DEFAULT_INNER_CLIP_RATIO if self.hex_blocks and self.hex_design == "swept_quads" and self.inner_clip_height is None else 0.0
 
 
 class CartilageBrep(SurfaceBrep):

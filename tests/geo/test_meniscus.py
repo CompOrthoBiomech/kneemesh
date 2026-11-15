@@ -630,3 +630,60 @@ def test_loft_of_real_meniscus_does_not_fold(real_label, tmp_path, order, assemb
     # addThruSections overshoots there and folds the surface, which stalls
     # gmsh's surface meshing indefinitely.
     assert surface_folds(contours_to_brep(slices, spline_order=order, cap="planar"), tmp_path) == 0
+
+
+def test_clipping_cuts_the_inner_edge_straight_at_the_height(meniscus_clipped_slices, meniscus_slices):
+    assert {contour.straight_from for contour in meniscus_clipped_slices} == {meniscus_clipped_slices[0].straight_from}
+    for contour, full in zip(meniscus_clipped_slices, meniscus_slices, strict=True):
+        end = contour.straight_from
+        assert end is not None
+        start, stop = contour.points[0], contour.points[end]
+        assert np.linalg.norm(start - stop) == pytest.approx(2.0, abs=0.05)
+        # The straight run's points lie on the cut, evenly spaced from its first corner back to the other.
+        on_cut = contour.points[end:]
+        fractions = np.linspace(0.0, 1.0, len(on_cut) + 1)[:-1]
+        assert np.allclose(on_cut, stop + np.outer(fractions, start - stop), atol=1e-9)
+        u, v = in_plane(contour)
+        assert np.sum(u * np.roll(v, -1) - np.roll(u, -1) * v) > 0
+        assert 0.9 * full.area < contour.area < full.area
+
+
+def test_clipping_cuts_the_fixtures_sharpest_corner(meniscus_clipped_slices):
+    # The cut replaces the corner at the inner radius, so both of its ends lie near it, well inside the outer radius of 20.
+    for contour in meniscus_clipped_slices:
+        radii = np.linalg.norm(contour.points[[0, contour.straight_from], :2], axis=1)
+        assert np.all(radii < 14.0)
+
+
+def test_clipping_ratio_is_of_the_mean_outer_height(meniscus_mesh, meniscus_centerline):
+    slices = slice_isocontour(meniscus_mesh, meniscus_centerline, spacing=5.0, clip_ratio=0.25)
+
+    # Heights run across the direction from the centroid to the fixture's inner corner, a diagonal of its
+    # triangle, so its greatest is about 6.4 rather than its outer side's 8.
+    lengths = [np.linalg.norm(contour.points[0] - contour.points[contour.straight_from]) for contour in slices]
+    assert np.mean(lengths) == pytest.approx(0.25 * 6.4, rel=0.1)
+
+
+def test_clipping_rejects_negative_heights(meniscus_mesh, meniscus_centerline):
+    with pytest.raises(ValueError, match="must not be negative"):
+        slice_isocontour(meniscus_mesh, meniscus_centerline, spacing=5.0, clip_ratio=-0.1)
+
+
+def test_clipped_loft_has_a_face_for_the_cut(meniscus_clipped_solid, tmp_path):
+    path = tmp_path / "clipped.brep"
+    write_brep(meniscus_clipped_solid, path)
+    with gmsh_session():
+        gmsh.model.occ.importShapes(str(path))
+        gmsh.model.occ.synchronize()
+        assert len(gmsh.model.getEntities(3)) == 1
+        types = sorted(gmsh.model.getType(2, face) for _, face in gmsh.model.getEntities(2))
+        assert types == ["BSpline surface", "BSpline surface", "Plane", "Plane"]
+        # The cut's top and bottom run cap to cap, besides the caps' two edges each.
+        assert len(gmsh.model.getEntities(1)) == 6
+
+
+def test_clipped_loft_rejects_smooth_caps_and_mixed_contours(meniscus_clipped_slices, meniscus_slices):
+    with pytest.raises(ValueError, match="planar caps or none"):
+        contours_to_brep(meniscus_clipped_slices, cap="smooth")
+    with pytest.raises(ValueError, match="clipped alike"):
+        contours_to_brep([*meniscus_clipped_slices[:3], *meniscus_slices[3:]], cap="planar")
