@@ -15,8 +15,8 @@
   "output_directory": "examples",
   "assembled_mesh": "examples/knee_hex8.vtkhdf",
   "meniscus": {
-    "elements_per_edge": 6,
-    "elements_along": 50,
+    "transverse_size": 0.5,
+    "circumferential_size": 1.0,
     "optimize": true
   },
   "cartilage": {

@@ -94,6 +94,7 @@ class _Constraints:
     boundary_edges: np.ndarray  # (B, 2) node pairs on the boundary
     feature_edges: np.ndarray  # (F, 2) node pairs on feature edges
     areas: np.ndarray  # (N,) boundary area around each surface node, 0 elsewhere
+    edge_areas: np.ndarray  # (N, 3) outward boundary area vector around each feature edge node, 0 elsewhere
     preserve_volume: bool
     lines: np.ndarray  # (L, K) chains of nodes kept straight
     fractions: np.ndarray  # (L, K) each node's fraction of the way from its chain's first node to its last
@@ -124,19 +125,22 @@ class _Constraints:
         across = offsets - along
 
         surface = self.kind == _SURFACE
-        # Surface nodes: along is the normal part, across the tangential part.
-        normal = np.clip(np.einsum("ij,ij->i", offsets, self.direction), -self.deviation, self.deviation)
-        if self.preserve_volume and self.areas.any():
-            # Removing the area-weighted mean normal offset cancels the net volume
-            # it adds; a few rounds keep the offsets within their limits too.
-            for _ in range(_VOLUME_ROUNDS):
-                shift = np.sum(self.areas * normal) / np.sum(self.areas)
-                normal = np.clip(normal - shift * (self.areas > 0), -self.deviation, self.deviation)
-        offsets[surface] = (_clip_norm(across, self.travel) + normal[:, None] * self.direction)[surface]
         edge = self.kind == _EDGE
         # Edge nodes: along is the tangential part, across the part off the line.
         tangential = np.clip(np.einsum("ij,ij->i", offsets, self.direction), -self.travel, self.travel)
-        offsets[edge] = (tangential[:, None] * self.direction + _clip_norm(across, self.deviation))[edge]
+        edge_offsets = tangential[:, None] * self.direction + _clip_norm(across, self.deviation)
+        # Surface nodes: along is the normal part, across the tangential part.
+        normal = np.clip(np.einsum("ij,ij->i", offsets, self.direction), -self.deviation, self.deviation)
+        if self.preserve_volume and self.areas.any():
+            # Shifting the surface nodes' normal offsets by their area-weighted mean cancels the
+            # net volume they and the edge nodes, moving off their lines, add; a few rounds keep
+            # the offsets within their limits too.
+            edge_volume = float(np.einsum("ij,ij->", self.edge_areas[edge], edge_offsets[edge]))
+            for _ in range(_VOLUME_ROUNDS):
+                shift = (np.sum(self.areas * normal) + edge_volume) / np.sum(self.areas)
+                normal = np.clip(normal - shift * (self.areas > 0), -self.deviation, self.deviation)
+        offsets[surface] = (_clip_norm(across, self.travel) + normal[:, None] * self.direction)[surface]
+        offsets[edge] = edge_offsets[edge]
         offsets[self.kind == _FIXED] = 0.0
         return self.place_lines(self.origin + offsets)
 
@@ -556,8 +560,20 @@ def _constraints(
         *(int(np.count_nonzero(kind[np.unique(corners)] == value)) for value in (_INTERIOR, _SURFACE, _EDGE, _FIXED, _LINE)),
     )
     node_areas = np.where(kind == _SURFACE, np.linalg.norm(normals, axis=1) / 4, 0.0)
+    edge_areas = np.where((kind == _EDGE)[:, None], normals / 4, 0.0)
     return _Constraints(
-        kind, nodes.copy(), direction, deviation * sizes, travel * sizes, boundary_edges, feature_edges, node_areas, preserve_volume, lines, fractions
+        kind,
+        nodes.copy(),
+        direction,
+        deviation * sizes,
+        travel * sizes,
+        boundary_edges,
+        feature_edges,
+        node_areas,
+        edge_areas,
+        preserve_volume,
+        lines,
+        fractions,
     )
 
 

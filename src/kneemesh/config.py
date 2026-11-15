@@ -346,6 +346,10 @@ class StructureMesh(BaseConfig):
     )
 
 
+DEFAULT_MENISCUS_ASPECT_WEIGHT = 0.02
+"""Default weight of the squared Frobenius aspect ratios when optimizing meniscus hexahedra."""
+
+
 class MeniscusMesh(StructureMesh):
     """Settings for meshing the lateral and medial meniscus B-reps, with the defaults of each meshing function.
 
@@ -354,14 +358,25 @@ class MeniscusMesh(StructureMesh):
     butterfly blocks are meshed with structured hexahedra (see hex_design).
     """
 
-    elements_per_edge: int = Field(
-        default=4, description="Hexahedra along each edge of a butterfly block's cap, or a quarter of the edges around a swept cross-section"
+    transverse_size: float = Field(
+        default=1.0,
+        gt=0,
+        description="Target edge length of the hexahedra across the meniscus, in physical units: the swept cross-section's "
+        + "quadrilaterals at its largest section, smaller toward the horns, or a quarter of a butterfly's middle perimeter per cap edge",
     )
-    elements_along: int = Field(default=20, description="Hexahedra along the solid between the caps")
+    circumferential_size: float = Field(
+        default=2.0, gt=0, description="Target edge length of the hexahedra along the meniscus, in physical units, through its sections' centroids"
+    )
     optimize: bool = Field(
         default=True,
         description="Move hexahedral mesh nodes to raise the elements' scaled Jacobians after meshing; ignored for tetrahedra. "
         + "Swept hexahedra can start inverted",
+    )
+    aspect_weight: float = Field(
+        default=DEFAULT_MENISCUS_ASPECT_WEIGHT,
+        ge=0,
+        description="Weight of the elements' squared Frobenius aspect ratios against 1 / scaled Jacobian when optimizing. "
+        + "0 optimizes the scaled Jacobian alone, which stretched the real menisci's elements near the horns to aspect ratios of 90",
     )
 
 

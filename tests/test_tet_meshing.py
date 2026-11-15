@@ -153,17 +153,15 @@ def test_default_max_size_gives_a_larger_min_size_room(meniscus_solid):
     assert median_edge_length(tetrahedral_mesh(meniscus_solid, min_size=3.0)) == pytest.approx(3.0, rel=0.25)
 
 
-@pytest.mark.parametrize(("assembled", "failure"), [(True, "produced no tetrahedra"), (False, "could not mesh")])
-def test_default_sizes_mesh_the_thin_real_medial_meniscus(real_medial_label, assembled, failure):
+@pytest.mark.parametrize("assembled", [True, False])
+def test_default_sizes_mesh_the_thin_real_medial_meniscus(real_medial_label, assembled):
     label = assemble_label_maps({"medial_meniscus": real_medial_label}).image if assembled else real_medial_label
     surface = smooth_isocontour(extract_isocontour(signed_distance_field(label)))
     solid = contours_to_brep(slice_isocontour(surface, centerline(label), spacing=5.0), cap="planar")
 
-    assert len(tetrahedral_mesh(solid).elements["Tetrahedron 4"]) > 0
-    # gmsh's own default sizes, from the overall extent, are too coarse for it.
-    # Depending on the grid, gmsh then fails or silently makes no tetrahedra.
-    with pytest.raises(ValueError, match=failure):
-        tetrahedral_mesh(solid, max_size=1e3)
+    # gmsh's own default sizes, from the overall extent, are coarser: 200-1000 tetrahedra against about 2000. Before
+    # contours followed the section's corners, gmsh failed with them or silently made no tetrahedra.
+    assert len(tetrahedral_mesh(solid).elements["Tetrahedron 4"]) > len(tetrahedral_mesh(solid, max_size=1e3).elements["Tetrahedron 4"])
 
 
 def test_tetrahedral_mesh_rejects_open_surface(meniscus_surface):

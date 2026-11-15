@@ -304,7 +304,7 @@ def _meniscus_mesh(path: Path, mesh_config: BrepMesh, _structure: Structure) -> 
     logger.info("Meshing with {} elements", mesh_config.element_type)
     if mesh_config.element_shape == "hexahedral":
         mesh = meniscus_mesh.hexahedral_mesh(
-            brep, config.elements_per_edge, config.elements_along, mesh_config.element_order, mesh_config.second_order_incomplete
+            brep, config.transverse_size, config.circumferential_size, mesh_config.element_order, mesh_config.second_order_incomplete
         )
         if config.optimize:
             return _optimize(mesh, config)

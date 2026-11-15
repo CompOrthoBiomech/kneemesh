@@ -159,8 +159,8 @@ def meniscus_tetrahedra(meniscus_solid: BRep) -> Mesh:
 
 @pytest.fixture(scope="session")
 def meniscus_hexahedra(meniscus_hex_blocks: BRep) -> Mesh:
-    """Linear hexahedral mesh of meniscus_hex_blocks, 4 elements per cap edge and 30 along."""
-    return hexahedral_mesh(meniscus_hex_blocks, elements_per_edge=4, elements_along=30)
+    """Linear hexahedral mesh of meniscus_hex_blocks, about 1.8 mm across, 4 elements per cap edge, and 2.5 mm along."""
+    return hexahedral_mesh(meniscus_hex_blocks, transverse_size=1.8, circumferential_size=2.5)
 
 
 @pytest.fixture(scope="session")

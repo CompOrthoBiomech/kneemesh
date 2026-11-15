@@ -201,7 +201,7 @@ def test_write_mesh_msh_round_trips_nodes_and_elements(tmp_path, small_tetrahedr
 
 
 def test_write_mesh_keeps_high_order_elements(tmp_path, meniscus_hex_blocks):
-    mesh = hexahedral_mesh(meniscus_hex_blocks, elements_per_edge=2, elements_along=6, element_order=2, second_order_incomplete=True)
+    mesh = hexahedral_mesh(meniscus_hex_blocks, transverse_size=3.6, circumferential_size=12.5, element_order=2, second_order_incomplete=True)
     path = tmp_path / "mesh.msh"
 
     write_mesh(mesh, path)

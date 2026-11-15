@@ -10,6 +10,7 @@ import numpy as np
 import SimpleITK as sitk
 from loguru import logger
 from scipy.interpolate import BSpline, make_splprep
+from scipy.ndimage import gaussian_filter1d
 from scipy.sparse import coo_matrix
 from scipy.sparse.csgraph import connected_components, dijkstra
 from scipy.spatial import KDTree
@@ -34,6 +35,7 @@ from kneemesh.brep import (
     periodic_poles_and_knots,
     periodic_spline,
     resample_closed,
+    sample_closed,
     split_periodic_spline,
 )
 from kneemesh.vol import ContourSlice, require_3d_label_map
@@ -49,6 +51,17 @@ _CENTROID_TOLERANCE_VOXELS = 0.25
 _CENTROID_TOLERANCE_HALF_WIDTHS = 0.05
 _MIN_END_AREA_RATIO = 0.2
 _MAX_CONTOUR_SEGMENTS = 1_000_000
+# Corner tracking: contours are first sampled at _DENSE_POINTS, and turning is summed over a Gaussian
+# window of _CORNER_WINDOW of the perimeter. A track may drift about _CORNER_DRIFT of the perimeter per
+# slice, at a cost of _CORNER_DRIFT_WEIGHT radians per drift squared. Up to _MAX_CORNERS tracks are kept
+# whose turning averages _MIN_CORNER_TURN, each at least _CORNER_SEPARATION of the perimeter from the others.
+_DENSE_POINTS = 512
+_CORNER_WINDOW = 1 / 48
+_CORNER_DRIFT = 0.03
+_CORNER_DRIFT_WEIGHT = 0.1
+_MIN_CORNER_TURN = math.radians(35.0)
+_MAX_CORNERS = 4
+_CORNER_SEPARATION = 1 / 8
 
 _DEFAULT_CAP_OFFSET_RADII = 0.25
 _PIECE_SAMPLES = 20
@@ -110,9 +123,11 @@ def slice_isocontour(mesh: vtkPolyData, curve: BSpline, spacing: float, points_p
 
     Slices are spaced exactly spacing apart along the curve, with any remainder
     split equally between its two ends, and are ordered along the curve from
-    u = 0. Each cut is resampled to evenly spaced ordered points with a closed
-    Kochanek spline. Slices are removed from either end of the curve until one
-    encloses at least 20% of the average area.
+    u = 0. Each cut is resampled to ordered points with a closed Kochanek
+    spline: the section's corners, tracked through the slices by their
+    turning, at the same point indices on every slice, and points evenly
+    spaced between them (_follow_corners). Slices are removed from either end
+    of the curve until one encloses at least 20% of the average area.
 
     In-plane axes are defined from the curve's best-fit plane, so they do not
     twist along a roughly planar curve.
@@ -148,7 +163,7 @@ def slice_isocontour(mesh: vtkPolyData, curve: BSpline, spacing: float, points_p
     v_axes = np.cross(normals, u_axes)
 
     slices = [
-        _slice_at(mesh, center, u_axis, v_axis, normal, points_per_slice) for center, u_axis, v_axis, normal in zip(centers, u_axes, v_axes, normals)
+        _slice_at(mesh, center, u_axis, v_axis, normal, _DENSE_POINTS) for center, u_axis, v_axis, normal in zip(centers, u_axes, v_axes, normals)
     ]
     areas = np.array([0.0 if contour is None else contour.area for contour in slices])
     if not areas.any():
@@ -159,7 +174,7 @@ def slice_isocontour(mesh: vtkPolyData, curve: BSpline, spacing: float, points_p
     if any(contour is None for contour in retained):
         raise ValueError("A plane along the curve does not cut the mesh in a closed contour")
     logger.debug("Kept {} of {} slices after clipping ends below {:.0%} of the mean area", len(retained), len(slices), _MIN_END_AREA_RATIO)
-    return _align_with_previous(retained)  # pyright: ignore[reportArgumentType]
+    return _follow_corners(_align_with_previous(retained), points_per_slice)  # pyright: ignore[reportArgumentType]
 
 
 def contours_to_brep(
@@ -362,6 +377,114 @@ def _align_with_previous(slices: list[ContourSlice]) -> list[ContourSlice]:
         costs = [np.sum((target - np.roll(current, -shift, axis=0)) ** 2) for shift in range(len(current))]
         aligned.append(replace(contour, points=np.roll(contour.points, -int(np.argmin(costs)), axis=0)))
     return aligned
+
+
+def _follow_corners(slices: list[ContourSlice], count: int) -> list[ContourSlice]:
+    """Resample aligned dense contours to count points each, with every tracked corner at the same point index on every slice.
+
+    A loft joins contours at shared parameters, so the corners' ridges then
+    follow lines of the loft's parameter around it rather than drifting
+    across them. Each stretch between corners gets its share of count by
+    its mean fraction of the perimeter, and each contour starts at its
+    sharpest corner. A corner is pinned only on slices where it turns at
+    least _MIN_CORNER_TURN; elsewhere, as where the rounded outer corners
+    fade toward the horns, it lies where points are evenly spaced between
+    the pinned corners on either side, since a stretch's spacing changes at
+    a corner and the loft overshoots where that change meets a smooth
+    stretch of the contour. Without corners, points are evenly spaced from
+    the aligned start.
+    """
+    dense = len(slices[0].points)
+    tracks, pinned = (array[:, : min(_MAX_CORNERS, count)] for array in _corner_tracks(slices))
+    if not tracks.shape[1]:
+        return [replace(contour, points=resample_closed(contour.points, count)) for contour in slices]
+    # Order the tracks around the contour from the sharpest, the first, which starts every contour.
+    order = np.argsort((tracks - tracks[:, :1]) % dense, axis=1)
+    tracks, pinned = (np.take_along_axis(array, order, axis=1) for array in (tracks, pinned))
+    pinned[:, 0] = True
+    # Each stretch runs from its corner to the next around the contour, wrapping past the start; a lone corner's spans the whole.
+    lengths = ((np.roll(tracks, -1, axis=1) - tracks - 1) % dense + 1) / dense
+    shares = _largest_remainders(lengths.mean(axis=0), count)
+    starts = np.concatenate(([0], np.cumsum(shares)))
+    logger.debug(
+        "Tracked {} corners through {} slices, with {} points between them, pinned on {} of their slices",
+        tracks.shape[1],
+        len(slices),
+        shares.tolist(),
+        pinned.sum(axis=0).tolist(),
+    )
+    resampled = []
+    for contour, corners, strong in zip(slices, tracks, pinned, strict=True):
+        # Pinned corners' fractions of the perimeter after the first, closing with the first one turn on.
+        anchors = np.append(np.flatnonzero(strong), len(corners))
+        positions = np.append(((corners - corners[0]) % dense) / dense, 1.0)[anchors]
+        # Points sit half a spacing either side of each corner: an interpolating spline through a sharp corner's own point overshoots.
+        fractions = corners[0] / dense + np.interp(np.arange(count) + 0.5, starts[anchors], positions)
+        resampled.append(replace(contour, points=sample_closed(contour.points, fractions)))
+    return resampled
+
+
+def _corner_tracks(slices: list[ContourSlice]) -> tuple[np.ndarray, np.ndarray]:
+    """Return (slices, K) dense point indices of the corners tracked through every slice, sharpest track first, and where each turns at least _MIN_CORNER_TURN.
+
+    Each slice's turning at each point is summed over a Gaussian window,
+    positive where the contour turns counterclockwise about its normal.
+    Each track is the path through the slices maximizing its turning less
+    a penalty on drift between slices (Viterbi); points near a found track
+    are excluded from later ones. Tracks are kept while their turning
+    averages at least _MIN_CORNER_TURN and their order around the contour
+    stays the same on every slice.
+    """
+    dense = len(slices[0].points)
+    width = _CORNER_WINDOW * dense
+    turning = np.array([gaussian_filter1d(_signed_turns(contour), width, mode="wrap") * width * math.sqrt(2 * math.pi) for contour in slices])
+    offsets = np.arange(dense)
+    cyclic = np.abs(offsets[:, None] - offsets[None]) / dense
+    cyclic = np.minimum(cyclic, 1.0 - cyclic)
+    drift_cost = _CORNER_DRIFT_WEIGHT * (cyclic / _CORNER_DRIFT) ** 2
+    available = np.ones_like(turning, dtype=bool)
+    tracks: list[np.ndarray] = []
+    while len(tracks) < _MAX_CORNERS:
+        score = np.where(available, turning, -np.inf)
+        best, back = score[0], np.zeros((len(slices), dense), dtype=np.int64)
+        for index in range(1, len(slices)):
+            candidates = best[:, None] - drift_cost
+            back[index] = np.argmax(candidates, axis=0)
+            best = score[index] + candidates[back[index], offsets]
+        if not np.isfinite(best).any():
+            break
+        path = np.empty(len(slices), dtype=np.int64)
+        path[-1] = int(np.argmax(best))
+        for index in range(len(slices) - 1, 0, -1):
+            path[index - 1] = back[index, path[index]]
+        if turning[np.arange(len(slices)), path].mean() < _MIN_CORNER_TURN:
+            break
+        candidate = [*tracks, path]
+        relative = (np.column_stack(candidate) - candidate[0][:, None]) % dense
+        if len({tuple(np.argsort(row)) for row in relative}) > 1:
+            break
+        tracks = candidate
+        available &= cyclic[path] > _CORNER_SEPARATION
+    if not tracks:
+        return np.zeros((len(slices), 0), dtype=np.int64), np.zeros((len(slices), 0), dtype=bool)
+    corners = np.column_stack(tracks)
+    return corners, turning[np.arange(len(slices))[:, None], corners] >= _MIN_CORNER_TURN
+
+
+def _signed_turns(contour: ContourSlice) -> np.ndarray:
+    """Return the angle a closed contour turns at each point, positive counterclockwise about its normal."""
+    incoming = contour.points - np.roll(contour.points, 1, axis=0)
+    outgoing = np.roll(incoming, -1, axis=0)
+    return np.arctan2(np.cross(incoming, outgoing) @ contour.normal, np.einsum("ij,ij->i", incoming, outgoing))
+
+
+def _largest_remainders(fractions: np.ndarray, count: int) -> np.ndarray:
+    """Split count into whole shares, at least 1 each, proportional to fractions."""
+    extra = count - len(fractions)
+    ideal = fractions / fractions.sum() * extra
+    shares = np.floor(ideal).astype(np.int64)
+    shares[np.argsort(shares - ideal)[: extra - int(shares.sum())]] += 1
+    return shares + 1
 
 
 def _plane_coordinates(contour: ContourSlice) -> np.ndarray:

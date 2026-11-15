@@ -75,7 +75,7 @@ def real_hex_meshes(real_label, real_medial_label):
     for label in (real_label, real_medial_label):
         surface = smooth_isocontour(extract_isocontour(signed_distance_field(label)))
         slices = slice_isocontour(surface, centerline(label), spacing=5.0, points_per_slice=10)
-        meshes.append(hexahedral_mesh(contours_to_hex_blocks(slices), elements_per_edge=4, elements_along=20))
+        meshes.append(hexahedral_mesh(contours_to_hex_blocks(slices), transverse_size=1.5, circumferential_size=4.0))
     return meshes
 
 
@@ -332,8 +332,10 @@ def test_surface_nodes_stay_within_their_allowances(real_hex_meshes, optimized_r
 
 @pytest.mark.parametrize("incomplete", [False, True])
 def test_high_order_nodes_follow_their_corners(meniscus_hex_blocks, incomplete):
-    linear = hexahedral_mesh(meniscus_hex_blocks, elements_per_edge=3, elements_along=12)
-    quadratic = hexahedral_mesh(meniscus_hex_blocks, elements_per_edge=3, elements_along=12, element_order=2, second_order_incomplete=incomplete)
+    linear = hexahedral_mesh(meniscus_hex_blocks, transverse_size=2.4, circumferential_size=6.25)
+    quadratic = hexahedral_mesh(
+        meniscus_hex_blocks, transverse_size=2.4, circumferential_size=6.25, element_order=2, second_order_incomplete=incomplete
+    )
     name = next(iter(quadratic.elements))
     connectivity = quadratic.elements[name]
 

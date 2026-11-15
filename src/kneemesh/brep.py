@@ -274,6 +274,19 @@ def resample_closed(loop: np.ndarray, count: int) -> np.ndarray:
     Returns:
         (count, D) points, starting at the loop's first point.
     """
+    return sample_closed(loop, np.arange(count) / count)
+
+
+def sample_closed(loop: np.ndarray, fractions: np.ndarray) -> np.ndarray:
+    """Return points at fractions of the length around a closed Kochanek spline through a loop.
+
+    Args:
+        loop: (N, D) points around a closed loop, without the first repeated, with D of 2 or 3.
+        fractions: Fractions of the length from the loop's first point, taken modulo 1.
+
+    Returns:
+        (len(fractions), D) points.
+    """
     dimension = loop.shape[1]
     points = vtkPoints()
     points.SetData(numpy_to_vtk(np.pad(loop, ((0, 0), (0, 3 - dimension))), deep=True))
@@ -286,11 +299,11 @@ def resample_closed(loop: np.ndarray, count: int) -> np.ndarray:
     spline.ClosedOn()
     spline.ParameterizeByLengthOn()
 
-    result = np.empty((count, 3))
+    result = np.empty((len(fractions), 3))
     point = [0.0, 0.0, 0.0]
     derivatives = [0.0] * 9
-    for index in range(count):
-        spline.Evaluate([index / count, 0.0, 0.0], point, derivatives)
+    for index, fraction in enumerate(np.asarray(fractions, dtype=float) % 1.0):
+        spline.Evaluate([float(fraction), 0.0, 0.0], point, derivatives)
         result[index] = point
     return result[:, :dimension]
 

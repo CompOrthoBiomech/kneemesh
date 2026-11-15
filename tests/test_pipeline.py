@@ -207,10 +207,10 @@ def test_pipelines_build_and_mesh_hexahedral_blocks(in_tmp_path, meniscus_label,
     with gmsh_session():
         import_solid(read_brep(in_tmp_path / "lateral_meniscus_blocks.brep"))
         assert len(gmsh.model.getEntities(3)) == volumes
-    assert mesh_main(["--config", str(mesh_config), "--meniscus.elements-per-edge", "2", "--meniscus.elements-along", "10"]) == 0
+    assert mesh_main(["--config", str(mesh_config), "--meniscus.transverse-size", "3.6", "--meniscus.circumferential-size", "7.5"]) == 0
 
     assert (in_tmp_path / "out" / "lateral_meniscus_hex8.vtk").stat().st_size > 0
-    assert BrepMesh.from_json(in_tmp_path / "mesh_modified.json").meniscus.elements_per_edge == 2
+    assert BrepMesh.from_json(in_tmp_path / "mesh_modified.json").meniscus.transverse_size == 3.6
 
 
 def test_mesh_pipeline_makes_serendipity_hexahedra(in_tmp_path, meniscus_hex_blocks):
@@ -221,10 +221,10 @@ def test_mesh_pipeline_makes_serendipity_hexahedra(in_tmp_path, meniscus_hex_blo
         '{"medial_meniscus": "blocks.brep"}',
         "--element-type",
         "hex20",
-        "--meniscus.elements-per-edge",
-        "2",
-        "--meniscus.elements-along",
-        "6",
+        "--meniscus.transverse-size",
+        "3.6",
+        "--meniscus.circumferential-size",
+        "12.5",
     ]
     assert mesh_main(argv) == 0
 
@@ -419,7 +419,7 @@ def test_mesh_pipeline_optimizes_hexahedra(in_tmp_path, meniscus_hex_blocks, cap
     write_brep(meniscus_hex_blocks, in_tmp_path / "blocks.brep")
     argv = ["--breps", '{"lateral_meniscus": "blocks.brep"}', "--element-type", "hex8", "--output", ".vtk", "--meniscus.optimize", "true"]
 
-    assert mesh_main([*argv, "--meniscus.elements-per-edge", "3", "--meniscus.elements-along", "12"]) == 0
+    assert mesh_main([*argv, "--meniscus.transverse-size", "2.4", "--meniscus.circumferential-size", "6.25"]) == 0
 
     stderr = capsys.readouterr().err
     assert "Optimized minimum scaled Jacobian" in stderr

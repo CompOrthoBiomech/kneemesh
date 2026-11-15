@@ -9,6 +9,7 @@ from kneemesh.brep import (
     contours_to_polydata,
     gmsh_session,
     resample_closed,
+    sample_closed,
 )
 from kneemesh.vol import ContourSlice
 
@@ -80,6 +81,15 @@ def test_resample_closed_keeps_the_dimension_and_spacing():
     assert np.linalg.norm(points, axis=1) == pytest.approx(np.full(20, 3.0), rel=1e-3)
     gaps = np.linalg.norm(np.roll(points, -1, axis=0) - points, axis=1)
     assert gaps == pytest.approx(np.full(20, gaps.mean()), rel=1e-2)
+
+
+def test_sample_closed_takes_fractions_of_the_length_modulo_one():
+    angles = np.linspace(0, 2 * np.pi, 50, endpoint=False)
+    circle = np.column_stack((3 * np.cos(angles), 3 * np.sin(angles)))
+
+    points = sample_closed(circle, np.array([0.0, 0.25, 0.5, 1.25]))
+
+    assert points == pytest.approx(np.array([[3.0, 0.0], [0.0, 3.0], [-3.0, 0.0], [0.0, 3.0]]), abs=1e-2)
 
 
 def test_butterfly_splits_follow_given_costs():

@@ -27,11 +27,13 @@ class ContourSlice:
     """An ordered closed contour of a surface in a plane normal to a curve.
 
     Attributes:
-        points: (N, 3) physical points, evenly spaced around the contour and
-            counterclockwise about normal. The closing point is not repeated.
-            The first slice starts in the +u_axis direction from the contour's
-            center. Each later slice starts wherever best lines its points up
-            with the previous slice's, so corresponding points match along the curve.
+        points: (N, 3) physical points around the contour, counterclockwise
+            about normal. The closing point is not repeated. Each corner
+            tracked through the slices, such as a meniscus's sharp inner edge,
+            lies at the same index on every slice, the sharpest at index 0,
+            and points are evenly spaced between them, so corresponding points
+            match along the curve. Without corners, points are evenly spaced
+            from wherever best lines them up with the previous slice's.
         center: Point on the curve where the plane is centered.
         u_axis: Unit vector in the plane.
         v_axis: Unit vector in the plane. (u_axis, v_axis, normal) is right-handed.

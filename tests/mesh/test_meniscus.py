@@ -1,7 +1,10 @@
+import math
+
 import gmsh
 import numpy as np
 import pytest
 
+from kneemesh.config import DEFAULT_MENISCUS_ASPECT_WEIGHT
 from kneemesh.disk import write_brep
 from kneemesh.mesh.meniscus import _mean_value_coordinates, hexahedral_mesh, meniscus_face_groups
 from kneemesh.mesh_optimization import mesh_quality, optimize_hexahedral_mesh
@@ -48,10 +51,49 @@ def brep_volume(brep, tmp_path):
         return sum(gmsh.model.occ.getMass(3, volume) for _, volume in gmsh.model.getEntities(3))
 
 
+def block_counts(mesh):
+    """Return a butterfly mesh's elements per cap edge and along, from its horn's 5 * n * n faces."""
+    horn = len(mesh.element_sets["anterior_horn"])
+    per_edge = round(math.sqrt(horn / 5))
+    assert 5 * per_edge**2 == horn
+    total = len(mesh.elements[next(iter(mesh.elements))])
+    assert total % horn == 0
+    return per_edge, total // horn
+
+
+def edge_lengths(mesh):
+    """Return the mean length of the hexahedra's edges along the meniscus, and the median across it.
+
+    Of each hexahedron's three groups of four parallel edges, the one closest
+    to the fixture's tangent about the z axis runs along it.
+    """
+    corners = mesh.nodes[mesh.elements[next(iter(mesh.elements))][:, :8]]
+    groups = [((0, 1), (3, 2), (4, 5), (7, 6)), ((0, 3), (1, 2), (4, 7), (5, 6)), ((0, 4), (1, 5), (2, 6), (3, 7))]
+    edges = np.stack([np.stack([corners[:, end] - corners[:, start] for start, end in group], axis=1) for group in groups], axis=1)
+    centers = corners.mean(axis=1)
+    tangents = np.column_stack((-centers[:, 1], centers[:, 0], np.zeros(len(centers))))
+    tangents /= np.linalg.norm(tangents, axis=1, keepdims=True)
+    alignment = (np.abs(np.einsum("egkd,ed->egk", edges, tangents)) / np.linalg.norm(edges, axis=-1)).mean(axis=2)
+    along = np.argmax(alignment, axis=1)
+    lengths = np.linalg.norm(edges, axis=-1)
+    rows = np.arange(len(corners))
+    across = np.concatenate([lengths[rows, (along + shift) % 3] for shift in (1, 2)])
+    return float(lengths[rows, along].mean()), float(np.median(across))
+
+
 def test_hexahedral_mesh_is_structured_blocks(meniscus_hexahedra):
-    # Five blocks, each 4 x 4 elements per cap swept 30 times.
     assert list(meniscus_hexahedra.elements) == ["Hexahedron 8"]
-    assert len(meniscus_hexahedra.elements["Hexahedron 8"]) == 5 * 4 * 4 * 30
+    # Five blocks of n by n elements per cap, swept along: n of 4 for a perimeter of about 29 at 1.8.
+    assert block_counts(meniscus_hexahedra)[0] == 4
+
+
+# The butterfly's boundary edges take transverse_size, but its inner block and short spokes are smaller.
+@pytest.mark.parametrize(("mesh", "smallest"), [("meniscus_hexahedra", 0.3), ("swept_hexahedra", 0.6)])
+def test_hexahedral_mesh_targets_the_sizes(request, mesh, smallest):
+    along, across = edge_lengths(request.getfixturevalue(mesh))
+
+    assert along == pytest.approx(2.5, rel=0.1)
+    assert smallest * 1.8 < across < 1.2 * 1.8
 
 
 def test_hexahedral_mesh_has_no_inverted_elements(meniscus_hexahedra):
@@ -65,26 +107,24 @@ def test_hexahedral_mesh_fills_the_solid(meniscus_hexahedra, meniscus_hex_blocks
     assert volumes.sum() == pytest.approx(brep_volume(meniscus_hex_blocks, tmp_path), rel=0.05)
 
 
-@pytest.mark.parametrize(("per_edge", "along"), [(2, 15), (8, 60)])
-def test_hexahedral_mesh_is_valid_at_other_resolutions(meniscus_hex_blocks, per_edge, along):
-    mesh = hexahedral_mesh(meniscus_hex_blocks, elements_per_edge=per_edge, elements_along=along)
+@pytest.mark.parametrize(("transverse", "circumferential"), [(3.6, 5.0), (0.9, 1.25)])
+def test_hexahedral_mesh_is_valid_at_other_sizes(meniscus_hex_blocks, meniscus_hexahedra, transverse, circumferential):
+    mesh = hexahedral_mesh(meniscus_hex_blocks, transverse_size=transverse, circumferential_size=circumferential)
 
-    assert len(mesh.elements["Hexahedron 8"]) == 5 * per_edge * per_edge * along
+    per_edge, along = block_counts(mesh)
+    base_per_edge, base_along = block_counts(meniscus_hexahedra)
+    assert per_edge == pytest.approx(base_per_edge * 1.8 / transverse, abs=1)
+    assert along == pytest.approx(base_along * 2.5 / circumferential, abs=1)
     assert scaled_corner_jacobians(mesh, "Hexahedron 8").min() > 0
 
 
-def test_hexahedral_mesh_second_order_has_27_node_hexahedra(meniscus_hex_blocks):
-    mesh = hexahedral_mesh(meniscus_hex_blocks, elements_per_edge=2, elements_along=10, element_order=2)
+@pytest.mark.parametrize(("incomplete", "name", "nodes"), [(False, "Hexahedron 27", 27), (True, "Hexahedron 20", 20)])
+def test_hexahedral_mesh_second_order(meniscus_hex_blocks, incomplete, name, nodes):
+    linear = hexahedral_mesh(meniscus_hex_blocks, transverse_size=3.6, circumferential_size=7.5)
+    mesh = hexahedral_mesh(meniscus_hex_blocks, transverse_size=3.6, circumferential_size=7.5, element_order=2, second_order_incomplete=incomplete)
 
-    assert list(mesh.elements) == ["Hexahedron 27"]
-    assert mesh.elements["Hexahedron 27"].shape == (5 * 2 * 2 * 10, 27)
-
-
-def test_hexahedral_mesh_second_order_incomplete_has_20_node_hexahedra(meniscus_hex_blocks):
-    mesh = hexahedral_mesh(meniscus_hex_blocks, elements_per_edge=2, elements_along=10, element_order=2, second_order_incomplete=True)
-
-    assert list(mesh.elements) == ["Hexahedron 20"]
-    assert mesh.elements["Hexahedron 20"].shape == (5 * 2 * 2 * 10, 20)
+    assert list(mesh.elements) == [name]
+    assert mesh.elements[name].shape == (len(linear.elements["Hexahedron 8"]), nodes)
 
 
 def test_mesh_records_gmsh_element_types(meniscus_tetrahedra, meniscus_hexahedra):
@@ -99,21 +139,20 @@ def test_hexahedral_mesh_rejects_smooth_caps(meniscus_domed_solid):
 
 @pytest.fixture(scope="module")
 def swept_hexahedra(meniscus_solid):
-    """Swept hexahedra of the planar-capped meniscus_solid, about 16 edges around and 30 along."""
-    return hexahedral_mesh(meniscus_solid, elements_per_edge=4, elements_along=30)
+    """Swept hexahedra of the planar-capped meniscus_solid, about 1.8 mm across and 2.5 mm along."""
+    return hexahedral_mesh(meniscus_solid, transverse_size=1.8, circumferential_size=2.5)
 
 
 def test_swept_hexahedral_mesh_stacks_one_section(swept_hexahedra):
     assert swept_hexahedra.element_types == {"Hexahedron 8": 5, "Quadrilateral 4": 3}
     hexahedra = swept_hexahedra.elements["Hexahedron 8"]
-    # One section's quadrilaterals per layer, between 31 stations of the same nodes.
-    assert len(hexahedra) % 30 == 0
-    assert len(swept_hexahedra.nodes) % 31 == 0
-    section = len(hexahedra) // 30
-    # Frontal-Delaunay fills the section with fewer quadrilaterals than the butterfly's 5 * 4 * 4.
+    # One section's quadrilaterals per layer, each cap one section.
+    section = len(swept_hexahedra.element_sets["anterior_horn"])
+    assert len(swept_hexahedra.element_sets["posterior_horn"]) == section
+    assert len(hexahedra) % section == 0
+    assert len(swept_hexahedra.nodes) % (len(hexahedra) // section + 1) == 0
+    # Frontal-Delaunay fills the section with fewer quadrilaterals than the butterfly's 5 * 4 * 4 at the same size.
     assert 8 <= section < 5 * 16
-    # About 4 * elements_per_edge edges around each cap.
-    assert len(swept_hexahedra.element_sets["anterior_horn"]) == len(swept_hexahedra.element_sets["posterior_horn"]) == section
 
 
 def test_swept_hexahedral_mesh_fills_the_solid(swept_hexahedra, meniscus_solid, tmp_path):
@@ -136,8 +175,8 @@ def test_swept_hexahedral_mesh_names_the_horns_and_body(swept_hexahedra):
 
 @pytest.mark.parametrize(("incomplete", "name", "nodes"), [(False, "Hexahedron 27", 27), (True, "Hexahedron 20", 20)])
 def test_swept_hexahedral_mesh_second_order(meniscus_solid, incomplete, name, nodes):
-    linear = hexahedral_mesh(meniscus_solid, elements_per_edge=2, elements_along=10)
-    mesh = hexahedral_mesh(meniscus_solid, elements_per_edge=2, elements_along=10, element_order=2, second_order_incomplete=incomplete)
+    linear = hexahedral_mesh(meniscus_solid, transverse_size=3.6, circumferential_size=7.5)
+    mesh = hexahedral_mesh(meniscus_solid, transverse_size=3.6, circumferential_size=7.5, element_order=2, second_order_incomplete=incomplete)
 
     assert list(mesh.elements) == [name]
     assert mesh.elements[name].shape == (len(linear.elements["Hexahedron 8"]), nodes)
@@ -159,7 +198,7 @@ def test_mean_value_coordinates_reproduce_points():
 
 @pytest.mark.parametrize(
     ("arguments", "message"),
-    [({"elements_per_edge": 0}, "at least 1"), ({"elements_along": 0}, "at least 1"), ({"element_order": 0}, "element_order")],
+    [({"transverse_size": 0.0}, "positive"), ({"circumferential_size": -1.0}, "positive"), ({"element_order": 0}, "element_order")],
 )
 def test_hexahedral_mesh_rejects_invalid_arguments(meniscus_hex_blocks, arguments, message):
     with pytest.raises(ValueError, match=message):
@@ -185,7 +224,7 @@ def test_hexahedral_mesh_of_real_meniscus_has_no_inverted_elements(real_label):
     surface = smooth_isocontour(extract_isocontour(signed_distance_field(real_label)))
     slices = slice_isocontour(surface, centerline(real_label), spacing=5.0, points_per_slice=10)
 
-    mesh = hexahedral_mesh(contours_to_hex_blocks(slices), elements_per_edge=4, elements_along=20)
+    mesh = hexahedral_mesh(contours_to_hex_blocks(slices))
 
     assert scaled_corner_jacobians(mesh, "Hexahedron 8").min() > 0.1
 
@@ -196,12 +235,14 @@ def test_swept_hexahedral_mesh_of_real_meniscus_optimizes_well(real_medial_label
     surface = smooth_isocontour(extract_isocontour(signed_distance_field(real_medial_label)))
     slices = slice_isocontour(surface, centerline(real_medial_label), spacing=5.0)
 
-    mesh = hexahedral_mesh(contours_to_brep(slices, cap="planar"), elements_per_edge=4, elements_along=20)
-    quality = mesh_quality(optimize_hexahedral_mesh(mesh))
+    mesh = hexahedral_mesh(contours_to_brep(slices, cap="planar"))
+    quality = mesh_quality(optimize_hexahedral_mesh(mesh, aspect_weight=DEFAULT_MENISCUS_ASPECT_WEIGHT))
 
-    # The section mapped from the middle starts with two barely inverted elements, which untangle; the butterfly reaches 0.35.
+    # The section starts with a few barely inverted elements, which untangle.
     assert quality.inverted == 0
-    assert quality.minimum > 0.45
+    assert quality.minimum > 0.3
+    assert quality.mean > 0.88
+    assert quality.max_aspect < 10
 
 
 def face_centers(mesh, name):

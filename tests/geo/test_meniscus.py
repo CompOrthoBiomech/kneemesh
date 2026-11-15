@@ -9,7 +9,7 @@ import SimpleITK as sitk
 from scipy.interpolate import BSpline
 from scipy.spatial import KDTree
 
-from kneemesh.brep import gmsh_session
+from kneemesh.brep import gmsh_session, turning_angles
 from kneemesh.disk import write_brep
 from kneemesh.geo.meniscus import (
     centerline,
@@ -156,11 +156,27 @@ def test_slice_points_lie_in_their_plane(meniscus_slices):
         assert np.abs((contour_slice.points - contour_slice.center) @ contour_slice.normal).max() < 1e-4
 
 
-def test_slice_points_wind_counterclockwise_from_positive_u(meniscus_slices):
+def corner_turns(points):
+    """The turn across each gap between consecutive points, before point i: corners lie midway between two points."""
+    turns = turning_angles(points)
+    return turns + np.roll(turns, 1)
+
+
+def test_slice_points_wind_counterclockwise_from_the_sharpest_corner(meniscus_slices):
     for contour_slice in meniscus_slices:
         u, v = in_plane(contour_slice)
         assert np.sum(u * np.roll(v, -1) - np.roll(u, -1) * v) > 0
-        assert abs(np.degrees(np.arctan2(v[0], u[0]))) < 30.0
+        # The sharpest corner lies between the last point and the first.
+        assert np.argmax(corner_turns(contour_slice.points)) == 0
+
+
+@pytest.mark.parametrize("count", [10, 32])
+def test_slice_corners_share_point_indices(meniscus_mesh, meniscus_centerline, count):
+    # The fixture's triangular section turns about 141, 129, and 90 degrees at its corners.
+    slices = slice_isocontour(meniscus_mesh, meniscus_centerline, spacing=5.0, points_per_slice=count)
+
+    corners = {tuple(sorted(np.argsort(corner_turns(contour_slice.points))[-3:].tolist())) for contour_slice in slices}
+    assert len(corners) == 1
 
 
 def test_slice_points_line_up_with_the_previous_slice(meniscus_slices):
