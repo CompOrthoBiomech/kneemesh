@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 import SimpleITK as sitk
 from scipy.interpolate import BSpline
-from scipy.spatial import KDTree
+from scipy.spatial import ConvexHull, KDTree
 
 from kneemesh.brep import gmsh_session, turning_angles
 from kneemesh.disk import write_brep
@@ -172,8 +172,9 @@ def test_slice_points_wind_counterclockwise_from_the_sharpest_corner(meniscus_sl
 
 @pytest.mark.parametrize("count", [10, 32])
 def test_slice_corners_share_point_indices(meniscus_mesh, meniscus_centerline, count):
-    # The fixture's triangular section turns about 141, 129, and 90 degrees at its corners.
-    slices = slice_isocontour(meniscus_mesh, meniscus_centerline, spacing=5.0, points_per_slice=count)
+    # The fixture's triangular section turns about 141, 129, and 90 degrees at its corners. Filling grooves flattens the
+    # unsmoothed staircase, spreading the 90 degree corner's turn evenly enough over two gaps that either can be the larger.
+    slices = slice_isocontour(meniscus_mesh, meniscus_centerline, spacing=5.0, points_per_slice=count, groove_ratio=0.0)
 
     corners = {tuple(sorted(np.argsort(corner_turns(contour_slice.points))[-3:].tolist())) for contour_slice in slices}
     assert len(corners) == 1
@@ -275,6 +276,46 @@ def test_slices_keep_small_sections_between_the_ends():
     assert areas.min() < 0.2 * areas.mean()
 
 
+def grooved_cylinder_mesh(groove_radius, groove_offset):
+    """A cylinder of radius 10 along z with a groove along its side, cut by a cylinder of groove_radius centered groove_offset from its axis."""
+    z, y, x = np.indices((51, 41, 41))
+    mask = (z >= 5) & (z <= 45) & (np.hypot(x - 20, y - 20) <= 10) & (np.hypot(x - 20 - groove_offset, y - 20) > groove_radius)
+    return extract_isocontour(signed_distance_field(make_label(mask)))
+
+
+def hull_excess(contour_slice):
+    """Fraction of a contour's convex hull its polygon leaves out."""
+    hull_area = ConvexHull(np.column_stack(in_plane(contour_slice))).volume
+    return 1 - contour_slice.area / hull_area
+
+
+def test_slices_fill_in_a_shallow_groove():
+    # The groove is about 1.5 deep and 8 wide.
+    mesh = grooved_cylinder_mesh(6.0, 14.5)
+    line = straight_line((20, 20, 6), (20, 20, 44))
+
+    filled = slice_isocontour(mesh, line, spacing=4.0)
+    kept = slice_isocontour(mesh, line, spacing=4.0, groove_ratio=0.0)
+
+    # The distance field's Gaussian leaves the groove shallower, under 1% of the section's area.
+    assert min(hull_excess(contour_slice) for contour_slice in kept) > 3e-3
+    assert max(hull_excess(contour_slice) for contour_slice in filled) < 3e-4
+    assert np.mean([contour_slice.area for contour_slice in filled]) > np.mean([contour_slice.area for contour_slice in kept])
+
+
+def test_slices_keep_a_deep_notch():
+    # The notch is about 5 deep and 4 wide.
+    mesh = grooved_cylinder_mesh(2.0, 7.0)
+    line = straight_line((20, 20, 6), (20, 20, 44))
+
+    filled = slice_isocontour(mesh, line, spacing=4.0)
+    kept = slice_isocontour(mesh, line, spacing=4.0, groove_ratio=0.0)
+
+    excess = np.array([hull_excess(contour_slice) for contour_slice in filled])
+    assert excess.min() > 0.02
+    assert excess == pytest.approx([hull_excess(contour_slice) for contour_slice in kept], rel=0.05)
+
+
 def test_slice_rejects_gap_in_the_mesh_along_the_curve():
     z, y, x = np.indices((71, 41, 41))
     in_blocks = ((z >= 5) & (z <= 25)) | ((z >= 45) & (z <= 65))
@@ -296,6 +337,7 @@ def test_slice_rejects_curve_that_misses_the_mesh(meniscus_mesh):
         ({"spacing": 0.0}, "must be positive"),
         ({"spacing": -1.0}, "must be positive"),
         ({"spacing": 5.0, "points_per_slice": 2}, "at least 3"),
+        ({"spacing": 5.0, "groove_ratio": -0.1}, "must not be negative"),
     ],
 )
 def test_slice_rejects_invalid_arguments(meniscus_mesh, meniscus_centerline, arguments, message):

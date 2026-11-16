@@ -10,13 +10,13 @@
     "patellar_cartilage": "examples/patellar_cartilage_hex.brep",
     "femoral_cartilage": "examples/femoral_cartilage_hex.brep"
   },
-  "element_type": "hex8",
+  "element_type": "hex20",
   "output": "_{element_type}.vtu",
   "output_directory": "examples",
   "assembled_mesh": "examples/knee_hex8.vtkhdf",
   "meniscus": {
     "transverse_size": 1.0,
-    "circumferential_size": 2.0,
+    "circumferential_size": 1.0,
     "optimize": true
   },
   "cartilage": {

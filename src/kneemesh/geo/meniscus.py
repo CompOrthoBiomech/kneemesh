@@ -13,7 +13,7 @@ from scipy.interpolate import BSpline, make_splprep
 from scipy.ndimage import gaussian_filter1d
 from scipy.sparse import coo_matrix
 from scipy.sparse.csgraph import connected_components, dijkstra
-from scipy.spatial import KDTree
+from scipy.spatial import ConvexHull, KDTree
 from vtkmodules.util.numpy_support import vtk_to_numpy
 from vtkmodules.vtkCommonDataModel import vtkPlane, vtkPolyData
 from vtkmodules.vtkFiltersCore import vtkCutter, vtkStripper
@@ -72,6 +72,9 @@ _CORNER_SEPARATION = 1 / 8
 _CLIP_STATIONS = 400
 _MAX_CLIP_HEIGHT = 0.5
 _CLIP_CORNER_MARGIN = 0.05
+
+DEFAULT_GROOVE_RATIO = 0.25
+"""Default depth, as a fraction of their width, up to which a section's concavities are filled in as noise (see slice_isocontour)."""
 
 _DEFAULT_CAP_OFFSET_RADII = 0.25
 _PIECE_SAMPLES = 20
@@ -135,6 +138,7 @@ def slice_isocontour(
     points_per_slice: int = 32,
     clip_height: float | None = None,
     clip_ratio: float = 0.0,
+    groove_ratio: float = DEFAULT_GROOVE_RATIO,
 ) -> list[ContourSlice]:
     """Slice a mesh with planes normal to a curve at uniform arc-length spacing.
 
@@ -155,6 +159,11 @@ def slice_isocontour(
     corner (see _clip_inner_edges). The contour is then its curved part,
     from one corner of the cut to the other, and a straight run back.
 
+    Shallow concavities of each section, grooves the smoothed surface keeps
+    from the label, are treated as noise and filled in toward the section's
+    convex hull before corners are tracked (_fill_grooves): fully up to
+    groove_ratio of their width deep, fading out at twice that.
+
     Args:
         mesh: Closed surface from extract_isocontour or smooth_isocontour.
         curve: Curve from centerline.
@@ -165,13 +174,16 @@ def slice_isocontour(
         clip_ratio: Height at which to cut off the sections' thin inner edges,
             as a fraction of the mean of the sections' greatest heights,
             those of their outer sides. 0 keeps the inner edges.
+        groove_ratio: Depth, as a fraction of its width, up to which a
+            section's concavity is filled in to the section's convex hull,
+            and partly filled up to twice that. 0 keeps every concavity.
 
     Returns:
         The retained ContourSlices.
 
     Raises:
         ValueError: If spacing is not positive, points_per_slice is below 3,
-            a clipping height or ratio is negative, or a retained plane does
+            a clipping height or ratio or groove_ratio is negative, or a retained plane does
             not cut the mesh in a closed contour.
     """
     if spacing <= 0:
@@ -180,6 +192,8 @@ def slice_isocontour(
         raise ValueError("Slices need at least 3 points")
     if (clip_height is not None and clip_height < 0) or clip_ratio < 0:
         raise ValueError(f"Clipping heights must not be negative, got {clip_height} and {clip_ratio}")
+    if groove_ratio < 0:
+        raise ValueError(f"groove_ratio must not be negative, got {groove_ratio}")
 
     curve_u, lengths = _arc_lengths(curve)
     count = math.floor(lengths[-1] / spacing) + 1
@@ -205,6 +219,8 @@ def slice_isocontour(
     if any(contour is None for contour in retained):
         raise ValueError("A plane along the curve does not cut the mesh in a closed contour")
     logger.debug("Kept {} of {} slices after clipping ends below {:.0%} of the mean area", len(retained), len(slices), _MIN_END_AREA_RATIO)
+    if groove_ratio:
+        retained = [_fill_grooves(contour, groove_ratio) for contour in retained]  # pyright: ignore[reportArgumentType]
     aligned = _align_with_previous(retained)  # pyright: ignore[reportArgumentType]
     if clip_height or clip_ratio:
         return _clip_inner_edges(aligned, points_per_slice, clip_height, clip_ratio)
@@ -438,6 +454,40 @@ def _slice_at(
     loop = np.roll(loop, -int(np.argmin(np.abs(np.arctan2(v, u)))), axis=0)
 
     return ContourSlice(resample_closed(loop, point_count), center, u_axis, v_axis, normal, abs(signed_area))
+
+
+def _fill_grooves(contour: ContourSlice, ratio: float) -> ContourSlice:
+    """Fill in a dense contour's shallow concavities toward its convex hull, and resample it evenly from its first point.
+
+    Each pocket, the contour's points between two consecutive vertices of
+    its convex hull, has a depth, its points' greatest distance from the
+    hull's edge between them, and a width, that edge's length. Its points
+    move onto the edge, along its normal, entirely for pockets at most
+    ratio of their width deep, not at all from twice that, and by a linearly
+    falling fraction between, so a pocket deepening along the slices fades
+    in rather than appearing at once.
+    """
+    plane = _plane_coordinates(contour)
+    vertices = np.sort(ConvexHull(plane).vertices)
+    points = contour.points.copy()
+    count = len(points)
+    for first, last in zip(vertices, np.roll(vertices, -1), strict=True):
+        inside = (first + 1 + np.arange((last - first - 1) % count)) % count
+        if not len(inside):
+            continue
+        edge = plane[last] - plane[first]
+        width = float(np.linalg.norm(edge))
+        offsets = plane[inside] - plane[first]
+        depth = float(np.abs(edge[0] * offsets[:, 1] - edge[1] * offsets[:, 0]).max() / width)
+        weight = float(np.clip(2.0 - depth / (ratio * width), 0.0, 1.0))
+        if weight:
+            along = offsets @ edge / width**2
+            feet = contour.points[first] + along[:, None] * (contour.points[last] - contour.points[first])
+            points[inside] += weight * (feet - points[inside])
+    if np.array_equal(points, contour.points):
+        return contour
+    filled = resample_closed(points, count)
+    return replace(contour, points=filled, area=_polygon_area(contour, filled))
 
 
 def _align_with_previous(slices: list[ContourSlice]) -> list[ContourSlice]:

@@ -159,9 +159,16 @@ def test_default_sizes_mesh_the_thin_real_medial_meniscus(real_medial_label, ass
     surface = smooth_isocontour(extract_isocontour(signed_distance_field(label)))
     solid = contours_to_brep(slice_isocontour(surface, centerline(label), spacing=5.0), cap="planar")
 
-    # gmsh's own default sizes, from the overall extent, are coarser: 200-1000 tetrahedra against about 2000. Before
-    # contours followed the section's corners, gmsh failed with them or silently made no tetrahedra.
-    assert len(tetrahedral_mesh(solid).elements["Tetrahedron 4"]) > len(tetrahedral_mesh(solid, max_size=1e3).elements["Tetrahedron 4"])
+    count = len(tetrahedral_mesh(solid).elements["Tetrahedron 4"])
+
+    # gmsh's own default sizes, from the overall extent, are coarser: 200-1000 tetrahedra against about 2000, or, on
+    # the medial meniscus's filled-in sections after assembly, overlapping facets. Before contours followed the
+    # section's corners, gmsh also failed with them or silently made no tetrahedra.
+    try:
+        coarse = len(tetrahedral_mesh(solid, max_size=1e3).elements["Tetrahedron 4"])
+    except ValueError:
+        coarse = 0
+    assert count > max(coarse, 1000)
 
 
 def test_tetrahedral_mesh_rejects_open_surface(meniscus_surface):

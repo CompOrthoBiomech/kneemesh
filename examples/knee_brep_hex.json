@@ -14,7 +14,8 @@
   "output": "_hex.brep",
   "output_directory": "examples",
   "meniscus": {
-    "hex_blocks": true
+    "hex_blocks": true,
+    "hex_design": "butterfly"
   },
   "cartilage": {
     "hex_blocks": true

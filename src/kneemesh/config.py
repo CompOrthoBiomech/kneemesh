@@ -10,6 +10,7 @@ from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, model_valida
 from kneemesh.cartilage import DEFAULT_SIDE_COSINE
 from kneemesh.disk import BREP_SUFFIXES, MESH_SET_SUFFIXES, SURFACE_SUFFIXES
 from kneemesh.geo.bone import DEFAULT_TRIANGLE_SIZE
+from kneemesh.geo.meniscus import DEFAULT_GROOVE_RATIO
 from kneemesh.geo.sheet import (
     DEFAULT_HOLE_THICKNESS,
     DEFAULT_MIN_THICKNESS_HEXAHEDRAL,
@@ -173,7 +174,7 @@ class MeniscusBrep(SurfaceBrep):
     """Settings for building the lateral and medial meniscus B-reps, with the defaults of each step."""
 
     spacing: float = Field(default=5.0, description="Arc-length distance between slices along the centerline, in physical units")
-    points_per_slice: int = Field(default=32, description="Points on each slice contour. Use about 10 for butterfly blocks")
+    points_per_slice: int = Field(default=32, description="Points on each slice contour")
     spline_order: int = Field(default=3, description="Polynomial degree of the B-spline geometry")
     cap: Literal["none", "planar", "smooth"] = Field(default="planar", description="How to close the ends; hex_blocks are always planar")
     cap_offset: OptionalFloat = Field(
@@ -194,10 +195,18 @@ class MeniscusBrep(SurfaceBrep):
         + f"None is {DEFAULT_INNER_CLIP_RATIO} for swept_quads hex_blocks and 0, no cut, otherwise. Each cut is at most half its "
         + "section's greatest height",
     )
+    groove_ratio: float = Field(
+        default=DEFAULT_GROOVE_RATIO,
+        ge=0,
+        description="Depth, as a fraction of its width, up to which a concavity of a section is treated as noise and filled in to "
+        + "the section's convex hull, partly filled up to twice that. The real menisci's grooves are at most 0.15 of their width "
+        + "deep, at most 1.1 mm. 0 keeps every concavity",
+    )
     hex_design: MeniscusHexDesign = Field(
-        default="swept_quads",
-        description="With hex_blocks, which hexahedra the solid is for: swept_quads, the lofted solid, whose cross-section is meshed "
-        + "with unstructured quadrilaterals swept along it, or butterfly, five blocks of structured hexahedra. Swept quadrilaterals "
+        default="butterfly",
+        description="With hex_blocks, which hexahedra the solid is for: butterfly, five blocks of structured hexahedra, whose regular "
+        + "layout makes the more simulation-ready mesh, or swept_quads, the lofted solid, whose cross-section is meshed "
+        + "with unstructured quadrilaterals swept along it. Swept quadrilaterals "
         + "optimized to higher scaled Jacobians and lower aspect ratios on the real menisci, with a quarter of the elements",
     )
 
@@ -388,7 +397,7 @@ class StructureMesh(BaseConfig):
 DEFAULT_MENISCUS_ASPECT_WEIGHT = 0.02
 """Default weight of the squared Frobenius aspect ratios when optimizing meniscus hexahedra."""
 
-DEFAULT_MENISCUS_WARP_WEIGHT = 30.0
+DEFAULT_MENISCUS_WARP_WEIGHT = 50.0
 """Default weight of the surface quadrilaterals' warp when optimizing meniscus hexahedra."""
 
 
@@ -424,8 +433,9 @@ class MeniscusMesh(StructureMesh):
         default=DEFAULT_MENISCUS_WARP_WEIGHT,
         ge=0,
         description="Weight, per boundary quadrilateral, of its warp out of plane against 1 / scaled Jacobian when optimizing. "
-        + "At 30 the real menisci's swept hexahedra's 99th percentile of surface warp roughly halved, to 16-27 degrees, at the "
-        + "same scaled Jacobians; 0 leaves the surface crumpled where the sections change shape",
+        + "Tuned for the default butterfly blocks: at 50 the real menisci's 99th percentile of surface warp fell from 20-33 "
+        + "degrees to 17-23 at the same or higher minimum scaled Jacobians, the mean falling at most 0.025; from 100 the mean "
+        + "falls faster. Swept hexahedra were tuned at 30. 0 leaves the surface crumpled where the sections change shape",
     )
 
 

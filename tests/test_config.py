@@ -150,12 +150,12 @@ def test_meniscus_optimizes_by_default_and_tetrahedra_ignore_it():
     assert BrepMesh.model_validate_json(BrepMesh().model_dump_json()).meniscus.optimize
 
 
-def test_meniscus_clips_its_inner_edge_for_swept_hexahedra_by_default():
+def test_meniscus_clips_its_inner_edge_only_for_swept_hexahedra_by_default():
     assert MeniscusBrep().resolved_inner_clip_ratio == 0.0
-    assert MeniscusBrep(hex_blocks=True).resolved_inner_clip_ratio == 0.25
-    assert MeniscusBrep(hex_blocks=True, hex_design="butterfly").resolved_inner_clip_ratio == 0.0
-    assert MeniscusBrep(hex_blocks=True, inner_clip_ratio=0.0).resolved_inner_clip_ratio == 0.0
-    assert MeniscusBrep(hex_blocks=True, inner_clip_height=1.5).resolved_inner_clip_ratio == 0.0
+    assert MeniscusBrep(hex_blocks=True).resolved_inner_clip_ratio == 0.0
+    assert MeniscusBrep(hex_blocks=True, hex_design="swept_quads").resolved_inner_clip_ratio == 0.25
+    assert MeniscusBrep(hex_blocks=True, hex_design="swept_quads", inner_clip_ratio=0.0).resolved_inner_clip_ratio == 0.0
+    assert MeniscusBrep(hex_blocks=True, hex_design="swept_quads", inner_clip_height=1.5).resolved_inner_clip_ratio == 0.0
     assert MeniscusBrep(inner_clip_ratio=0.3).resolved_inner_clip_ratio == 0.3
     with pytest.raises(pydantic.ValidationError, match="not both"):
         MeniscusBrep(inner_clip_height=1.0, inner_clip_ratio=0.2)
@@ -163,9 +163,9 @@ def test_meniscus_clips_its_inner_edge_for_swept_hexahedra_by_default():
         MeniscusBrep(inner_clip_ratio=0.2, cap="smooth")
 
 
-def test_meniscus_hex_blocks_default_to_swept_quadrilaterals():
-    assert MeniscusBrep().hex_design == "swept_quads"
-    assert MeniscusBrep.model_validate({"hex_blocks": True, "hex_design": "butterfly"}).hex_design == "butterfly"
+def test_meniscus_hex_blocks_default_to_butterfly_blocks():
+    assert MeniscusBrep().hex_design == "butterfly"
+    assert MeniscusBrep.model_validate({"hex_blocks": True, "hex_design": "swept_quads"}).hex_design == "swept_quads"
     with pytest.raises(pydantic.ValidationError):
         MeniscusBrep.model_validate({"hex_design": "o_grid"})
 
@@ -223,7 +223,7 @@ def test_sections_share_surface_and_meshing_settings():
 def test_meniscus_and_cartilage_weigh_aspect_ratios_by_default():
     assert MeniscusMesh().aspect_weight == 0.02
     assert CartilageMesh().aspect_weight == 0.5
-    assert MeniscusMesh().warp_weight == 30.0
+    assert MeniscusMesh().warp_weight == 50.0
     assert CartilageMesh().warp_weight == 0.0
     with pytest.raises(pydantic.ValidationError):
         CartilageMesh(aspect_weight=-1.0)
