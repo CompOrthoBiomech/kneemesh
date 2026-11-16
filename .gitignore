@@ -5,6 +5,11 @@
 *.mp4
 *.vtk
 *.msh
+*.vtu
+*.vtkhdf
+*.stl
+*.ply
+*.obj
 # Python-generated files
 __pycache__/
 *.py[oc]
