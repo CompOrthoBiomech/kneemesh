@@ -258,7 +258,33 @@ def test_cartilage_hexahedra_settings():
         CartilageMesh.model_validate({"elements_around": 8})
     with pytest.raises(pydantic.ValidationError, match="only to hexahedral"):
         BrepMesh(cartilage=CartilageMesh(save_partition=True))
+    assert BrepMesh(element_types={"patellar_cartilage": "hex8"}, cartilage=CartilageMesh(save_partition=True)).cartilage.save_partition
+    with pytest.raises(pydantic.ValidationError, match="femoral_cartilage.save_partition"):
+        BrepMesh(element_types={"patellar_cartilage": "hex8"}, femoral_cartilage=FemoralCartilageMesh(save_partition=True))
     assert BrepMesh(element_type="hex8").partition_path("patellar_cartilage") == Path("patellar_cartilage_partition.brep")
+
+
+def test_element_types_override_element_type_for_their_structures():
+    config = BrepMesh.model_validate({"element_type": "tet4", "element_types": '{"medial_meniscus": "hex20"}', "output": "_{element_type}.vtu"})
+
+    assert config.structure_element_type("medial_meniscus") == "hex20"
+    assert config.structure_element_type("lateral_meniscus") == "tet4"
+    assert config.output_path("medial_meniscus") == Path("medial_meniscus_hex20.vtu")
+    assert config.output_path("lateral_meniscus") == Path("lateral_meniscus_tet4.vtu")
+    medial = config.for_structure("medial_meniscus")
+    assert (medial.element_shape, medial.element_order, medial.second_order_incomplete) == ("hexahedral", 2, True)
+    assert config.for_structure("lateral_meniscus") is config
+    assert BrepMesh().element_types is None
+    assert BrepMesh.model_validate({"element_types": "none"}).element_types is None
+
+
+def test_element_types_reject_bones_and_unknown_types():
+    with pytest.raises(pydantic.ValidationError, match="femur.element_type"):
+        BrepMesh.model_validate({"element_types": {"femur": "tet4"}})
+    with pytest.raises(pydantic.ValidationError):
+        BrepMesh.model_validate({"element_types": {"medial_meniscus": "quad4"}})
+    with pytest.raises(pydantic.ValidationError):
+        BrepMesh.model_validate({"element_types": {"meniscus": "hex8"}})
 
 
 def test_bones_are_written_as_surfaces():

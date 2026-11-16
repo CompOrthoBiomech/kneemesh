@@ -100,6 +100,7 @@ OptionalFloat = Annotated[float | None, BeforeValidator(_none_from_text)]
 OptionalPath = Annotated[Path | None, BeforeValidator(_none_from_text)]
 LabelValues = Annotated[dict[Structure, int] | None, BeforeValidator(_json_from_text)]
 StructurePaths = Annotated[dict[Structure, Path] | None, BeforeValidator(_json_from_text)]
+StructureElementTypes = Annotated[dict[Structure, ElementType] | None, BeforeValidator(_json_from_text)]
 
 
 def _label_maps_field(summary: str) -> Any:
@@ -654,6 +655,10 @@ class BrepMesh(BaseConfig):
     of its section such as meniscus, and written to
     <output_directory>/<structure><output>. Bones are meshed from their
     surfaces with their own section's element_type, such as femur.element_type.
+    Every other structure takes element_type unless element_types gives it
+    its own, and the element_shape, element_order, and
+    second_order_incomplete properties describe element_type itself; use
+    for_structure for a structure's settings.
     """
 
     breps: StructurePaths = Field(
@@ -663,7 +668,13 @@ class BrepMesh(BaseConfig):
     )
     element_type: ElementType = Field(
         default="tet4",
-        description="Element shape and node count: hex8, hex20, or hex27 hexahedra, or tet4 or tet10 tetrahedra. Bones use their own, such as femur.element_type",
+        description="Element shape and node count: hex8, hex20, or hex27 hexahedra, or tet4 or tet10 tetrahedra, for every structure "
+        + "element_types does not name. Bones use their own, such as femur.element_type",
+    )
+    element_types: StructureElementTypes = Field(
+        default=None,
+        description="Element type of individual structures in place of element_type, by structure name, as JSON such as "
+        + '{"medial_meniscus": "hex8", "patellar_cartilage": "tet10"}. Bones are set in their own sections, such as femur.element_type',
     )
     output: str = Field(
         default="_{element_type}.msh",
@@ -694,9 +705,26 @@ class BrepMesh(BaseConfig):
         _check_suffix(suffix)
         if self.assembled_mesh is not None and self.assembled_mesh.suffix.lower() not in MESH_SET_SUFFIXES:
             raise ValueError(f"assembled_mesh needs extension {' or '.join(sorted(MESH_SET_SUFFIXES))}, got {self.assembled_mesh.name!r}")
-        if (self.cartilage.save_partition or self.femoral_cartilage.save_partition) and self.element_shape != "hexahedral":
-            raise ValueError("save_partition applies only to hexahedral meshes")
+        if bones := sorted(set(self.element_types or {}) & set(BONE_STRUCTURES)):
+            raise ValueError(f"Bones take their own section's element_type, such as femur.element_type, not element_types: {bones}")
+        sheets: dict[str, list[Structure]] = {
+            "cartilage": [structure for structure in BONES if structure != "femoral_cartilage"],
+            "femoral_cartilage": ["femoral_cartilage"],
+        }
+        for section, structures in sheets.items():
+            hexahedral = any(ELEMENT_TYPES[self.structure_element_type(structure)][0] == "hexahedral" for structure in structures)
+            if getattr(self, section).save_partition and not hexahedral:
+                raise ValueError(f"{section}.save_partition applies only to hexahedral meshes")
         return self
+
+    def structure_element_type(self, structure: Structure) -> ElementType:
+        """The element type of a structure other than a bone: its entry in element_types, or element_type."""
+        return (self.element_types or {}).get(structure, self.element_type)
+
+    def for_structure(self, structure: Structure) -> Self:
+        """These settings with element_type set to the structure's own, so element_shape and the other properties describe it."""
+        element_type = self.structure_element_type(structure)
+        return self if element_type == self.element_type else self.model_copy(update={"element_type": element_type})
 
     @property
     def element_shape(self) -> Literal["tetrahedral", "hexahedral"]:
@@ -719,8 +747,9 @@ class BrepMesh(BaseConfig):
         return self.output.format(element_type=self.element_type)
 
     def output_path(self, structure: Structure) -> Path:
-        """The mesh file to write for structure, named with the bone's element type for a bone."""
-        suffix = self.output.format(element_type=self.bone(structure).element_type) if structure in BONE_STRUCTURES else self.output_suffix
+        """The mesh file to write for structure, named with its own element type, a bone's from its section."""
+        element_type = self.bone(structure).element_type if structure in BONE_STRUCTURES else self.structure_element_type(structure)
+        suffix = self.output.format(element_type=element_type)
         return self.output_directory / f"{structure}{suffix}"
 
     def bone(self, structure: Structure) -> BoneMesh:

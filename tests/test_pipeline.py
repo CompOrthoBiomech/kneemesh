@@ -233,6 +233,27 @@ def test_mesh_pipeline_makes_serendipity_hexahedra(in_tmp_path, meniscus_hex_blo
     assert list(mesh_entity_counts(in_tmp_path / "medial_meniscus_hex20.msh")) == ["Hexahedron 20"]
 
 
+def test_mesh_pipeline_overrides_the_element_type_per_structure(in_tmp_path, meniscus_hex_blocks):
+    write_brep(meniscus_hex_blocks, in_tmp_path / "blocks.brep")
+
+    argv = [
+        "--breps",
+        '{"lateral_meniscus": "blocks.brep", "medial_meniscus": "blocks.brep"}',
+        "--element-type",
+        "tet4",
+        "--element-types",
+        '{"medial_meniscus": "hex8"}',
+        "--meniscus.transverse-size",
+        "3.6",
+        "--meniscus.circumferential-size",
+        "12.5",
+    ]
+    assert mesh_main(argv) == 0
+
+    assert list(mesh_entity_counts(in_tmp_path / "lateral_meniscus_tet4.msh")) == ["Tetrahedron 4"]
+    assert list(mesh_entity_counts(in_tmp_path / "medial_meniscus_hex8.msh")) == ["Hexahedron 8"]
+
+
 @pytest.mark.usefixtures("in_tmp_path")
 def test_pipeline_reports_errors_without_traceback(capsys):
     assert mesh_main(["--breps", '{"lateral_meniscus": "missing.brep"}']) == 1

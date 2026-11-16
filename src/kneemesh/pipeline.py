@@ -109,7 +109,7 @@ def run_mesh(config: BrepMesh) -> dict[Structure, Mesh]:
     meshes: dict[Structure, Mesh] = {}
     for structure, path in config.breps.items():
         logger.info("Reading {} for {}", path, structure)
-        mesh = _MESHERS[structure](path, config, structure)
+        mesh = _MESHERS[structure](path, config.for_structure(structure), structure)
         counts = ", ".join(f"{len(connectivity)} {name}" for name, connectivity in mesh.elements.items())
         logger.info("Meshed {} with {} nodes and {}", structure, len(mesh.nodes), counts)
         logger.info(
