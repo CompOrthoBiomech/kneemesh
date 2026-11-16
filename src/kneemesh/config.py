@@ -377,10 +377,19 @@ class StructureMesh(BaseConfig):
         description="Weight of the elements' squared Frobenius aspect ratios against 1 / scaled Jacobian when optimizing. "
         + "0 optimizes the scaled Jacobian alone, which can stretch elements",
     )
+    warp_weight: float = Field(
+        default=0.0,
+        ge=0,
+        description="Weight, per boundary quadrilateral, of its warp out of plane against 1 / scaled Jacobian when optimizing. "
+        + "0 leaves warped surface faces, which scaled Jacobians and aspect ratios do not measure, as they are",
+    )
 
 
 DEFAULT_MENISCUS_ASPECT_WEIGHT = 0.02
 """Default weight of the squared Frobenius aspect ratios when optimizing meniscus hexahedra."""
+
+DEFAULT_MENISCUS_WARP_WEIGHT = 30.0
+"""Default weight of the surface quadrilaterals' warp when optimizing meniscus hexahedra."""
 
 
 class MeniscusMesh(StructureMesh):
@@ -410,6 +419,13 @@ class MeniscusMesh(StructureMesh):
         ge=0,
         description="Weight of the elements' squared Frobenius aspect ratios against 1 / scaled Jacobian when optimizing. "
         + "0 optimizes the scaled Jacobian alone, which stretched the real menisci's elements near the horns to aspect ratios of 90",
+    )
+    warp_weight: float = Field(
+        default=DEFAULT_MENISCUS_WARP_WEIGHT,
+        ge=0,
+        description="Weight, per boundary quadrilateral, of its warp out of plane against 1 / scaled Jacobian when optimizing. "
+        + "At 30 the real menisci's swept hexahedra's 99th percentile of surface warp roughly halved, to 16-27 degrees, at the "
+        + "same scaled Jacobians; 0 leaves the surface crumpled where the sections change shape",
     )
 
 

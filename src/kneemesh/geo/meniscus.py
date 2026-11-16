@@ -60,6 +60,10 @@ _CORNER_WINDOW = 1 / 48
 _CORNER_DRIFT = 0.03
 _CORNER_DRIFT_WEIGHT = 0.1
 _MIN_CORNER_TURN = math.radians(35.0)
+# Corners are pinned not at all below _PIN_TURNS[0] degrees of turning and fully from _PIN_TURNS[1], smoothed over _PIN_SMOOTHING slices.
+_PIN_TURNS = (25.0, 45.0)
+_PIN_SMOOTHING = 1.0
+_ANCHOR_SMOOTHING = 1.0
 _MAX_CORNERS = 4
 _CORNER_SEPARATION = 1 / 8
 # Inner edge clipping: chord heights at _CLIP_STATIONS distances across each section, a cut at most
@@ -458,40 +462,47 @@ def _follow_corners(slices: list[ContourSlice], count: int) -> list[ContourSlice
     follow lines of the loft's parameter around it rather than drifting
     across them. Each stretch between corners gets its share of count by
     its mean fraction of the perimeter, and each contour starts at its
-    sharpest corner. A corner is pinned only on slices where it turns at
-    least _MIN_CORNER_TURN; elsewhere, as where the rounded outer corners
-    fade toward the horns, it lies where points are evenly spaced between
-    the pinned corners on either side, since a stretch's spacing changes at
-    a corner and the loft overshoots where that change meets a smooth
-    stretch of the contour. Without corners, points are evenly spaced from
-    the aligned start.
+    sharpest corner. A corner is pinned as firmly as it is sharp on each
+    slice (_pin_weights): where it fades, as the rounded outer corners do
+    toward the horns, it eases toward where points would be evenly spaced
+    between its neighbors, since a stretch's spacing changes at a corner and
+    the loft overshoots where that change meets a smooth stretch of the
+    contour. Without corners, points are evenly spaced from the aligned
+    start.
     """
     dense = len(slices[0].points)
-    tracks, pinned = (array[:, : min(_MAX_CORNERS, count)] for array in _corner_tracks(slices))
+    tracks, weights = (array[:, : min(_MAX_CORNERS, count)] for array in _corner_tracks(slices))
     if not tracks.shape[1]:
         return [replace(contour, points=resample_closed(contour.points, count)) for contour in slices]
     # Order the tracks around the contour from the sharpest, the first, which starts every contour.
     order = np.argsort((tracks - tracks[:, :1]) % dense, axis=1)
-    tracks, pinned = (np.take_along_axis(array, order, axis=1) for array in (tracks, pinned))
-    pinned[:, 0] = True
+    tracks = np.take_along_axis(tracks, order, axis=1)
+    weights = np.take_along_axis(weights, order, axis=1)
+    weights[:, 0] = 1.0
     # Each stretch runs from its corner to the next around the contour, wrapping past the start; a lone corner's spans the whole.
     lengths = ((np.roll(tracks, -1, axis=1) - tracks - 1) % dense + 1) / dense
     shares = _largest_remainders(lengths.mean(axis=0), count)
     starts = np.concatenate(([0], np.cumsum(shares)))
     logger.debug(
-        "Tracked {} corners through {} slices, with {} points between them, pinned on {} of their slices",
+        "Tracked {} corners through {} slices, with {} points between them, pinned {} firmly on average",
         tracks.shape[1],
         len(slices),
         shares.tolist(),
-        pinned.sum(axis=0).tolist(),
+        np.round(weights.mean(axis=0), 2).tolist(),
+    )
+    # Corners' fractions of the perimeter after the first, closing with the first one turn on, eased toward even spacing as they fade.
+    anchors = _smooth_anchors(
+        np.array(
+            [
+                _blend_anchors(np.append(((corners - corners[0]) % dense) / dense, 1.0), starts.astype(float), np.append(firmness, 1.0))
+                for corners, firmness in zip(tracks, weights, strict=True)
+            ]
+        )
     )
     resampled = []
-    for contour, corners, strong in zip(slices, tracks, pinned, strict=True):
-        # Pinned corners' fractions of the perimeter after the first, closing with the first one turn on.
-        anchors = np.append(np.flatnonzero(strong), len(corners))
-        positions = np.append(((corners - corners[0]) % dense) / dense, 1.0)[anchors]
+    for contour, corners, positions in zip(slices, tracks, anchors, strict=True):
         # Points sit half a spacing either side of each corner: an interpolating spline through a sharp corner's own point overshoots.
-        fractions = corners[0] / dense + np.interp(np.arange(count) + 0.5, starts[anchors], positions)
+        fractions = corners[0] / dense + np.interp(np.arange(count) + 0.5, starts, positions)
         resampled.append(replace(contour, points=sample_closed(contour.points, fractions)))
     return resampled
 
@@ -511,7 +522,7 @@ def _clip_inner_edges(slices: list[ContourSlice], count: int, clip_height: float
     _follow_corners places them, and the straight part's points are evenly
     spaced on the cut.
     """
-    tracks, pinned = _corner_tracks(slices)
+    tracks, weights = _corner_tracks(slices)
     if not tracks.shape[1]:
         logger.warning("Found no inner edge to clip, so the contours keep theirs")
         return _follow_corners(slices, count)
@@ -527,7 +538,7 @@ def _clip_inner_edges(slices: list[ContourSlice], count: int, clip_height: float
     for track in range(1, tracks.shape[1]):
         fractions = np.array([cut.fraction_of(int(index)) for cut, index in zip(cuts, tracks[:, track], strict=True)])
         if np.all((fractions > _CLIP_CORNER_MARGIN) & (fractions < 1 - _CLIP_CORNER_MARGIN)):
-            others.append((fractions, pinned[:, track]))
+            others.append((fractions, weights[:, track]))
     others.sort(key=lambda other: float(other[0].mean()))
     straight = np.mean([cut.straight_length / (cut.curved_length + cut.straight_length) for cut in cuts])
     straight_count = min(count - 2 - len(others), max(1, round(straight * count) - 1))
@@ -544,12 +555,22 @@ def _clip_inner_edges(slices: list[ContourSlice], count: int, clip_height: float
         curved_count,
         straight_count,
     )
+    # The cut's corners are exact points; the other corners lie between points, as in _follow_corners, eased toward even spacing as they fade.
+    points_at = np.array([starts[anchor] - (0.5 if 0 < anchor <= len(others) else 0.0) for anchor in range(len(others) + 2)])
+    anchors = _smooth_anchors(
+        np.array(
+            [
+                _blend_anchors(
+                    np.array([0.0, *(fractions[index] for fractions, _ in others), 1.0]),
+                    points_at,
+                    np.array([1.0, *(weight[index] for _, weight in others), 1.0]),
+                )
+                for index in range(len(slices))
+            ]
+        )
+    )
     clipped = []
-    for index, (contour, cut) in enumerate(zip(slices, cuts, strict=True)):
-        anchors = [0, *(position + 1 for position, (_, strong) in enumerate(others) if strong[index]), len(others) + 1]
-        positions = np.array([0.0, *(fractions[index] for fractions, _ in others), 1.0])[anchors]
-        # The cut's corners are exact points; the other corners lie between points, as in _follow_corners.
-        points_at = np.array([starts[anchor] - (0.5 if 0 < anchor <= len(others) else 0.0) for anchor in anchors])
+    for contour, cut, positions in zip(slices, cuts, anchors, strict=True):
         curved = cut.along(np.interp(np.arange(curved_count), points_at, positions))
         on_cut = curved[-1] + np.outer(np.arange(1, straight_count + 1) / (straight_count + 1), curved[0] - curved[-1])
         points = np.vstack((curved, on_cut))
@@ -678,9 +699,48 @@ def _corner_tracks(slices: list[ContourSlice]) -> tuple[np.ndarray, np.ndarray]:
         tracks = candidate
         available &= cyclic[path] > _CORNER_SEPARATION
     if not tracks:
-        return np.zeros((len(slices), 0), dtype=np.int64), np.zeros((len(slices), 0), dtype=bool)
+        return np.zeros((len(slices), 0), dtype=np.int64), np.zeros((len(slices), 0))
     corners = np.column_stack(tracks)
-    return corners, turning[np.arange(len(slices))[:, None], corners] >= _MIN_CORNER_TURN
+    return corners, _pin_weights(turning[np.arange(len(slices))[:, None], corners])
+
+
+def _pin_weights(turns: np.ndarray) -> np.ndarray:
+    """Return how firmly to pin each tracked corner on each slice, (S, K) in [0, 1], from its turning there.
+
+    The weight ramps from 0 at _PIN_TURNS[0] of turning to 1 at _PIN_TURNS[1]
+    and is smoothed along the slices by a Gaussian of _PIN_SMOOTHING slices.
+    Pinning a corner on one slice and not the next moves every point
+    between it and its neighbors at once, and the loft kinks around the
+    whole section there.
+    """
+    low, high = (math.radians(angle) for angle in _PIN_TURNS)
+    ramp = np.clip((turns - low) / (high - low), 0.0, 1.0)
+    return np.clip(gaussian_filter1d(ramp, _PIN_SMOOTHING, axis=0, mode="nearest"), 0.0, 1.0)
+
+
+def _smooth_anchors(anchors: np.ndarray) -> np.ndarray:
+    """Smooth anchors' positions along the slices, (S, K) with the first and last kept, by a Gaussian of _ANCHOR_SMOOTHING slices.
+
+    The loft's lines around the section follow the anchors, so a corner
+    that fades or appears within one slice would otherwise kink them all.
+    """
+    smoothed = anchors.copy()
+    smoothed[:, 1:-1] = gaussian_filter1d(anchors[:, 1:-1], _ANCHOR_SMOOTHING, axis=0, mode="nearest")
+    return smoothed
+
+
+def _blend_anchors(positions: np.ndarray, places: np.ndarray, weights: np.ndarray) -> np.ndarray:
+    """Return anchor positions moved toward even spacing between their neighbors as their weights fall below 1.
+
+    positions are increasing positions of anchors along a contour, places
+    the point indices they belong at, and weights how firmly each is
+    pinned; the first and last are kept. An anchor's evenly spaced position
+    divides the stretch between its neighbors by its place between theirs.
+    """
+    blended = positions.copy()
+    even = positions[:-2] + (positions[2:] - positions[:-2]) * (places[1:-1] - places[:-2]) / (places[2:] - places[:-2])
+    blended[1:-1] = weights[1:-1] * positions[1:-1] + (1 - weights[1:-1]) * even
+    return blended
 
 
 def _signed_turns(contour: ContourSlice) -> np.ndarray:

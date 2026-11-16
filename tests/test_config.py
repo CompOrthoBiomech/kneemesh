@@ -223,8 +223,12 @@ def test_sections_share_surface_and_meshing_settings():
 def test_meniscus_and_cartilage_weigh_aspect_ratios_by_default():
     assert MeniscusMesh().aspect_weight == 0.02
     assert CartilageMesh().aspect_weight == 0.5
+    assert MeniscusMesh().warp_weight == 30.0
+    assert CartilageMesh().warp_weight == 0.0
     with pytest.raises(pydantic.ValidationError):
         CartilageMesh(aspect_weight=-1.0)
+    with pytest.raises(pydantic.ValidationError):
+        MeniscusMesh(warp_weight=-1.0)
 
 
 def test_femoral_cartilage_sections_extend_the_cartilage_settings():

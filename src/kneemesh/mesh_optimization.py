@@ -13,7 +13,10 @@ Up to three strategies run in turn on the hexahedra's corner nodes:
    ratio, by projected gradient descent. Both terms grow without bound as a
    corner degenerates, so no step can invert an element, and both weigh the
    worst corners most. 1 / SJ alone squares corners up by stretching
-   elements; the aspect term holds their edge lengths in proportion.
+   elements; the aspect term holds their edge lengths in proportion. A
+   third term, warp_weight times the sum over the boundary quadrilaterals of
+   their squared normalized out-of-plane volume, flattens warped faces on the
+   surface, which corner measures cannot see.
 
 Boundary nodes are classified from the mesh's own boundary quadrilaterals.
 Where adjacent boundary faces meet at more than a feature angle, their shared
@@ -65,7 +68,7 @@ _UNTANGLE_MARGIN = 0.01
 
 @dataclass(frozen=True)
 class MeshQuality:
-    """Scaled Jacobian and Frobenius aspect ratio statistics of a hexahedral mesh.
+    """Scaled Jacobian, Frobenius aspect ratio, and surface warp statistics of a hexahedral mesh.
 
     Attributes:
         minimum: Smallest element scaled Jacobian. Negative means an inverted element.
@@ -73,6 +76,8 @@ class MeshQuality:
         inverted: Number of elements with a corner Jacobian determinant at or below zero.
         max_aspect: Largest element Frobenius aspect ratio, infinite if any element is inverted.
         mean_aspect: Mean element Frobenius aspect ratio, infinite if any element is inverted.
+        max_warp: Largest warp of a boundary quadrilateral, in degrees (see surface_warps).
+        warp_99: 99th percentile of the boundary quadrilaterals' warps, in degrees.
     """
 
     minimum: float
@@ -80,6 +85,8 @@ class MeshQuality:
     inverted: int
     max_aspect: float
     mean_aspect: float
+    max_warp: float
+    warp_99: float
 
 
 @dataclass(frozen=True, eq=False)
@@ -174,8 +181,34 @@ def frobenius_aspects(mesh: Mesh) -> np.ndarray:
     return _corner_aspects(_corner_edges(mesh.nodes, _hexahedron_corners(mesh))).max(axis=1)
 
 
+def surface_warps(mesh: Mesh) -> np.ndarray:
+    """Return each boundary quadrilateral's warp, in degrees, from the hexahedra's corner nodes.
+
+    A quadrilateral's warp is the angle between the normals of the two
+    triangles a diagonal splits it into, the larger over its two diagonals:
+    0 for a flat face. Scaled Jacobians and aspect ratios, measured at
+    element corners, miss it; it is what makes a mesh's surface look
+    crumpled.
+
+    Raises:
+        ValueError: If the mesh has elements other than hexahedra.
+    """
+    faces = _boundary_faces(_hexahedron_corners(mesh))
+    points = mesh.nodes[faces]
+
+    def angle(first: np.ndarray, second: np.ndarray) -> np.ndarray:
+        lengths = np.maximum(np.linalg.norm(first, axis=-1) * np.linalg.norm(second, axis=-1), np.finfo(float).tiny)
+        return np.degrees(np.arccos(np.clip(np.einsum("...i,...i", first, second) / lengths, -1.0, 1.0)))
+
+    def split(a: int, b: int, c: int, d: int) -> np.ndarray:
+        corner = points[:, a]
+        return angle(np.cross(points[:, b] - corner, points[:, c] - corner), np.cross(points[:, c] - corner, points[:, d] - corner))
+
+    return np.maximum(split(0, 1, 2, 3), split(1, 2, 3, 0))
+
+
 def mesh_quality(mesh: Mesh) -> MeshQuality:
-    """Summarize a hexahedral mesh's scaled Jacobians and Frobenius aspect ratios.
+    """Summarize a hexahedral mesh's scaled Jacobians, Frobenius aspect ratios, and surface warps.
 
     Raises:
         ValueError: If the mesh has elements other than hexahedra.
@@ -185,12 +218,15 @@ def mesh_quality(mesh: Mesh) -> MeshQuality:
     determinants = np.linalg.det(edges)
     quality = _corner_scaled_jacobians(mesh.nodes, corners).min(axis=1)
     aspects = _corner_aspects(edges).max(axis=1)
+    warps = surface_warps(mesh)
     return MeshQuality(
         float(quality.min()),
         float(quality.mean()),
         int(np.count_nonzero((determinants <= 0).any(axis=1))),
         float(aspects.max()),
         float(aspects.mean()),
+        float(warps.max(initial=0.0)),
+        float(np.percentile(warps, 99)) if len(warps) else 0.0,
     )
 
 
@@ -203,12 +239,14 @@ def optimize_hexahedral_mesh(
     feature_angle: float = DEFAULT_FEATURE_ANGLE,
     preserve_volume: bool = True,
     aspect_weight: float = 0.0,
+    warp_weight: float = 0.0,
 ) -> Mesh:
     """Move a hexahedral mesh's nodes to raise its scaled Jacobians, keeping connectivity.
 
     Smart Laplacian smoothing runs first, then optimization of the sum of
     1 / SJ over every element corner plus aspect_weight times the sum of their
-    squared Frobenius aspect ratios. Optimization needs every element valid,
+    squared Frobenius aspect ratios, plus warp_weight times the sum of the
+    boundary quadrilaterals' squared warp measures (_warp_objective). Optimization needs every element valid,
     so if smoothing leaves any corner's scaled Jacobian below 0.01, inverted
     or nearly, the mesh is untangled first, by raising every corner's toward
     0.2 until all reach 0.01, and optimization is skipped with a warning if
@@ -243,6 +281,8 @@ def optimize_hexahedral_mesh(
             straight, against 6.4 at 0.5. The aspect term also penalizes
             deliberately elongated elements, such as the meniscus's along its
             centerline.
+        warp_weight: Weight of the boundary quadrilaterals' warp against
+            1 / SJ, per quadrilateral. 0 leaves warped faces as they are.
 
     Returns:
         A new Mesh with the same connectivity and moved nodes. High-order
@@ -259,8 +299,8 @@ def optimize_hexahedral_mesh(
         raise ValueError(f"Surface allowances must not be negative, got {surface_deviation} and {surface_travel}")
     if not 0 < feature_angle < 180:
         raise ValueError(f"feature_angle must be between 0 and 180 degrees, got {feature_angle}")
-    if aspect_weight < 0:
-        raise ValueError(f"aspect_weight must not be negative, got {aspect_weight}")
+    if aspect_weight < 0 or warp_weight < 0:
+        raise ValueError(f"aspect_weight and warp_weight must not be negative, got {aspect_weight} and {warp_weight}")
 
     corners = _hexahedron_corners(mesh)
     before = mesh_quality(mesh)
@@ -274,7 +314,8 @@ def optimize_hexahedral_mesh(
         if (np.linalg.det(_corner_edges(positions, corners)) <= 0).any():
             logger.warning("Skipping optimization because untangling left inverted elements")
         else:
-            positions = _optimize(positions, corners, constraints, optimization_iterations, aspect_weight)
+            faces = _boundary_faces(corners) if warp_weight else None
+            positions = _optimize(positions, corners, constraints, optimization_iterations, aspect_weight, faces, warp_weight)
 
     result = replace(mesh, nodes=_move_high_order_nodes(mesh, corners, positions))
     after = mesh_quality(result)
@@ -319,7 +360,9 @@ def _corner_aspects(edges: np.ndarray) -> np.ndarray:
     return np.where(positive, squared / (3 * np.where(positive, determinants, 1.0) ** (2 / 3)), np.inf)
 
 
-def _objective(nodes: np.ndarray, corners: np.ndarray, aspect_weight: float = 0.0) -> tuple[float, np.ndarray]:
+def _objective(
+    nodes: np.ndarray, corners: np.ndarray, aspect_weight: float = 0.0, faces: np.ndarray | None = None, warp_weight: float = 0.0
+) -> tuple[float, np.ndarray]:
     """Return the sum of 1 / SJ plus aspect_weight times the sum of F^2 over all corners, and its gradient.
 
     The sum is infinite, with a zero gradient, if any corner is degenerate or inverted.
@@ -352,20 +395,63 @@ def _objective(nodes: np.ndarray, corners: np.ndarray, aspect_weight: float = 0.
     indices = np.concatenate((corners[:, _CORNER_NEIGHBORS].ravel(), corners.ravel()))
     values = np.concatenate((edge_gradient.reshape(-1, 3), -edge_gradient.sum(axis=2).reshape(-1, 3)))
     gradient = np.column_stack([np.bincount(indices, weights=values[:, axis], minlength=len(nodes)) for axis in range(3)])
+    if warp_weight and faces is not None:
+        warp_energy, warp_gradient = _warp_objective(nodes, faces)
+        energy += warp_weight * warp_energy
+        gradient += warp_weight * warp_gradient
     return energy, gradient
 
 
-def _optimize(positions: np.ndarray, corners: np.ndarray, constraints: _Constraints, iterations: int, aspect_weight: float) -> np.ndarray:
+def _warp_objective(nodes: np.ndarray, faces: np.ndarray) -> tuple[float, np.ndarray]:
+    """Return the sum over quadrilaterals of W = V^2 / A^3, and its gradient.
+
+    V = (b - a) . ((c - a) x (d - a)) is six times the volume of the
+    tetrahedron of a face's corners, 0 for a flat face, and A half the length
+    of the cross product N of its diagonals, its area for a flat one, so W is
+    dimensionless and about the square of the warp angle in radians over
+    four for small warps. dV/db = (c - a) x (d - a) and cyclically, and for
+    the diagonals u = c - a and v = d - b, dA/du = (v x n) / 2 and
+    dA/dv = (n x u) / 2 with n = N / |N|.
+    """
+    a, b, c, d = (nodes[faces[:, index]] for index in range(4))
+    volume = np.einsum("ij,ij->i", b - a, np.cross(c - a, d - a))
+    first, second = c - a, d - b
+    normal = np.cross(first, second)
+    length = np.maximum(np.linalg.norm(normal, axis=1), np.finfo(float).tiny)
+    area = 0.5 * length
+    unit = normal / length[:, None]
+    energy = volume**2 / area**3
+    d_volume = 2 * volume / area**3
+    d_area = -3 * volume**2 / area**4
+    by_volume = {1: np.cross(c - a, d - a), 2: np.cross(d - a, b - a), 3: np.cross(b - a, c - a)}
+    by_volume[0] = -(by_volume[1] + by_volume[2] + by_volume[3])
+    along_first, along_second = 0.5 * np.cross(second, unit), 0.5 * np.cross(unit, first)
+    by_area = {0: -along_first, 1: -along_second, 2: along_first, 3: along_second}
+    values = np.concatenate([d_volume[:, None] * by_volume[index] + d_area[:, None] * by_area[index] for index in range(4)])
+    indices = faces.T.ravel()
+    gradient = np.column_stack([np.bincount(indices, weights=values[:, axis], minlength=len(nodes)) for axis in range(3)])
+    return float(energy.sum()), gradient
+
+
+def _optimize(
+    positions: np.ndarray,
+    corners: np.ndarray,
+    constraints: _Constraints,
+    iterations: int,
+    aspect_weight: float,
+    faces: np.ndarray | None = None,
+    warp_weight: float = 0.0,
+) -> np.ndarray:
     """Minimize the objective by projected gradient descent with backtracking."""
     # Scaling each node's step by its local size squared makes the step dimensionless.
     scale = _local_sizes(constraints.origin, corners)[:, None] ** 2
-    energy, gradient = _objective(positions, corners, aspect_weight)
+    energy, gradient = _objective(positions, corners, aspect_weight, faces, warp_weight)
     step = _INITIAL_STEP
     for iteration in range(iterations):
         direction = scale * constraints.line_gradient(gradient)
         while step >= _MIN_STEP:
             trial = constraints.project(positions - step * direction)
-            trial_energy, trial_gradient = _objective(trial, corners, aspect_weight)
+            trial_energy, trial_gradient = _objective(trial, corners, aspect_weight, faces, warp_weight)
             if trial_energy < energy:
                 break
             step /= 2

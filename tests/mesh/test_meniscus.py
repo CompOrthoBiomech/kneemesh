@@ -224,6 +224,24 @@ def test_swept_hexahedra_of_a_clipped_loft_have_nodes_on_the_cut_edges(meniscus_
             assert np.linalg.norm(nodes - corner, axis=1).min() < 1e-6
 
 
+def test_warp_term_flattens_the_swept_surface_of_a_real_meniscus(real_medial_label):
+    from kneemesh.config import DEFAULT_MENISCUS_WARP_WEIGHT
+    from kneemesh.geo.meniscus import centerline, contours_to_brep, slice_isocontour
+
+    surface = smooth_isocontour(extract_isocontour(signed_distance_field(real_medial_label)))
+    brep = contours_to_brep(slice_isocontour(surface, centerline(real_medial_label), spacing=5.0, clip_ratio=0.25), cap="planar")
+    mesh = hexahedral_mesh(brep)
+
+    plain, flattened = (
+        mesh_quality(optimize_hexahedral_mesh(mesh, aspect_weight=DEFAULT_MENISCUS_ASPECT_WEIGHT, warp_weight=weight))
+        for weight in (0.0, DEFAULT_MENISCUS_WARP_WEIGHT)
+    )
+
+    assert flattened.warp_99 < 0.75 * plain.warp_99
+    assert flattened.inverted == 0
+    assert flattened.minimum > plain.minimum - 0.1
+
+
 def test_mean_value_coordinates_reproduce_points():
     square = np.array([[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]])
     points = np.array([[0.5, 0.5], [0.1, 0.8], [0.9, 0.05]])

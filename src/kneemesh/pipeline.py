@@ -383,11 +383,14 @@ def _optimize(mesh: Mesh, config: StructureMesh) -> Mesh:
     before = mesh_quality(mesh)
     count = sum(len(connectivity) for connectivity in mesh.elements.values())
     logger.info(
-        "Optimizing {} hexahedra with minimum scaled Jacobian {:.3f}, mean {:.3f}, and maximum Frobenius aspect ratio {:.3g}",
+        "Optimizing {} hexahedra with minimum scaled Jacobian {:.3f}, mean {:.3f}, maximum Frobenius aspect ratio {:.3g}, "
+        + "and surface warp {:.1f} degrees at the 99th percentile, {:.1f} at most",
         count,
         before.minimum,
         before.mean,
         before.max_aspect,
+        before.warp_99,
+        before.max_warp,
     )
     optimized = optimize_hexahedral_mesh(
         mesh,
@@ -398,13 +401,17 @@ def _optimize(mesh: Mesh, config: StructureMesh) -> Mesh:
         config.feature_angle,
         config.preserve_volume,
         config.aspect_weight,
+        config.warp_weight,
     )
     after = mesh_quality(optimized)
     logger.info(
-        "Optimized minimum scaled Jacobian to {:.3f}, mean to {:.3f}, and maximum Frobenius aspect ratio to {:.3g}",
+        "Optimized minimum scaled Jacobian to {:.3f}, mean to {:.3f}, maximum Frobenius aspect ratio to {:.3g}, "
+        + "and surface warp to {:.1f} degrees at the 99th percentile, {:.1f} at most",
         after.minimum,
         after.mean,
         after.max_aspect,
+        after.warp_99,
+        after.max_warp,
     )
     return optimized
 

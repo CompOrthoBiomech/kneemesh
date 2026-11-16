@@ -10,10 +10,12 @@ from kneemesh.mesh_optimization import (
     _local_sizes,
     _objective,
     _untangling_objective,
+    _warp_objective,
     frobenius_aspects,
     mesh_quality,
     optimize_hexahedral_mesh,
     scaled_jacobians,
+    surface_warps,
 )
 from kneemesh.tet_meshing import Mesh
 from kneemesh.vol import extract_isocontour, signed_distance_field, smooth_isocontour
@@ -195,6 +197,41 @@ def test_straight_lines_stay_straight_at_their_fractions():
 def test_aspect_weight_must_not_be_negative():
     with pytest.raises(ValueError, match="aspect_weight"):
         optimize_hexahedral_mesh(cube_grid(2), aspect_weight=-1.0)
+
+
+def test_warp_weight_must_not_be_negative():
+    with pytest.raises(ValueError, match="warp_weight"):
+        optimize_hexahedral_mesh(cube_grid(2), warp_weight=-1.0)
+
+
+def test_surface_warps_are_zero_for_flat_faces_and_grow_with_a_lifted_corner():
+    lifted = UNIT_CUBE.copy()
+    lifted[6] += [0.0, 0.0, 0.3]
+
+    assert surface_warps(hexahedra(UNIT_CUBE, [range(8)])) == pytest.approx(np.zeros(6), abs=1e-9)
+    warps = surface_warps(hexahedra(lifted, [range(8)]))
+    # Raised along z, node 6 stays in the planes of the two sides it lies on, so only the top face warps.
+    assert np.count_nonzero(warps > 1.0) == 1
+    quality = mesh_quality(hexahedra(lifted, [range(8)]))
+    assert quality.max_warp == pytest.approx(warps.max())
+    assert 0 < quality.warp_99 <= quality.max_warp
+
+
+def test_warp_objective_gradient_matches_finite_differences():
+    mesh = cube_grid(3, perturbation=0.2)
+    rng = np.random.default_rng(1)
+    nodes = mesh.nodes + rng.uniform(-0.05, 0.05, mesh.nodes.shape)
+    faces = np.array([[0, 1, 5, 4], [1, 2, 6, 5], [16, 17, 21, 20]])
+    _, gradient = _warp_objective(nodes, faces)
+    step = 1e-6
+
+    for node, axis in [(0, 0), (5, 1), (17, 2), (21, 0)]:
+        ahead, behind = nodes.copy(), nodes.copy()
+        ahead[node, axis] += step
+        behind[node, axis] -= step
+        difference = (_warp_objective(ahead, faces)[0] - _warp_objective(behind, faces)[0]) / (2 * step)
+        assert gradient[node, axis] == pytest.approx(difference, rel=1e-5, abs=1e-9)
+    assert _warp_objective(UNIT_CUBE, np.array([[0, 1, 2, 3]]))[0] == pytest.approx(0.0, abs=1e-12)
 
 
 def test_cube_nodes_are_classified_by_their_boundary_features():
