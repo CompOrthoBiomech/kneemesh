@@ -61,6 +61,15 @@ Each run saves the configuration it used, so it can be repeated with `--config`.
 
 Add `--meniscus.hex-design butterfly --meniscus.points-per-slice 10` for the meniscus's structured butterfly blocks. For the cartilage, `--cartilage.hex-blocks true` builds the B-rep with the defaults that suit hexahedra; any cartilage B-rep can be meshed with either element shape.
 
+## GUI
+
+`kneemesh-gui` runs every stage interactively in a browser: import labels, configure, build, and mesh each structure, view the results, and import or export the pipelines' JSON configurations. It needs the `gui` extra:
+
+```sh
+pip install "kneemesh[gui]"
+kneemesh-gui
+```
+
 ## Development
 
 Requires [uv](https://docs.astral.sh/uv/).

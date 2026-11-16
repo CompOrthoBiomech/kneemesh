@@ -76,18 +76,27 @@ def run_brep(config: LabelMapBrep) -> dict[Structure, BRep | vtkPolyData]:
     if not structures:
         raise ValueError("Give a multilabel label_map with labels or single-label label_maps to read")
     segmentation = load_segmentation(config)
-    breps: dict[Structure, BRep | vtkPolyData] = {}
-    for structure in structures:
-        geometry = _BREP_BUILDERS[structure](segmentation, structure, config)
-        path = config.output_path(structure)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        if isinstance(geometry, BRep):
-            write_brep(geometry, path)
-        else:
-            write_surface(geometry, path)
-        logger.info("Wrote {}", path)
-        breps[structure] = geometry
-    return breps
+    return {structure: build_structure(segmentation, structure, config) for structure in structures}
+
+
+def build_structure(segmentation: Segmentation, structure: Structure, config: LabelMapBrep) -> BRep | vtkPolyData:
+    """Build one structure's B-rep, or a bone's surface, from a segmentation and write it to config.output_path(structure).
+
+    The segmentation must name the structure, and a cartilage's bone too.
+    config's own labels and label_maps are not read.
+
+    Raises:
+        ValueError: If the segmentation lacks the structure or its bone, or the geometry cannot be built.
+    """
+    geometry = _BREP_BUILDERS[structure](segmentation, structure, config)
+    path = config.output_path(structure)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if isinstance(geometry, BRep):
+        write_brep(geometry, path)
+    else:
+        write_surface(geometry, path)
+    logger.info("Wrote {}", path)
+    return geometry
 
 
 def run_mesh(config: BrepMesh) -> dict[Structure, Mesh]:

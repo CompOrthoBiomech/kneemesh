@@ -53,3 +53,25 @@ Modules at the package root apply to every structure. The `geo` and `mesh` subpa
 
 .. automodule:: kneemesh.mesh.bone
 ```
+
+## GUI
+
+The `gui` subpackage needs the `gui` extra.
+
+```{eval-rst}
+.. automodule:: kneemesh.gui
+
+.. automodule:: kneemesh.gui.app
+
+.. automodule:: kneemesh.gui.settings
+
+.. automodule:: kneemesh.gui.labels
+
+.. automodule:: kneemesh.gui.jobs
+
+.. automodule:: kneemesh.gui.worker
+
+.. automodule:: kneemesh.gui.view
+
+.. automodule:: kneemesh.gui.files
+```

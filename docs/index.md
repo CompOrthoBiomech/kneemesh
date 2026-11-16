@@ -6,6 +6,7 @@ Convert segmented knee images into B-rep geometry, and mesh it with tetrahedra o
 :maxdepth: 2
 
 usage
+gui
 pipeline
 configuration
 api
