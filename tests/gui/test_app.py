@@ -1,6 +1,8 @@
 import asyncio
+import io
 import json
 import uuid
+import zipfile
 
 import numpy as np
 import pytest
@@ -9,7 +11,7 @@ from trame.app import get_server
 
 from kneemesh.config import BrepMesh, LabelMapBrep, MeniscusBrep
 from kneemesh.disk import read_segmentation, write_label_map
-from kneemesh.gui.app import KneemeshApp, _parse_config
+from kneemesh.gui.app import KneemeshApp, _parse_config, zip_files
 
 
 @pytest.fixture
@@ -178,3 +180,31 @@ def test_solo_shows_only_one_structure(app):
     assert (app.state.solo, app.state.hidden) == ("tibia", [])
     app.toggle_solo("tibia")
     assert app.state.solo is None
+
+
+def test_uploads_are_written_into_the_dialog_directory(app, tmp_path):
+    app.add_label()
+    app.dialog_open_directory(str(tmp_path))
+    app._upload([{"name": "../scan.nrrd", "content": [b"ab", b"cd"]}, {"name": "notes.txt", "content": b"x"}])
+    assert (tmp_path / "scan.nrrd").read_bytes() == b"abcd"
+    assert (tmp_path / "notes.txt").read_bytes() == b"x"
+    assert not (tmp_path.parent / "scan.nrrd").exists()
+    # The one file the dialog can open is selected.
+    assert (app.state.dialog_selection, app.state.dialog_selection_name) == (str(tmp_path / "scan.nrrd"), "scan.nrrd")
+    assert app.state.dialog_upload is None
+
+
+def test_zip_of_written_files_names_them_from_their_common_directory(tmp_path):
+    (tmp_path / "meshes").mkdir()
+    (tmp_path / "a.brep").write_text("a", encoding="utf-8")
+    (tmp_path / "meshes" / "a.vtu").write_text("b", encoding="utf-8")
+    archive = zipfile.ZipFile(io.BytesIO(zip_files([str(tmp_path / "a.brep"), str(tmp_path / "meshes" / "a.vtu"), str(tmp_path / "gone")])))
+    assert sorted(archive.namelist()) == ["a.brep", "meshes/a.vtu"]
+    assert archive.read("meshes/a.vtu") == b"b"
+    assert zipfile.ZipFile(io.BytesIO(zip_files([]))).namelist() == []
+
+
+def test_exports_are_remembered_for_download(app, tmp_path):
+    app._export_mesh(str(tmp_path / "mesh.json"))
+    assert list(app._written) == [str((tmp_path / "mesh.json").resolve())]
+    assert app.state.written_count == 1

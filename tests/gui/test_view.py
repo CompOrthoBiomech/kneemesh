@@ -1,19 +1,29 @@
 from dataclasses import replace
 
 import numpy as np
+from vtkmodules.vtkFiltersGeometry import vtkUnstructuredGridGeometryFilter
 
 from kneemesh.disk import write_mesh
 from kneemesh.gui.labels import LabelEntry
-from kneemesh.gui.view import Scene, read_mesh_preview
+from kneemesh.gui.view import Scene, edge_lines, read_mesh_preview
 from kneemesh.mesh_optimization import element_quality
 from kneemesh.tet_meshing import Mesh
 
 
-def _cube_mesh(path, lift=0.0):
-    """Two hexahedra side by side, with their faces and quality, written as a preview; lift raises one top corner."""
-    nodes = np.array([[x, y, z] for z in (0.0, 1.0) for y in (0.0, 1.0) for x in (0.0, 1.0, 2.0)])
-    nodes[11, 2] += lift
-    corners = [[0, 1, 4, 3, 6, 7, 10, 9], [1, 2, 5, 4, 7, 8, 11, 10]]
+def _cube_mesh(path, lift=0.0, columns=2):
+    """Hexahedra in a row along x, with their faces and quality, written as a preview; lift raises the last top corner."""
+    xs = np.arange(columns + 1, dtype=float)
+    nodes = np.array([[x, y, z] for z in (0.0, 1.0) for y in (0.0, 1.0) for x in xs])
+    nodes[-1, 2] += lift
+    width = columns + 1
+
+    def node(i, j, k):
+        return k * 2 * width + j * width + i
+
+    corners = [
+        [node(i, 0, 0), node(i + 1, 0, 0), node(i + 1, 1, 0), node(i, 1, 0), node(i, 0, 1), node(i + 1, 0, 1), node(i + 1, 1, 1), node(i, 1, 1)]
+        for i in range(columns)
+    ]
     mesh = Mesh(nodes, {"Hexahedron 8": np.array(corners)}, {"Hexahedron 8": 5}).with_face_sets()
     write_mesh(replace(mesh, quality=element_quality(mesh)), path)
     return read_mesh_preview(path)
@@ -34,10 +44,12 @@ def test_meshes_are_colored_by_a_metric_with_a_scalar_bar(tmp_path):
     low, high = scene.lookup_table.GetTableRange()
     assert low < 1.0
     assert np.isclose(high, 1.0)
-    mapper = scene._stages[("mesh", "medial_meniscus")][0].GetMapper()
+    mapper = scene._stages[("mesh", "medial_meniscus")].actors[0].GetMapper()
     assert mapper.GetScalarVisibility()
     # The element metrics are drawn on the elements' outer faces, the warp on the boundary faces.
+    mapper.Update()
     assert mapper.GetInput().GetNumberOfCells() == 10
+    assert mapper.GetInput().GetPointData().GetNormals() is not None
 
     scene.refresh([], "latest", [], metric="warp")
     assert scene.lookup_table.GetTableRange()[0] == 0.0
@@ -56,7 +68,9 @@ def test_solo_hides_every_other_structure_and_its_labels(tmp_path):
     scene = Scene()
     scene.set_mesh("lateral_meniscus", _cube_mesh(tmp_path / "a.vtu"))
     scene.set_mesh("medial_meniscus", _cube_mesh(tmp_path / "b.vtu"))
-    surface = scene._stages[("mesh", "lateral_meniscus")][0].GetMapper().GetInput()
+    mapper = scene._stages[("mesh", "lateral_meniscus")].actors[0].GetMapper()
+    mapper.Update()
+    surface = mapper.GetInput()
     entries = [
         LabelEntry(id=1, path="a.nii", name="a.nii", file_value=1, structure="tibia", value=1, include=True),
         LabelEntry(id=2, path="a.nii", name="a.nii", file_value=2, structure=None, value=2, include=True),
@@ -65,7 +79,71 @@ def test_solo_hides_every_other_structure_and_its_labels(tmp_path):
         scene.set_label(entry["id"], surface)
 
     scene.refresh(entries, "latest", [], solo="medial_meniscus")
-    assert _visible(scene._stages[("mesh", "lateral_meniscus")] + scene._labels[1] + scene._labels[2]) == [False, False, False]
-    assert _visible(scene._stages[("mesh", "medial_meniscus")]) == [True]
+    others = scene._stages[("mesh", "lateral_meniscus")].actors + scene._labels[1].actors + scene._labels[2].actors
+    assert _visible(others) == [False, False, False]
+    assert _visible(scene._stages[("mesh", "medial_meniscus")].actors) == [True]
     scene.refresh(entries, "latest", ["medial_meniscus"])
-    assert _visible(scene._stages[("mesh", "lateral_meniscus")] + scene._labels[1] + scene._labels[2]) == [True, True, True]
+    assert _visible(others) == [True, True, True]
+
+
+def _cells(actor):
+    mapper = actor.GetMapper()
+    mapper.Update()
+    return mapper.GetInput().GetNumberOfCells()
+
+
+def test_crinkle_clip_keeps_whole_cells_beyond_the_plane(tmp_path):
+    scene = Scene()
+    scene.set_mesh("lateral_meniscus", _cube_mesh(tmp_path / "a.vtu", columns=6))
+    actor = scene._stages[("mesh", "lateral_meniscus")].actors[0]
+    assert _cells(actor) == 6 * 4 + 2
+    camera = scene.renderer.GetActiveCamera()
+    camera.SetFocalPoint(3.0, 0.5, 0.5)
+    camera.SetPosition(10.0, 0.5, 0.5)
+
+    # Facing the viewer at +x through x = 3, the clip keeps the three columns behind it, and the column the plane touches, whole.
+    scene.set_clipping(True)
+    assert _cells(actor) == 4 * 4 + 2
+    scene.set_clipping(True, offset=0.5)
+    assert _cells(actor) < 4 * 4 + 2
+
+    # Fixed, the plane stays where it was when the camera turns; following the view, it turns too.
+    scene.set_clipping(True, "fixed")
+    fixed = _cells(actor)
+    camera.SetPosition(3.0, 10.0, 0.5)
+    scene.render_window.Render()
+    assert _cells(actor) == fixed
+    scene.set_clipping(True, "view")
+    scene.render_window.Render()
+    assert _cells(actor) == 6 * 4 + 2
+    scene.set_clipping(False)
+    assert _cells(actor) == 6 * 4 + 2
+
+
+def test_nonlinear_meshes_draw_curved_edges_without_the_subdivision(tmp_path):
+    corners = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]], dtype=float)
+    pairs = [(0, 1), (1, 2), (2, 0), (3, 0), (3, 2), (3, 1)]
+    nodes = np.vstack([corners, [(corners[a] + corners[b]) / 2 + [0.0, 0.0, 0.1] for a, b in pairs]])
+    mesh = Mesh(nodes, {"Tetrahedron 10": np.arange(10)[None]}, {"Tetrahedron 10": 11}).with_face_sets()
+    write_mesh(replace(mesh, quality=element_quality(mesh)), tmp_path / "t.vtu")
+    scene = Scene()
+    scene.set_mesh("lateral_meniscus", read_mesh_preview(tmp_path / "t.vtu"))
+    surface, edges = scene._stages[("mesh", "lateral_meniscus")].actors
+    # Four faces subdivided twice, 16 triangles each, and the six edges as curves of five points.
+    assert _cells(surface) == 4 * 16
+    assert not surface.GetProperty().GetEdgeVisibility()
+    assert _cells(edges) == 6
+    lines = edges.GetMapper().GetInput()
+    assert lines.GetNumberOfPoints() == 6 * 5
+    middle = np.array(lines.GetPoint(2))
+    assert np.isclose(middle[2], 0.1)
+
+
+def test_edge_lines_of_linear_cells_are_their_corner_pairs(tmp_path):
+    grid = _cube_mesh(tmp_path / "a.vtu", columns=1)
+    boundary = vtkUnstructuredGridGeometryFilter()
+    boundary.SetInputData(grid)
+    boundary.Update()
+    lines = edge_lines(boundary.GetOutput())
+    assert lines.GetNumberOfLines() == 12
+    assert lines.GetNumberOfPoints() == 24

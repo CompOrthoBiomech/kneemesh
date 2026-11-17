@@ -2,11 +2,14 @@
 
 import asyncio
 import atexit
+import io
 import json
+import os
 import shutil
 import sys
 import tempfile
-from collections.abc import Callable, Generator, Sequence
+import zipfile
+from collections.abc import Callable, Generator, Iterable, Sequence
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, cast, get_args
@@ -15,6 +18,7 @@ import SimpleITK as sitk
 from loguru import logger
 from pydantic import ValidationError
 from trame.app import asynchronous, get_server
+from trame.app.file_upload import ClientFile
 from trame.ui.vuetify3 import SinglePageWithDrawerLayout
 from trame.widgets import client, html
 from trame.widgets import vtk as vtk_widgets
@@ -23,16 +27,18 @@ from trame_server import Server
 
 from kneemesh.config import (
     BONE_STRUCTURES,
+    BONES,
     OWN_SECTION_STRUCTURES,
     STRUCTURE_SECTIONS,
     STRUCTURES,
     BrepMesh,
+    CartilageMesh,
     ElementType,
     LabelMapAssembly,
     LabelMapBrep,
     Structure,
 )
-from kneemesh.disk import SUPPORTED_SUFFIXES, read_label_map, read_poly_data, read_surface, write_segmentation
+from kneemesh.disk import SUPPORTED_SUFFIXES, read_label_map, read_poly_data, read_surface, segmentation_labels_path, write_segmentation
 from kneemesh.gui import settings
 from kneemesh.gui.files import list_directory
 from kneemesh.gui.jobs import JobError, JobRunner
@@ -104,6 +110,8 @@ class KneemeshApp:
         atexit.register(shutil.rmtree, self.preview_directory, True)
         self._dialog_callback: Callable[[str], object] | None = None
         self._surfaces: dict[tuple[str, int], Any] = {}
+        # The files this session wrote, in order, for downloading.
+        self._written: dict[str, None] = {}
         # The structures whose own sections hold values of their own, which making them their own again keeps.
         self._edited_sections: dict[settings.Kind, set[str]] = {"geometry": set(), "mesh": set()}
         self._initialize_state()
@@ -134,6 +142,12 @@ class KneemeshApp:
                 "own_sections": {"geometry": [], "mesh": []},
                 "hidden": [],
                 "solo": None,
+                "clip": False,
+                "clip_fixed": False,
+                "clip_offset": 0.0,
+                "dialog_upload": None,
+                "dialog_selection_name": "",
+                "written_count": 0,
                 "display": "latest",
                 "color_by": "",
                 "color_by_items": [
@@ -174,6 +188,10 @@ class KneemeshApp:
         keys = [spec.key for kind in ("geometry", "mesh") for spec in settings.all_fields(kind)]
         self.state.change(*keys, settings.OUTPUT_DIRECTORY_KEY, "element_types", "brep_paths", "own_sections")(lambda **_: self._validate())
         self.state.change("display", "hidden", "solo", "color_by")(lambda **_: self._refresh_scene())
+        self.state.change("clip", "clip_fixed", "clip_offset")(lambda **_: self._set_clipping())
+        self.state.change("dialog_upload")(lambda dialog_upload, **_: self._upload(dialog_upload))
+        self.server.trigger("kneemesh_download")(self.download_file)
+        self.server.trigger("kneemesh_download_outputs")(self.download_outputs)
         self.server.cli.add_argument("--config", help="JSON configuration of kneemesh-brep, kneemesh-mesh, or kneemesh-assemble to import")
         self.ctrl.on_server_ready.add(self._on_ready)
         for name in (
@@ -238,6 +256,12 @@ class KneemeshApp:
             _icon_button("mdi-file-import-outline", "Import a configuration (JSON)", click=self.ctrl.import_config, disabled=("busy",))
             _icon_button("mdi-file-export-outline", "Export the geometry configuration (JSON)", click=self.ctrl.export_geometry)
             _icon_button("mdi-file-export", "Export the mesh configuration (JSON)", click=self.ctrl.export_mesh)
+            _icon_button(
+                "mdi-folder-download-outline",
+                "Download the files this session wrote, as a zip",
+                click="utils.download('kneemesh_outputs.zip', trigger('kneemesh_download_outputs'), 'application/zip')",
+                disabled=("!written_count",),
+            )
             v3.VDivider(vertical=True, classes="mx-2")
             _icon_button(
                 "mdi-folder-open-outline",
@@ -269,6 +293,31 @@ class KneemeshApp:
                     classes="ml-2",
                     style="max-width: 250px;",
                 )
+            _icon_button(
+                "mdi-box-cutter",
+                "Clip by a plane, keeping whole cells (crinkle clip)",
+                click="clip = !clip",
+                color=("clip ? 'primary' : ''",),
+                classes="ml-2",
+            )
+            with html.Div(v_if="clip", classes="d-flex align-center"):
+                _icon_button(
+                    ("clip_fixed ? 'mdi-pin' : 'mdi-pin-off-outline'",),
+                    "Unpinned, the plane faces the viewer as the view turns; pinned, it stays where it is and turns with the geometry",
+                    click="clip_fixed = !clip_fixed",
+                    color=("clip_fixed ? 'primary' : ''",),
+                )
+                with _tooltip("Move the plane toward or away from the viewer"):
+                    v3.VSlider(
+                        v_model=("clip_offset",),
+                        v_bind="props",
+                        min=-1,
+                        max=1,
+                        step=0.01,
+                        density="compact",
+                        hide_details=True,
+                        style="width: 140px;",
+                    )
             _icon_button("mdi-crop-free", "Reset the camera", click=self.ctrl.reset_camera)
             _icon_button("mdi-console", "Show or hide the log", click="show_log = !show_log")
             v3.VProgressLinear(v_if="busy", indeterminate=True, absolute=True, location="bottom", color="primary")
@@ -528,8 +577,26 @@ class KneemeshApp:
                     hide_details=True,
                     style="flex: none;",
                 )
+                with _tooltip("Upload files from this computer into the directory shown, such as a .mhd with its .raw"):
+                    v3.VFileInput(
+                        v_model=("dialog_upload",),
+                        v_bind="props",
+                        label="Upload to this directory",
+                        multiple=True,
+                        density="compact",
+                        hide_details=True,
+                        prepend_icon="mdi-upload",
+                        classes="mt-2",
+                        style="flex: none;",
+                    )
                 v3.VAlert(v_if="dialog_error", text=("dialog_error",), type="error", density="compact", variant="tonal", classes="mt-2")
             with v3.VCardActions():
+                v3.VBtn(
+                    "Download",
+                    prepend_icon="mdi-download",
+                    v_if="dialog_selection",
+                    click="utils.download(dialog_selection_name, trigger('kneemesh_download', [dialog_selection]), 'application/octet-stream')",
+                )
                 v3.VSpacer()
                 v3.VBtn("Cancel", click="dialog_open = false")
                 v3.VBtn(
@@ -750,6 +817,7 @@ class KneemeshApp:
             self._notify("; ".join(dict.fromkeys(problems)))
             return
         geometry = config.model_dump(mode="json")
+        assembled: str | None = self.state.geo__assembled_label_map or None
         job = {
             "kind": "geometry",
             "config": geometry,
@@ -757,12 +825,15 @@ class KneemeshApp:
             "structures": structures,
             "interpolator": geometry["interpolator"],
             "padding": geometry["padding"],
-            "assembled_label_map": self.state.geo__assembled_label_map or None,
+            "assembled_label_map": assembled,
             "preview_directory": str(self.preview_directory),
         }
         result = await self._run(job, f"Building {', '.join(map(structure_title, structures))}")
         if result is None:
             return
+        self._wrote(*(paths["output"] for paths in result.values()))
+        if assembled:
+            self._wrote(assembled, segmentation_labels_path(assembled))
         for name, paths in result.items():
             name = cast(Structure, name)
             self.scene.set_geometry(name, await asyncio.to_thread(_read_geometry, paths["preview"]))
@@ -799,6 +870,9 @@ class KneemeshApp:
         result = await self._run(job, f"Meshing {', '.join(map(structure_title, breps))}")
         if result is None:
             return
+        self._wrote(*(paths["output"] for paths in result.values()), config.assembled_mesh)
+        sheets: list[Structure] = [name for name in BONES if name in result]
+        self._wrote(*(config.partition_path(name) for name in sheets if config.section(name, CartilageMesh).save_partition))
         for name, paths in result.items():
             name = cast(Structure, name)
             self.scene.set_mesh(name, await asyncio.to_thread(read_mesh_preview, paths["preview"]))
@@ -933,11 +1007,13 @@ class KneemeshApp:
                 await asyncio.to_thread(write_segmentation, segmentation, segmentation_path)
                 sources = {"label_map": str(segmentation_path), "labels": segmentation.labels}
                 self._log("INFO", f"Wrote the composed segmentation to {segmentation_path}")
+                self._wrote(segmentation_path, segmentation_labels_path(segmentation_path))
             elif "label_maps" in sources:
                 values["assembled_label_map"] = assembled
             values.update(sources)
             config = LabelMapBrep.model_validate(values)
             Path(path).write_text(config.model_dump_json(indent=2) + "\n", encoding="utf-8")
+            self._wrote(path)
         except ValidationError as error:
             self._notify(f"Could not export: {'; '.join(settings.validation_errors('geometry', error).values())}")
             return
@@ -958,6 +1034,7 @@ class KneemeshApp:
         try:
             config = self._mesh_config(breps, assembled=True)
             Path(path).write_text(config.model_dump_json(indent=2) + "\n", encoding="utf-8")
+            self._wrote(path)
         except ValidationError as error:
             self._notify(f"Could not export: {'; '.join(settings.validation_errors('mesh', error).values())}")
             return
@@ -1010,6 +1087,7 @@ class KneemeshApp:
             self.dialog_open_directory(item["path"])
         else:
             self.state.dialog_selection = item["path"]
+            self.state.dialog_selection_name = item["name"]
             if self.state.dialog_mode == "save":
                 self.state.dialog_filename = item["name"]
 
@@ -1038,11 +1116,71 @@ class KneemeshApp:
             if asyncio.iscoroutine(result):
                 asynchronous.create_task(result)
 
+    def _upload(self, files: object) -> None:
+        """Write files uploaded in the file dialog into its directory, and select the one to open if there is one."""
+        if not files:
+            return
+        uploads = [ClientFile(file) for file in (files if isinstance(files, list) else [files])]
+        directory = Path(self.state.dialog_directory)
+        written: list[Path] = []
+        try:
+            for upload in uploads:
+                content = upload.content
+                if content is None or not upload.name:
+                    continue
+                # Only the file's own name, so an upload cannot write outside the directory.
+                path = directory / Path(upload.name).name
+                path.write_bytes(content)
+                written.append(path)
+        except OSError as error:
+            self.state.dialog_error = f"Could not upload: {error}"
+            return
+        finally:
+            self.state.dialog_upload = None
+        self._log("INFO", f"Uploaded {', '.join(str(path) for path in written)}")
+        self.dialog_open_directory(str(directory))
+        suffixes = {suffix.lower() for suffix in self.state.dialog_suffixes}
+        openable = [path for path in written if not suffixes or path.suffix.lower() in suffixes]
+        if len(openable) == 1:
+            self.state.dialog_selection = str(openable[0])
+            self.state.dialog_selection_name = openable[0].name
+            if self.state.dialog_mode == "save":
+                self.state.dialog_filename = openable[0].name
+
+    def download_file(self, path: str) -> object:
+        """A server file's contents, for the browser to save."""
+        try:
+            return self._attachment(Path(path).read_bytes())
+        except OSError as error:
+            self._notify(f"Could not download {path}: {error}")
+            return None
+
+    def download_outputs(self) -> object:
+        """A zip of the files this session wrote, for the browser to save."""
+        return self._attachment(zip_files(self._written))
+
+    def _attachment(self, content: bytes) -> object:
+        """Bytes sent to the browser as a binary attachment rather than encoded in a message."""
+        protocol = self.server.protocol
+        assert protocol is not None, "The server is not running"
+        return protocol.addAttachment(content)
+
+    def _wrote(self, *paths: str | Path | None) -> None:
+        """Remember files this session wrote, for download_outputs."""
+        for path in paths:
+            if path is not None and Path(path).is_file():
+                self._written[str(Path(path).resolve())] = None
+        self.state.written_count = len(self._written)
+
     # View and messages
 
     def reset_camera(self) -> None:
         """Fit the view to what it shows."""
         self.scene.reset_camera()
+        self.ctrl.view_update()
+
+    def _set_clipping(self) -> None:
+        self.scene.set_clipping(bool(self.state.clip), "fixed" if self.state.clip_fixed else "view", float(self.state.clip_offset))
         self.ctrl.view_update()
 
     def _refresh_scene(self, reset: bool = False) -> None:
@@ -1078,6 +1216,17 @@ def _parse_config(text: str) -> LabelMapBrep | BrepMesh | LabelMapAssembly:
         except ValidationError as error:
             errors.append(f"not a {model.__name__}: {error.error_count()} errors, first {error.errors()[0]['msg']}")
     raise ValueError("; ".join(errors))
+
+
+def zip_files(paths: Iterable[str]) -> bytes:
+    """A zip of files, each named by its path relative to the deepest directory holding them all."""
+    existing = [Path(path) for path in paths if Path(path).is_file()]
+    root = Path(os.path.commonpath([path.parent for path in existing])) if existing else Path()
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        for path in existing:
+            archive.write(path, path.relative_to(root).as_posix())
+    return buffer.getvalue()
 
 
 def _values_of(path: str) -> list[int]:
