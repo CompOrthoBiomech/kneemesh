@@ -100,7 +100,9 @@ uv run --group docs sphinx-build -W -b html docs docs/_build/html
 
 The test data in `tests/dat` are segmentation labels of one knee from the [Open Knee(s)](https://simtk.org/projects/openknee) project, which provides specimen-specific imaging, segmentations, and models of the knee freely to the public. We thank the Open Knee(s) team for making their data openly available. If you use these data, please cite the Open Knee(s) project:
 
-> Erdemir A. Open Knee: Open Source Modeling and Simulation in Knee Biomechanics. *J Knee Surg*. 2016;29(2):107-116. doi:[10.1055/s-0035-1564600](https://doi.org/10.1055/s-0035-1564600)
+> Chokhandre S, Schwartz A, Klonowski E, Landis B, Erdemir A. Open Knee(s): A Free and Open Source Library of Specimen-Specific Models and Related Digital Assets for Finite Element Analysis of the Knee Joint. *Ann Biomed Eng*. 2023;51(1):10-23. doi:[10.1007/s10439-022-03074-0](https://doi.org/10.1007/s10439-022-03074-0)
+
+Project site: <https://simtk.org/projects/openknee>
 
 The labels were cropped to each structure's bounding box and converted to 8-bit LabelMaps for this repository.
 
