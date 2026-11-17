@@ -70,6 +70,17 @@ pip install "kneemesh[gui]"
 kneemesh-gui
 ```
 
+### Docker
+
+The `Dockerfile` builds a slim image that serves the GUI on port 8080 and also has the console scripts. Its working directory, `/data`, is where outputs are written:
+
+```sh
+docker build -t kneemesh .
+docker run --rm -p 8080:8080 -v "$PWD:/data" kneemesh
+```
+
+Then open http://localhost:8080. VTK renders offscreen with Mesa's software EGL, so the image needs no display or GPU. To keep the image small, `docker/prune.py` deletes every VTK library, SciPy subpackage, and trame client bundle that a traced run of the pipelines and the GUI (`docker/trace.py`) doesn't load. As a result, `import vtk` doesn't work inside the image; import from `vtkmodules` instead.
+
 ## Development
 
 Requires [uv](https://docs.astral.sh/uv/).

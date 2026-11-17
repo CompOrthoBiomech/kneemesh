@@ -1,0 +1,9 @@
+# The image needs only the package, its lock, and the build scripts.
+*
+!pyproject.toml
+!uv.lock
+!README.md
+!LICENSE
+!src
+!docker
+**/__pycache__
