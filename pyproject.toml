@@ -56,7 +56,7 @@ testpaths = ["tests"]
 addopts = ["--import-mode=importlib"]
 
 [tool.basedpyright]
-include = ["src", "tests"]
+include = ["src", "tests", "docker"]
 venvPath = "."
 venv = ".venv"
 pythonVersion = "3.13"

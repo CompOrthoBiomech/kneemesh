@@ -4,6 +4,8 @@
 #   docker run --rm -p 8080:8080 -v "$PWD:/data" kneemesh
 #
 # then open http://localhost:8080. /data is the working directory, where the GUI writes its outputs.
+# The entrypoint runs the command as the owner of /data, so a mounted directory stays writable
+# and its new files belong to that owner.
 # The build stage installs the locked runtime dependencies into /opt/kneemesh and prunes them with
 # docker/prune.py, which keeps only the shared objects a traced run of the pipelines and GUI loads.
 
@@ -48,13 +50,16 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends ${RUNTIME_PACKAGES} \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --create-home --uid 1000 kneemesh \
-    && mkdir /data && chown kneemesh /data
+    && mkdir /data && chown kneemesh:kneemesh /data
 
 COPY --from=build /opt/kneemesh /opt/kneemesh
 ENV PATH=/opt/kneemesh/bin:$PATH \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    VTK_DEFAULT_OPENGL_WINDOW=vtkEGLRenderWindow
+    VTK_DEFAULT_OPENGL_WINDOW=vtkEGLRenderWindow \
+    HOME=/tmp
+# HOME is /tmp because the entrypoint may run the command as any uid, which has no home of its own;
+# Mesa caches shaders and gmsh's FLTK keeps preferences there.
 
 # Check the pruned environment still runs the pipelines and the GUI, then drop the caches and
 # preferences Mesa and gmsh's FLTK wrote.
@@ -62,7 +67,8 @@ RUN --mount=type=bind,source=docker/trace.py,target=/tmp/trace.py \
     HOME=/tmp/home python /tmp/trace.py > /dev/null \
     && rm -rf /tmp/home /etc/fltk
 
-USER kneemesh
+COPY --chmod=755 docker/entrypoint.sh /usr/local/bin/kneemesh-entrypoint
 WORKDIR /data
 EXPOSE 8080
+ENTRYPOINT ["kneemesh-entrypoint"]
 CMD ["kneemesh-gui", "--server", "--host", "0.0.0.0", "--port", "8080"]

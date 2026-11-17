@@ -79,7 +79,7 @@ docker build -t kneemesh .
 docker run --rm -p 8080:8080 -v "$PWD:/data" kneemesh
 ```
 
-Then open http://localhost:8080. VTK renders offscreen with Mesa's software EGL, so the image needs no display or GPU. To keep the image small, `docker/prune.py` deletes every VTK library, SciPy subpackage, and trame client bundle that a traced run of the pipelines and the GUI (`docker/trace.py`) doesn't load. As a result, `import vtk` doesn't work inside the image; import from `vtkmodules` instead.
+Then open http://localhost:8080. The container runs as the owner of the mounted directory, so it can write wherever that owner can and its outputs belong to them. VTK renders offscreen with Mesa's software EGL, so the image needs no display or GPU. To keep the image small, `docker/prune.py` deletes every VTK library, SciPy subpackage, and trame client bundle that a traced run of the pipelines and the GUI (`docker/trace.py`) doesn't load. As a result, `import vtk` doesn't work inside the image; import from `vtkmodules` instead.
 
 ## Development
 

@@ -76,16 +76,18 @@ def run_gui(meshes: list[Path]) -> None:
     import asyncio
 
     from trame.app import get_server
-    from trame_vtk.modules.vtk.serializers import serialize  # noqa: F401  # local rendering's serializers
 
+    from kneemesh.config import Structure
     from kneemesh.disk import read_brep
     from kneemesh.gui.app import KneemeshApp
     from kneemesh.gui.view import read_mesh_preview
     from kneemesh.gui.worker import brep_surface
 
+    # Local rendering's serializers, which VtkRemoteView does not import.
+    importlib.import_module("trame_vtk.modules.vtk.serializers.serialize")
     app = KneemeshApp(get_server(f"trace-{uuid.uuid4().hex}", client_type="vue3"))
     scene = app.scene
-    structures = ["lateral_meniscus", "medial_tibial_cartilage", "tibia"]
+    structures: list[Structure] = ["lateral_meniscus", "medial_tibial_cartilage", "tibia"]
     for structure, path in zip(structures, meshes, strict=False):
         scene.set_mesh(structure, read_mesh_preview(path))
     scene.set_geometry("medial_meniscus", brep_surface(read_brep(next(meshes[0].parent.glob("*_hex.brep")))))
