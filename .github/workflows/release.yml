@@ -17,8 +17,9 @@ permissions:
 
 env:
   PYTHON_VERSION: "3.13"
-  # Shared libraries the gmsh and VTK wheels load, which the runner image lacks.
-  SYSTEM_PACKAGES: libglu1-mesa libgl1 libxrender1 libxcursor1 libxft2 libxinerama1
+  # Shared libraries the gmsh and VTK wheels load, which the runner image lacks, and a virtual X server:
+  # the runner has no display or GPU, and VTK crashes rendering the GUI tests without one.
+  SYSTEM_PACKAGES: libglu1-mesa libgl1 libxrender1 libxcursor1 libxft2 libxinerama1 xvfb
 
 jobs:
   test:
@@ -41,7 +42,7 @@ jobs:
         run: uv sync --locked
 
       - name: Run tests
-        run: uv run pytest --cov=kneemesh --cov-report=term --cov-report=xml
+        run: xvfb-run -a uv run pytest --cov=kneemesh --cov-report=term --cov-report=xml
 
       - uses: actions/upload-artifact@v4
         with:
