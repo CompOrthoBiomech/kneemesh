@@ -193,8 +193,11 @@ def surface_warps(mesh: Mesh) -> np.ndarray:
     Raises:
         ValueError: If the mesh has elements other than hexahedra.
     """
-    faces = _boundary_faces(_hexahedron_corners(mesh))
-    points = mesh.nodes[faces]
+    return _warps(mesh.nodes[_boundary_faces(_hexahedron_corners(mesh))])
+
+
+def _warps(points: np.ndarray) -> np.ndarray:
+    """Warps of (M, 4, 3) quadrilaterals' corners, in degrees."""
 
     def angle(first: np.ndarray, second: np.ndarray) -> np.ndarray:
         lengths = np.maximum(np.linalg.norm(first, axis=-1) * np.linalg.norm(second, axis=-1), np.finfo(float).tiny)
@@ -228,6 +231,128 @@ def mesh_quality(mesh: Mesh) -> MeshQuality:
         float(warps.max(initial=0.0)),
         float(np.percentile(warps, 99)) if len(warps) else 0.0,
     )
+
+
+SCALED_JACOBIAN = "scaled_jacobian"
+"""Name of the scaled Jacobian in element_quality."""
+
+FROBENIUS_ASPECT = "frobenius_aspect"
+"""Name of the Frobenius aspect ratio in element_quality."""
+
+WARP = "warp"
+"""Name of the quadrilaterals' warp in element_quality."""
+
+# Corners of each element shape: high-order elements are measured on these first nodes alone.
+_CORNER_COUNTS = {"Tetrahedron": 4, "Hexahedron": 8, "Triangle": 3, "Quadrilateral": 4}
+
+# A regular tetrahedron's edges from its first corner, one per row, with unit length.
+_REGULAR_TETRAHEDRON = np.array([[1.0, 0.0, 0.0], [0.5, np.sqrt(3) / 2, 0.0], [0.5, np.sqrt(3) / 6, np.sqrt(2 / 3)]])
+
+
+def element_quality(mesh: Mesh) -> dict[str, np.ndarray]:
+    """Return quality metrics of every element and face of a mesh, measured on corner nodes, by name.
+
+    Each array holds one value per element and face, in their numbering
+    (Mesh.elements, then Mesh.faces), NaN where the metric does not apply.
+    Higher-order elements are measured on their corner nodes, as if they
+    were first order.
+
+    - scaled_jacobian, of volume elements, or of a surface mesh's elements:
+      the smallest over its corners of the corner's Jacobian determinant over
+      the product of its edges' lengths, scaled so the ideal shape (a cube,
+      square, regular tetrahedron, or equilateral triangle) is 1. It is 0
+      for a degenerate element and negative for an inverted one;
+      triangles, which have no orientation of their own, are never negative.
+    - frobenius_aspect, of the same: the largest over its corners of
+      ``|T|_F^2 / (d det(T)^(2/d))``, in d dimensions, for the map T from the
+      ideal shape's corner to the element's, as Verdict's aspect Frobenius:
+      1 for the ideal shape, larger as edges differ in length or leave the
+      ideal angles, and infinite for an inverted or degenerate element.
+    - warp, of quadrilateral faces, or of a surface mesh's quadrilaterals:
+      the angle between the two triangles either diagonal splits it into,
+      the larger of the two, in degrees (see surface_warps). Present only
+      when the mesh has quadrilaterals.
+
+    Raises:
+        ValueError: If the mesh has an element shape other than tetrahedra, hexahedra, triangles, and quadrilaterals.
+    """
+    count = mesh.element_count
+    quality = {SCALED_JACOBIAN: np.full(count, np.nan), FROBENIUS_ASPECT: np.full(count, np.nan)}
+    warps = np.full(count, np.nan)
+    start = 0
+    for kind, connectivity in [*(("element", item) for item in mesh.elements.items()), *(("face", item) for item in mesh.faces.items())]:
+        name, rows = connectivity
+        shape = name.split(" ")[0]
+        if shape not in _CORNER_COUNTS:
+            raise ValueError(f"No quality metrics for {name} elements")
+        corners = rows[:, : _CORNER_COUNTS[shape]]
+        span = slice(start, start + len(rows))
+        start += len(rows)
+        if shape == "Quadrilateral":
+            warps[span] = _warps(mesh.nodes[corners])
+        if kind == "face":
+            continue
+        if shape == "Hexahedron":
+            edges = _corner_edges(mesh.nodes, corners)
+            quality[SCALED_JACOBIAN][span] = _corner_scaled_jacobians(mesh.nodes, corners).min(axis=1)
+            quality[FROBENIUS_ASPECT][span] = _corner_aspects(edges).max(axis=1)
+        elif shape == "Tetrahedron":
+            quality[SCALED_JACOBIAN][span], quality[FROBENIUS_ASPECT][span] = _tetrahedron_quality(mesh.nodes[corners])
+        elif shape == "Triangle":
+            quality[SCALED_JACOBIAN][span], quality[FROBENIUS_ASPECT][span] = _triangle_quality(mesh.nodes[corners])
+        else:
+            quality[SCALED_JACOBIAN][span], quality[FROBENIUS_ASPECT][span] = _quadrilateral_quality(mesh.nodes[corners])
+    if not np.isnan(warps).all():
+        quality[WARP] = warps
+    return quality
+
+
+def _tetrahedron_quality(points: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Scaled Jacobians and Frobenius aspect ratios of (M, 4, 3) tetrahedra's corners."""
+    edges = points[:, 1:] - points[:, :1]
+    determinants = np.linalg.det(edges)
+    lengths = np.linalg.norm(points[:, :, None] - points[:, None, :], axis=-1)
+    # Every corner's determinant is the same signed volume; each corner divides it by its own three edges' lengths.
+    products = np.stack([lengths[:, k, [m for m in range(4) if m != k]].prod(axis=1) for k in range(4)], axis=1)
+    scaled = np.sqrt(2) * determinants / np.maximum(products.max(axis=1), np.finfo(float).tiny)
+    # The map from the regular tetrahedron to this one, T = E^T W^-T.
+    maps = np.swapaxes(edges, 1, 2) @ np.linalg.inv(_REGULAR_TETRAHEDRON).T
+    return scaled, _aspects(maps, determinants / np.linalg.det(_REGULAR_TETRAHEDRON), 3)
+
+
+def _triangle_quality(points: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Scaled Jacobians and Frobenius aspect ratios of (M, 3, 3) triangles' corners."""
+    doubled_area = np.linalg.norm(np.cross(points[:, 1] - points[:, 0], points[:, 2] - points[:, 0]), axis=-1)
+    lengths = np.linalg.norm(points - np.roll(points, -1, axis=1), axis=-1)
+    products = np.stack([lengths[:, k] * lengths[:, k - 1] for k in range(3)], axis=1)
+    tiny = np.finfo(float).tiny
+    scaled = 2 / np.sqrt(3) * doubled_area / np.maximum(products.max(axis=1), tiny)
+    # Verdict's triangle aspect Frobenius, (a^2 + b^2 + c^2) / (4 sqrt(3) area), for which every corner gives the same.
+    squared = (lengths**2).sum(axis=1)
+    positive = doubled_area > 0
+    aspect = np.where(positive, squared / (2 * np.sqrt(3) * np.where(positive, doubled_area, 1.0)), np.inf)
+    return scaled, aspect
+
+
+def _quadrilateral_quality(points: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Scaled Jacobians and Frobenius aspect ratios of (M, 4, 3) quadrilaterals' corners, in the plane normal to their diagonals."""
+    normals = np.cross(points[:, 2] - points[:, 0], points[:, 3] - points[:, 1])
+    normals /= np.maximum(np.linalg.norm(normals, axis=-1, keepdims=True), np.finfo(float).tiny)
+    forward = np.roll(points, -1, axis=1) - points
+    backward = np.roll(points, 1, axis=1) - points
+    areas = np.einsum("mki,mi->mk", np.cross(forward, backward), normals)
+    forward_squared, backward_squared = (forward**2).sum(axis=-1), (backward**2).sum(axis=-1)
+    scaled = areas / np.maximum(np.sqrt(forward_squared * backward_squared), np.finfo(float).tiny)
+    positive = areas > 0
+    aspects = np.where(positive, (forward_squared + backward_squared) / (2 * np.where(positive, areas, 1.0)), np.inf)
+    return scaled.min(axis=1), aspects.max(axis=1)
+
+
+def _aspects(maps: np.ndarray, determinants: np.ndarray, dimension: int) -> np.ndarray:
+    """Frobenius aspect ratios |T|_F^2 / (d det(T)^(2/d)) of (..., d, d) maps with the given determinants, infinite where not positive."""
+    squared = np.einsum("...ij,...ij->...", maps, maps)
+    positive = determinants > 0
+    return np.where(positive, squared / (dimension * np.where(positive, determinants, 1.0) ** (2 / dimension)), np.inf)
 
 
 def optimize_hexahedral_mesh(

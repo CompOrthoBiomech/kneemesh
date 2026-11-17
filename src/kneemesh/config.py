@@ -3,7 +3,7 @@
 import json
 from os import PathLike
 from pathlib import Path
-from typing import Annotated, Any, ClassVar, Literal, Self, get_args
+from typing import Annotated, Any, ClassVar, Literal, Self, cast, get_args
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, model_validator
 
@@ -90,6 +90,28 @@ BONES: dict[Structure, Structure] = {
 BONE_STRUCTURES: tuple[Structure, ...] = ("femur", "tibia", "patella")
 """The bones, whose geometry is a triangulated surface rather than a B-rep, meshed with their own element types."""
 
+STRUCTURE_SECTIONS: dict[Structure, str] = {
+    "lateral_meniscus": "meniscus",
+    "medial_meniscus": "meniscus",
+    "lateral_tibial_cartilage": "cartilage",
+    "medial_tibial_cartilage": "cartilage",
+    "patellar_cartilage": "cartilage",
+    "femoral_cartilage": "femoral_cartilage",
+    "femur": "femur",
+    "tibia": "tibia",
+    "patella": "patella",
+}
+"""The section of the B-rep and mesh configurations whose settings each structure takes, unless it has its own (OWN_SECTION_STRUCTURES)."""
+
+OWN_SECTION_STRUCTURES: tuple[Structure, ...] = (
+    "lateral_meniscus",
+    "medial_meniscus",
+    "lateral_tibial_cartilage",
+    "medial_tibial_cartilage",
+    "patellar_cartilage",
+)
+"""The structures that share a section, meniscus or cartilage, and can have their own instead: a section named for the structure."""
+
 ElementType = Literal["hex8", "hex20", "hex27", "tet4", "tet10"]
 """Element shape and node count: 8-node, 20-node serendipity, or 27-node hexahedra, or 4- or 10-node tetrahedra."""
 
@@ -120,6 +142,57 @@ def _padding_field() -> Any:
 
 def _output_directory_field() -> Any:
     return Field(default=Path("."), description="Directory to write the output files in, created if missing")
+
+
+def _own_section_field(structure: Structure) -> Any:
+    shared = STRUCTURE_SECTIONS[structure]
+    return Field(
+        default=None,
+        description=f"Settings of the {structure.replace('_', ' ')} alone, in place of {shared}. Fields it leaves out take {shared}'s values; "
+        + f"None takes {shared} as it is",
+    )
+
+
+class _StructureSections(BaseConfig):
+    """A configuration with a section per kind of structure, which some structures can replace with their own.
+
+    A structure's own section, such as lateral_meniscus, is layered over the
+    shared one, meniscus, field by field as it is read, so it need only give
+    the fields that differ. To set a field the shared section sets but the
+    own section must leave unset, such as one of two exclusive fields, give
+    it as null there.
+    """
+
+    @model_validator(mode="before")
+    @classmethod
+    def _layer_own_sections(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        layered = dict(cast(dict[str, Any], data))
+        for structure in OWN_SECTION_STRUCTURES:
+            own, shared = (
+                value.model_dump(exclude_unset=True) if isinstance(value, BaseModel) else value
+                for value in (layered.get(structure), layered.get(STRUCTURE_SECTIONS[structure]))
+            )
+            if isinstance(own, dict) and isinstance(shared, dict):
+                layered[structure] = {**cast(dict[str, Any], shared), **cast(dict[str, Any], own)}
+        return layered
+
+    def section[Section: BaseConfig](self, structure: Structure, kind: type[Section]) -> Section:
+        """The settings of a structure: its own section if it has one, or else the section it shares, such as meniscus.
+
+        Raises:
+            TypeError: If the structure's section is not a kind, such as asking for a meniscus's settings for a cartilage.
+        """
+        own = getattr(self, structure) if structure in OWN_SECTION_STRUCTURES else None
+        section = own if own is not None else getattr(self, STRUCTURE_SECTIONS[structure])
+        if not isinstance(section, kind):
+            raise TypeError(f"The settings of {structure} are {type(section).__name__}, not {kind.__name__}")
+        return section
+
+    def own_sections(self) -> tuple[Structure, ...]:
+        """The structures with their own section."""
+        return tuple(structure for structure in OWN_SECTION_STRUCTURES if getattr(self, structure) is not None)
 
 
 def _check_suffix(suffix: str, extensions: frozenset[str] | None = None) -> None:
@@ -496,15 +569,15 @@ class FemoralCartilageMesh(CartilageMesh):
         return self.max_size if self.max_size is not None else self.element_size
 
 
-class LabelMapBrep(BaseConfig):
+class LabelMapBrep(_StructureSections):
     """Settings for building a B-rep of every structure in a segmented LabelMap.
 
     The segmentation is either one multilabel LabelMap, label_map, with labels
     naming its values, or several single-label LabelMaps, label_maps, that are
     assembled onto one grid. Give one or the other. Each structure named in
     labels or label_maps is built by its own pipeline, with the settings of
-    its section such as meniscus, and written to
-    <output_directory>/<structure><output>. Bones, including those named only
+    its section such as meniscus, or its own such as lateral_meniscus, and
+    written to <output_directory>/<structure><output>. Bones, including those named only
     to orient their cartilage, are written as surfaces with their own section's output, such as femur.output, instead.
     """
 
@@ -525,10 +598,18 @@ class LabelMapBrep(BaseConfig):
         default=".brep", description="Suffix of each B-rep file, appended to its structure's name, such as _hex.brep for lateral_meniscus_hex.brep"
     )
     output_directory: Path = _output_directory_field()
-    meniscus: MeniscusBrep = Field(default_factory=MeniscusBrep, description="Settings for the lateral and medial menisci")
-    cartilage: CartilageBrep = Field(
-        default_factory=CartilageBrep, description="Settings for the lateral and medial tibial and the patellar cartilage"
+    meniscus: MeniscusBrep = Field(
+        default_factory=MeniscusBrep, description="Settings for the lateral and medial menisci, but one with its own section"
     )
+    cartilage: CartilageBrep = Field(
+        default_factory=CartilageBrep,
+        description="Settings for the lateral and medial tibial and the patellar cartilage, but one with its own section",
+    )
+    lateral_meniscus: MeniscusBrep | None = _own_section_field("lateral_meniscus")
+    medial_meniscus: MeniscusBrep | None = _own_section_field("medial_meniscus")
+    lateral_tibial_cartilage: CartilageBrep | None = _own_section_field("lateral_tibial_cartilage")
+    medial_tibial_cartilage: CartilageBrep | None = _own_section_field("medial_tibial_cartilage")
+    patellar_cartilage: CartilageBrep | None = _own_section_field("patellar_cartilage")
     femoral_cartilage: FemoralCartilageBrep = Field(default_factory=FemoralCartilageBrep, description="Settings for the femoral cartilage")
     femur: BoneBrep = Field(default_factory=BoneBrep, description="Settings for the femur, whose output is a surface")
     tibia: BoneBrep = Field(default_factory=BoneBrep, description="Settings for the tibia, whose output is a surface")
@@ -648,11 +729,11 @@ ELEMENT_TYPES: dict[ElementType, tuple[Literal["tetrahedral", "hexahedral"], int
 }
 
 
-class BrepMesh(BaseConfig):
+class BrepMesh(_StructureSections):
     """Settings for meshing the B-rep of each structure.
 
     Each structure in breps is meshed by its own pipeline, with the settings
-    of its section such as meniscus, and written to
+    of its section such as meniscus, or its own such as lateral_meniscus, and written to
     <output_directory>/<structure><output>. Bones are meshed from their
     surfaces with their own section's element_type, such as femur.element_type.
     Every other structure takes element_type unless element_types gives it
@@ -687,10 +768,18 @@ class BrepMesh(BaseConfig):
         description="Where to also write every structure's mesh as one, with nodes, elements, and sets numbered on through the "
         + "structures and sets named <structure>_<set>: .vtu for one grid, or .vtkhdf for a multiblock of the structures. None does not",
     )
-    meniscus: MeniscusMesh = Field(default_factory=MeniscusMesh, description="Settings for the lateral and medial menisci")
-    cartilage: CartilageMesh = Field(
-        default_factory=CartilageMesh, description="Settings for the lateral and medial tibial and the patellar cartilage"
+    meniscus: MeniscusMesh = Field(
+        default_factory=MeniscusMesh, description="Settings for the lateral and medial menisci, but one with its own section"
     )
+    cartilage: CartilageMesh = Field(
+        default_factory=CartilageMesh,
+        description="Settings for the lateral and medial tibial and the patellar cartilage, but one with its own section",
+    )
+    lateral_meniscus: MeniscusMesh | None = _own_section_field("lateral_meniscus")
+    medial_meniscus: MeniscusMesh | None = _own_section_field("medial_meniscus")
+    lateral_tibial_cartilage: CartilageMesh | None = _own_section_field("lateral_tibial_cartilage")
+    medial_tibial_cartilage: CartilageMesh | None = _own_section_field("medial_tibial_cartilage")
+    patellar_cartilage: CartilageMesh | None = _own_section_field("patellar_cartilage")
     femoral_cartilage: FemoralCartilageMesh = Field(default_factory=FemoralCartilageMesh, description="Settings for the femoral cartilage")
     femur: BoneMesh = Field(default_factory=BoneMesh, description="Settings for the femur")
     tibia: BoneMesh = Field(default_factory=BoneMesh, description="Settings for the tibia")
@@ -707,14 +796,16 @@ class BrepMesh(BaseConfig):
             raise ValueError(f"assembled_mesh needs extension {' or '.join(sorted(MESH_SET_SUFFIXES))}, got {self.assembled_mesh.name!r}")
         if bones := sorted(set(self.element_types or {}) & set(BONE_STRUCTURES)):
             raise ValueError(f"Bones take their own section's element_type, such as femur.element_type, not element_types: {bones}")
-        sheets: dict[str, list[Structure]] = {
-            "cartilage": [structure for structure in BONES if structure != "femoral_cartilage"],
-            "femoral_cartilage": ["femoral_cartilage"],
-        }
-        for section, structures in sheets.items():
+        # Each sheet section's structures: those that take it, and a structure with its own section alone.
+        sheets: dict[str, list[Structure]] = {}
+        for structure in BONES:
+            name = structure if structure in self.own_sections() else STRUCTURE_SECTIONS[structure]
+            sheets.setdefault(name, []).append(structure)
+        for name, structures in sheets.items():
+            section = getattr(self, name)
             hexahedral = any(ELEMENT_TYPES[self.structure_element_type(structure)][0] == "hexahedral" for structure in structures)
-            if getattr(self, section).save_partition and not hexahedral:
-                raise ValueError(f"{section}.save_partition applies only to hexahedral meshes")
+            if isinstance(section, CartilageMesh) and section.save_partition and not hexahedral:
+                raise ValueError(f"{name}.save_partition applies only to hexahedral meshes")
         return self
 
     def structure_element_type(self, structure: Structure) -> ElementType:

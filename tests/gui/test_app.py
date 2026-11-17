@@ -7,7 +7,7 @@ import pytest
 import SimpleITK as sitk
 from trame.app import get_server
 
-from kneemesh.config import BrepMesh, LabelMapBrep
+from kneemesh.config import BrepMesh, LabelMapBrep, MeniscusBrep
 from kneemesh.disk import read_segmentation, write_label_map
 from kneemesh.gui.app import KneemeshApp, _parse_config
 
@@ -35,7 +35,7 @@ def test_defaults_are_valid(app):
 def test_select_shows_a_structure_section(app):
     app.select("mesh:medial_tibial_cartilage")
     assert (app.state.selected_kind, app.state.selected_structure, app.state.selected_section) == ("mesh", "medial_tibial_cartilage", "cartilage")
-    assert app.state.selected_shared == ["lateral_tibial_cartilage", "patellar_cartilage"]
+    assert app.state.selected_shared == ["patellar_cartilage", "lateral_tibial_cartilage"]
     app.select("settings")
     assert (app.state.selected_kind, app.state.selected_structure, app.state.selected_section) == ("settings", None, None)
 
@@ -137,3 +137,44 @@ def test_label_maps_import_previews_each_file(app, tmp_path):
     femur, tibia = (app._surfaces[(paths[name], 1)].GetBounds() for name in ("femur", "tibia"))
     assert femur[1] < 10
     assert tibia[0] > 100
+
+
+def test_own_sections_start_from_the_shared_one_and_export(app, tmp_path):
+    app.state.update({"geo__meniscus__spacing": 3.0})
+    app.select("geometry:lateral_meniscus")
+    app.set_own_section("geometry", "lateral_meniscus", True)
+    assert app.state.own_sections["geometry"] == ["lateral_meniscus"]
+    assert (app.state.selected_section, app.state.selected_shared) == ("lateral_meniscus", [])
+    assert app.state.geo__lateral_meniscus__spacing == 3.0
+    app.state.update({"geo__lateral_meniscus__spacing": 2.0})
+    app.select("geometry:medial_meniscus")
+    assert (app.state.selected_section, app.state.selected_shared) == ("meniscus", [])
+
+    knee = _write_blocks(tmp_path / "knee.nrrd")
+    asyncio.run(app._load_label_file(knee))
+    for entry, structure in zip(app.state.labels, ("lateral_meniscus", "medial_meniscus"), strict=True):
+        app.update_label(entry["id"], "structure", structure)
+        app.update_label(entry["id"], "include", True)
+    exported = tmp_path / "brep.json"
+    asyncio.run(app._export_geometry(str(exported)))
+    config = LabelMapBrep.from_json(exported)
+    assert (config.section("lateral_meniscus", MeniscusBrep).spacing, config.section("medial_meniscus", MeniscusBrep).spacing) == (2.0, 3.0)
+
+    # Sharing again keeps the own values for later but leaves them out of the configuration.
+    app.set_own_section("geometry", "lateral_meniscus", False)
+    assert app._geometry_config() == LabelMapBrep.model_validate({"meniscus": {"spacing": 3.0}})
+    app.set_own_section("geometry", "lateral_meniscus", True)
+    assert app.state.geo__lateral_meniscus__spacing == 2.0
+
+    other = KneemeshApp(get_server(f"test-{uuid.uuid4().hex}", client_type="vue3"))
+    asyncio.run(other._import_config(str(exported)))
+    assert other.state.own_sections["geometry"] == ["lateral_meniscus"]
+    assert other.state.geo__lateral_meniscus__spacing == 2.0
+
+
+def test_solo_shows_only_one_structure(app):
+    app.toggle_visibility("tibia")
+    app.toggle_solo("tibia")
+    assert (app.state.solo, app.state.hidden) == ("tibia", [])
+    app.toggle_solo("tibia")
+    assert app.state.solo is None

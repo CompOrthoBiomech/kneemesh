@@ -23,6 +23,8 @@ from trame_server import Server
 
 from kneemesh.config import (
     BONE_STRUCTURES,
+    OWN_SECTION_STRUCTURES,
+    STRUCTURE_SECTIONS,
     STRUCTURES,
     BrepMesh,
     ElementType,
@@ -45,7 +47,7 @@ from kneemesh.gui.labels import (
     missing_bones,
     new_entries,
 )
-from kneemesh.gui.view import STRUCTURE_ITEMS, Scene, read_mesh_preview, structure_title
+from kneemesh.gui.view import METRICS, STRUCTURE_ITEMS, Scene, read_mesh_preview, structure_title
 
 _LOG_LINES = 400
 _DRAWER_WIDTH = 440
@@ -102,6 +104,8 @@ class KneemeshApp:
         atexit.register(shutil.rmtree, self.preview_directory, True)
         self._dialog_callback: Callable[[str], object] | None = None
         self._surfaces: dict[tuple[str, int], Any] = {}
+        # The structures whose own sections hold values of their own, which making them their own again keeps.
+        self._edited_sections: dict[settings.Kind, set[str]] = {"geometry": set(), "mesh": set()}
         self._initialize_state()
         self._bind()
         self._build_ui()
@@ -127,8 +131,15 @@ class KneemeshApp:
                 "brep_paths": {},
                 "expected_geometry": {},
                 "status": {structure: {"geometry": False, "mesh": False} for structure in STRUCTURES},
+                "own_sections": {"geometry": [], "mesh": []},
                 "hidden": [],
+                "solo": None,
                 "display": "latest",
+                "color_by": "",
+                "color_by_items": [
+                    {"title": "Structure colors", "value": ""},
+                    *({"title": metric.title, "value": name} for name, metric in METRICS.items()),
+                ],
                 "form_errors": {},
                 "busy": False,
                 "busy_text": "",
@@ -161,8 +172,8 @@ class KneemeshApp:
 
     def _bind(self) -> None:
         keys = [spec.key for kind in ("geometry", "mesh") for spec in settings.all_fields(kind)]
-        self.state.change(*keys, settings.OUTPUT_DIRECTORY_KEY, "element_types", "brep_paths")(lambda **_: self._validate())
-        self.state.change("display", "hidden")(lambda **_: self._refresh_scene())
+        self.state.change(*keys, settings.OUTPUT_DIRECTORY_KEY, "element_types", "brep_paths", "own_sections")(lambda **_: self._validate())
+        self.state.change("display", "hidden", "solo", "color_by")(lambda **_: self._refresh_scene())
         self.server.cli.add_argument("--config", help="JSON configuration of kneemesh-brep, kneemesh-mesh, or kneemesh-assemble to import")
         self.ctrl.on_server_ready.add(self._on_ready)
         for name in (
@@ -173,6 +184,8 @@ class KneemeshApp:
             "set_element_type",
             "set_brep_path",
             "toggle_visibility",
+            "toggle_solo",
+            "set_own_section",
             "reset_section",
             "build",
             "mesh",
@@ -244,6 +257,18 @@ class KneemeshApp:
                 variant="outlined",
                 style="max-width: 170px;",
             )
+            with _tooltip("Color meshes by structure or by a quality metric of their elements, measured on corner nodes"):
+                v3.VSelect(
+                    v_model=("color_by",),
+                    items=("color_by_items",),
+                    v_bind="props",
+                    prepend_inner_icon="mdi-palette-outline",
+                    density="compact",
+                    hide_details=True,
+                    variant="outlined",
+                    classes="ml-2",
+                    style="max-width: 250px;",
+                )
             _icon_button("mdi-crop-free", "Reset the camera", click=self.ctrl.reset_camera)
             _icon_button("mdi-console", "Show or hide the log", click="show_log = !show_log")
             v3.VProgressLinear(v_if="busy", indeterminate=True, absolute=True, location="bottom", color="primary")
@@ -338,6 +363,13 @@ class KneemeshApp:
                     v3.VIcon(icon="mdi-cube-outline", size="small", v_if=f"status['{structure}'].geometry", color="primary", classes="mr-1")
                     v3.VIcon(icon="mdi-cube-scan", size="small", v_if=f"status['{structure}'].mesh", color="primary", classes="mr-1")
                     _icon_button(
+                        (f"solo == '{structure}' ? 'mdi-target-account' : 'mdi-target'",),
+                        "Show only this structure, or all again",
+                        click=(self.ctrl.toggle_solo, f"['{structure}']"),
+                        color=(f"solo == '{structure}' ? 'primary' : ''",),
+                        size="small",
+                    )
+                    _icon_button(
                         (f"hidden.includes('{structure}') ? 'mdi-eye-off-outline' : 'mdi-eye-outline'",),
                         "Show or hide",
                         click=(self.ctrl.toggle_visibility, f"['{structure}']"),
@@ -389,6 +421,23 @@ class KneemeshApp:
                     else:
                         v3.VBtn("Mesh", prepend_icon="mdi-play", color="primary", click=(self.ctrl.mesh, "[selected_structure]"), disabled=("busy",))
                     v3.VBtn("Defaults", prepend_icon="mdi-restore", variant="tonal", click=(self.ctrl.reset_section, f"['{kind}', selected_section]"))
+                with (
+                    html.Div(v_if=f"{_js_list(OWN_SECTION_STRUCTURES)}.includes(selected_structure)"),
+                    _tooltip(
+                        "Give this structure settings of its own, starting from the shared ones, or share them again. "
+                        + "Its own settings are kept while it shares"
+                    ),
+                ):
+                    v3.VSwitch(
+                        v_bind="props",
+                        label="Own settings",
+                        model_value=(f"own_sections['{kind}'].includes(selected_structure)",),
+                        update_modelValue=(self.ctrl.set_own_section, f"['{kind}', selected_structure, $event]"),
+                        color="primary",
+                        density="compact",
+                        hide_details=True,
+                        inset=True,
+                    )
                 v3.VAlert(
                     v_if="selected_shared.length",
                     text=("'These settings are shared with ' + selected_shared.map(s => structure_titles[s]).join(', ')",),
@@ -578,13 +627,32 @@ class KneemeshApp:
         self.state.selected = node
         self.state.selected_kind = kind
         self.state.selected_structure = structure or None
-        if structure in settings.STRUCTURE_SECTIONS:
-            section = settings.STRUCTURE_SECTIONS[structure]
-            self.state.selected_section = section
-            self.state.selected_shared = [other for other, name in settings.STRUCTURE_SECTIONS.items() if name == section and other != structure]
+        if structure in STRUCTURES and kind in ("geometry", "mesh"):
+            own = self.state.own_sections[kind]
+            self.state.selected_section = settings.structure_section(structure, own)
+            self.state.selected_shared = settings.sharing_structures(structure, own)
         else:
             self.state.selected_section = None
             self.state.selected_shared = []
+
+    def set_own_section(self, kind: settings.Kind, structure: Structure, own: bool) -> None:
+        """Give a structure settings of its own, starting from those it shares the first time, or let it share them again."""
+        if structure not in OWN_SECTION_STRUCTURES:
+            return
+        sections = {name: list(structures) for name, structures in self.state.own_sections.items()}
+        if own and structure not in sections[kind]:
+            # Its own section starts from the shared one's current values, unless it was edited before.
+            if structure not in self._edited_sections[kind]:
+                shared = STRUCTURE_SECTIONS[structure]
+                self.state.update(
+                    {spec.key: self.state[settings.state_key(kind, shared, spec.name)] for spec in settings.section_fields(kind, structure)}
+                )
+                self._edited_sections[kind].add(structure)
+            sections[kind].append(structure)
+        elif not own:
+            sections[kind] = [name for name in sections[kind] if name != structure]
+        self.state.own_sections = sections
+        self.select(self.state.selected)
 
     def set_element_type(self, structure: Structure, element_type: str | None) -> None:
         """Set a structure's own element type, or with an empty one, let it take the mesh's."""
@@ -605,6 +673,13 @@ class KneemeshApp:
         hidden = list(self.state.hidden)
         self.state.hidden = [name for name in hidden if name != structure] if structure in hidden else [*hidden, structure]
 
+    def toggle_solo(self, structure: Structure) -> None:
+        """Show only a structure in the view, or every structure again if it was the only one shown."""
+        self.state.solo = None if self.state.solo == structure else structure
+        if self.state.solo is not None:
+            self.state.hidden = [name for name in self.state.hidden if name != structure]
+        self._refresh_scene(reset=True)
+
     def reset_section(self, kind: settings.Kind, section: str) -> None:
         """Restore a section's defaults."""
         defaults = settings.state_values(kind)
@@ -615,7 +690,7 @@ class KneemeshApp:
     def _validate(self) -> None:
         errors: dict[str, str] = {}
         geometry = self._geometry_config(errors)
-        mesh_values = settings.config_values("mesh", self._form_state())
+        mesh_values = settings.config_values("mesh", self._form_state(), self.state.own_sections["mesh"])
         mesh_values["element_types"] = self.state.element_types or None
         try:
             BrepMesh.model_validate(mesh_values)
@@ -632,7 +707,7 @@ class KneemeshApp:
 
     def _geometry_config(self, errors: dict[str, str] | None = None) -> LabelMapBrep | None:
         """The geometry settings as a LabelMapBrep without a segmentation, or None, with its errors put in errors, if they are invalid."""
-        values = settings.config_values("geometry", self._form_state())
+        values = settings.config_values("geometry", self._form_state(), self.state.own_sections["geometry"])
         # The GUI composes the segmentation itself, so there are no label_maps for assembled_label_map to go with.
         values.pop("assembled_label_map", None)
         try:
@@ -643,7 +718,7 @@ class KneemeshApp:
             return None
 
     def _mesh_config(self, breps: dict[Structure, str], assembled: bool) -> BrepMesh:
-        values = settings.config_values("mesh", self._form_state())
+        values = settings.config_values("mesh", self._form_state(), self.state.own_sections["mesh"])
         values["breps"] = breps
         values["element_types"] = self.state.element_types or None
         if not assembled:
@@ -812,6 +887,10 @@ class KneemeshApp:
             self._notify(f"Could not read the labels {path} names: {error}")
             return
         with self.state:
+            if isinstance(config, LabelMapBrep | BrepMesh):
+                kind: settings.Kind = "geometry" if isinstance(config, LabelMapBrep) else "mesh"
+                self.state.own_sections = {**self.state.own_sections, kind: settings.own_sections(config)}
+                self._edited_sections[kind] = set(settings.own_sections(config))
             if isinstance(config, LabelMapBrep):
                 self.state.update(settings.state_values("geometry", config))
                 self.state.geo__assembled_label_map = str(config.assembled_label_map) if config.assembled_label_map is not None else None
@@ -842,7 +921,7 @@ class KneemeshApp:
         if problems := entry_problems(entries):
             self._notify(f"Could not export: {'; '.join(problems)}")
             return
-        values = settings.config_values("geometry", self._form_state())
+        values = settings.config_values("geometry", self._form_state(), self.state.own_sections["geometry"])
         assembled = values.pop("assembled_label_map", None)
         try:
             sources = await asyncio.to_thread(brep_sources, entries)
@@ -967,7 +1046,7 @@ class KneemeshApp:
         self.ctrl.view_update()
 
     def _refresh_scene(self, reset: bool = False) -> None:
-        self.scene.refresh(self.state.labels, self.state.display, self.state.hidden)
+        self.scene.refresh(self.state.labels, self.state.display, self.state.hidden, self.state.solo, self.state.color_by or None)
         if reset:
             self.scene.reset_camera()
         self.ctrl.view_update()

@@ -103,6 +103,10 @@ class Mesh:
         element_sets: Element numbers of named sets of faces, or of a surface
             mesh's elements, such as "surface" or "articular_side".
         node_sets: Indices into nodes of the nodes of each element set, by the same names.
+        quality: Quality metrics by name, each an array of one value per
+            element and face in their numbering, NaN where the metric does
+            not apply (see mesh_optimization.element_quality). Empty unless
+            computed, as the meshing pipeline does.
     """
 
     nodes: np.ndarray
@@ -112,6 +116,7 @@ class Mesh:
     faces: dict[str, np.ndarray] = field(default_factory=dict[str, np.ndarray])
     element_sets: dict[str, np.ndarray] = field(default_factory=dict[str, np.ndarray])
     node_sets: dict[str, np.ndarray] = field(default_factory=dict[str, np.ndarray])
+    quality: dict[str, np.ndarray] = field(default_factory=dict[str, np.ndarray])
 
     @property
     def element_count(self) -> int:

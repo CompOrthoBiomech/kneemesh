@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from kneemesh.config import STRUCTURES, BrepMesh, LabelMapBrep
+from kneemesh.config import STRUCTURE_SECTIONS, STRUCTURES, BrepMesh, LabelMapBrep, MeniscusBrep
 from kneemesh.gui import settings
 
 
@@ -13,7 +13,7 @@ def test_default_state_round_trips_to_the_default_config(kind):
 
 def test_every_structure_has_a_section_in_both_models():
     for structure in STRUCTURES:
-        section = settings.STRUCTURE_SECTIONS[structure]
+        section = STRUCTURE_SECTIONS[structure]
         assert section in settings.section_names("geometry")
         assert section in settings.section_names("mesh")
 
@@ -83,3 +83,25 @@ def test_validation_errors_by_key():
 
 def test_humanize():
     assert settings.humanize("points_per_slice") == "Points per slice"
+
+
+def test_own_sections_start_from_the_shared_section_and_count_only_when_own():
+    config = LabelMapBrep.model_validate({"meniscus": {"spacing": 3.0}, "medial_meniscus": {"spacing": 2.0}})
+    state = settings.state_values("geometry", config)
+    assert (state["geo__lateral_meniscus__spacing"], state["geo__medial_meniscus__spacing"]) == (3.0, 2.0)
+    assert settings.own_sections(config) == ["medial_meniscus"]
+
+    state["geo__lateral_meniscus__spacing"] = 2.5
+    assert "lateral_meniscus" not in settings.config_values("geometry", state, ["medial_meniscus"])
+    values = settings.config_values("geometry", state, ["medial_meniscus", "lateral_meniscus"])
+    rebuilt = LabelMapBrep.model_validate(values)
+    assert (rebuilt.section("lateral_meniscus", MeniscusBrep).spacing, rebuilt.section("medial_meniscus", MeniscusBrep).spacing) == (2.5, 2.0)
+
+
+def test_structure_sections_and_sharing():
+    assert settings.structure_section("lateral_meniscus") == "meniscus"
+    assert settings.structure_section("lateral_meniscus", ["lateral_meniscus"]) == "lateral_meniscus"
+    assert settings.structure_section("femur", ["femur"]) == "femur"
+    assert settings.sharing_structures("patellar_cartilage", ["medial_tibial_cartilage"]) == ["lateral_tibial_cartilage"]
+    assert settings.sharing_structures("patellar_cartilage", ["patellar_cartilage"]) == []
+    assert "geo__patellar_cartilage__side_cosine" in {spec.key for spec in settings.all_fields("geometry")}

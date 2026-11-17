@@ -371,3 +371,39 @@ def test_assembled_mesh_is_vtu_or_vtkhdf(assembled, valid):
     else:
         with pytest.raises(pydantic.ValidationError, match="assembled_mesh needs extension"):
             BrepMesh.model_validate({"assembled_mesh": assembled})
+
+
+def test_own_sections_layer_over_the_shared_section():
+    config = LabelMapBrep.model_validate({"meniscus": {"spacing": 3.0, "points_per_slice": 20}, "lateral_meniscus": {"spacing": 2.0}})
+
+    lateral = config.section("lateral_meniscus", MeniscusBrep)
+    assert (lateral.spacing, lateral.points_per_slice) == (2.0, 20)
+    assert config.section("medial_meniscus", MeniscusBrep) is config.meniscus
+    assert config.own_sections() == ("lateral_meniscus",)
+    assert LabelMapBrep.model_validate_json(config.model_dump_json()) == config
+    assert config.section("femur", BoneBrep) is config.femur
+    assert config.section("femoral_cartilage", CartilageBrep) is config.femoral_cartilage
+    with pytest.raises(TypeError, match="CartilageBrep"):
+        config.section("patellar_cartilage", MeniscusBrep)
+    # Models layer as their dicts do.
+    config = LabelMapBrep(meniscus=MeniscusBrep(spacing=3.0), lateral_meniscus=MeniscusBrep(points_per_slice=20))
+    assert (config.section("lateral_meniscus", MeniscusBrep).spacing, config.section("lateral_meniscus", MeniscusBrep).points_per_slice) == (3.0, 20)
+
+
+def test_own_sections_clear_exclusive_shared_fields_with_null():
+    with pytest.raises(pydantic.ValidationError, match="not both"):
+        LabelMapBrep.model_validate({"meniscus": {"inner_clip_ratio": 0.2}, "medial_meniscus": {"inner_clip_height": 1.0}})
+    config = LabelMapBrep.model_validate(
+        {"meniscus": {"inner_clip_ratio": 0.2}, "medial_meniscus": {"inner_clip_height": 1.0, "inner_clip_ratio": None}}
+    )
+    assert config.section("medial_meniscus", MeniscusBrep).inner_clip_height == 1.0
+
+
+def test_save_partition_follows_the_structures_of_each_section():
+    config = BrepMesh.model_validate({"element_types": {"patellar_cartilage": "hex8"}, "patellar_cartilage": {"save_partition": True}})
+    assert config.section("patellar_cartilage", CartilageMesh).save_partition
+    with pytest.raises(pydantic.ValidationError, match="lateral_tibial_cartilage.save_partition"):
+        BrepMesh.model_validate({"element_types": {"patellar_cartilage": "hex8"}, "lateral_tibial_cartilage": {"save_partition": True}})
+    # Once the hexahedral structure has its own section, only tetrahedral ones take the shared one.
+    with pytest.raises(pydantic.ValidationError, match=r"\bcartilage\.save_partition"):
+        BrepMesh.model_validate({"element_types": {"patellar_cartilage": "hex8"}, "patellar_cartilage": {}, "cartilage": {"save_partition": True}})

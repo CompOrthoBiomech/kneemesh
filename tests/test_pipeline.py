@@ -2,9 +2,12 @@ import json
 from pathlib import Path
 
 import gmsh
+import numpy as np
 import pytest
 import SimpleITK as sitk
 from loguru import logger
+from vtkmodules.util.numpy_support import vtk_to_numpy
+from vtkmodules.vtkIOXML import vtkXMLUnstructuredGridReader
 
 from kneemesh.brep import gmsh_session
 from kneemesh.config import (
@@ -252,6 +255,55 @@ def test_mesh_pipeline_overrides_the_element_type_per_structure(in_tmp_path, men
 
     assert list(mesh_entity_counts(in_tmp_path / "lateral_meniscus_tet4.msh")) == ["Tetrahedron 4"]
     assert list(mesh_entity_counts(in_tmp_path / "medial_meniscus_hex8.msh")) == ["Hexahedron 8"]
+
+
+@pytest.mark.usefixtures("in_tmp_path")
+def test_configure_layers_own_section_options_over_the_shared_section():
+    argv = ["--meniscus.spacing", "3", "--meniscus.points-per-slice", "20", "--lateral-meniscus.spacing", "2"]
+
+    config, _, _ = configure(LabelMapBrep, "test", argv)
+
+    lateral = config.section("lateral_meniscus", MeniscusBrep)
+    assert (lateral.spacing, lateral.points_per_slice) == (2.0, 20)
+    assert config.section("medial_meniscus", MeniscusBrep).spacing == 3.0
+
+
+def test_mesh_pipeline_meshes_a_structure_by_its_own_section_and_keeps_quality(in_tmp_path, meniscus_hex_blocks):
+    write_brep(meniscus_hex_blocks, in_tmp_path / "blocks.brep")
+    argv = [
+        "--breps",
+        '{"lateral_meniscus": "blocks.brep", "medial_meniscus": "blocks.brep"}',
+        "--element-type",
+        "hex8",
+        "--output",
+        "_{element_type}.vtu",
+        "--meniscus.transverse-size",
+        "3.6",
+        "--meniscus.circumferential-size",
+        "12.5",
+        "--meniscus.optimize",
+        "false",
+        "--medial-meniscus.circumferential-size",
+        "6.25",
+    ]
+    assert mesh_main(argv) == 0
+
+    lateral, medial = (read_vtu(in_tmp_path / f"{name}_hex8.vtu") for name in ("lateral_meniscus", "medial_meniscus"))
+    hexahedra = vtk_to_numpy(lateral.GetCellTypes()) == 12
+    assert np.count_nonzero(vtk_to_numpy(medial.GetCellTypes()) == 12) > np.count_nonzero(hexahedra)
+    scaled = vtk_to_numpy(lateral.GetCellData().GetArray("scaled_jacobian"))
+    warps = vtk_to_numpy(lateral.GetCellData().GetArray("warp"))
+    assert np.all((scaled[hexahedra] > 0) & (scaled[hexahedra] <= 1))
+    assert np.isnan(scaled[~hexahedra]).all()
+    assert np.isnan(warps[hexahedra]).all()
+    assert np.all(warps[~hexahedra] >= 0)
+
+
+def read_vtu(path):
+    reader = vtkXMLUnstructuredGridReader()
+    reader.SetFileName(str(path))
+    reader.Update()
+    return reader.GetOutput()
 
 
 @pytest.mark.usefixtures("in_tmp_path")

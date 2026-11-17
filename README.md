@@ -22,9 +22,9 @@ For the femur, tibia, and patella:
 - **Surface meshing** with 3- or 6-node triangles or 4-, 8-, or 9-node quadrilaterals (`--femur.element-type`, `tri3` by default).
 - **Tetrahedral meshing** with 4- or 10-node tetrahedra, finest in the cortical shell (`--femur.cortical-element-size` within `--femur.cortical-distance` of the surface) and growing by `--femur.cancellous-grad` per unit of depth up to `--femur.max-size`.
 
-Each bone has its own settings: `femur`, `tibia`, and `patella`.
+Each bone has its own settings: `femur`, `tibia`, and `patella`. The menisci share theirs, as do the tibial and patellar cartilage, unless one is given its own, such as `--lateral-meniscus.spacing 2`, which takes the shared section's other values.
 
-Every mesh has named node and element sets of its surface: each bone's surface, each cartilage's articular and bone sides, and each meniscus's anterior and posterior horns and body. `.vtu` and `.vtkhdf` (a multiblock) hold them; other formats gmsh infers from the file extension, such as `.msh`, `.vtk`, or `.inp`, hold the elements only. `--assembled-mesh knee.vtu` or `knee.vtkhdf` also writes every structure's mesh as one, numbered on through the structures.
+Every mesh has named node and element sets of its surface: each bone's surface, each cartilage's articular and bone sides, and each meniscus's anterior and posterior horns and body. `.vtu` and `.vtkhdf` (a multiblock) hold them; other formats gmsh infers from the file extension, such as `.msh`, `.vtk`, or `.inp`, hold the elements only. `--assembled-mesh knee.vtu` or `knee.vtkhdf` also writes every structure's mesh as one, numbered on through the structures. They also hold each element's quality, measured on its corner nodes: its scaled Jacobian and Frobenius aspect ratio, and each quadrilateral face's warp.
 
 **Documentation:** <https://comporthobiomech.github.io/kneemesh/>
 

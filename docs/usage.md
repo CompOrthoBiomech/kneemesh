@@ -1,6 +1,6 @@
 # Usage
 
-`kneemesh-assemble` combines single-label LabelMaps into one multilabel LabelMap. `kneemesh-brep` builds a B-rep of every structure in a segmentation, and `kneemesh-mesh` meshes each structure's B-rep. Each takes a JSON configuration, `--option value` overrides, or both, and `--help` lists every option and its default. Every option is a field of the command's model, {py:class}`~kneemesh.config.LabelMapAssembly`, {py:class}`~kneemesh.config.LabelMapBrep`, or {py:class}`~kneemesh.config.BrepMesh`, with underscores written as dashes. Settings for one kind of structure sit in a section, such as `meniscus`, and are given on the command line as `--meniscus.points-per-slice 10`.
+`kneemesh-assemble` combines single-label LabelMaps into one multilabel LabelMap. `kneemesh-brep` builds a B-rep of every structure in a segmentation, and `kneemesh-mesh` meshes each structure's B-rep. Each takes a JSON configuration, `--option value` overrides, or both, and `--help` lists every option and its default. Every option is a field of the command's model, {py:class}`~kneemesh.config.LabelMapAssembly`, {py:class}`~kneemesh.config.LabelMapBrep`, or {py:class}`~kneemesh.config.BrepMesh`, with underscores written as dashes. Settings for one kind of structure sit in a section, such as `meniscus`, and are given on the command line as `--meniscus.points-per-slice 10`. The two menisci share `meniscus`, and the tibial and patellar cartilage `cartilage`; any of them can have settings of its own instead, in a section named for it, such as `lateral_meniscus`. Its own section is layered over the shared one field by field, so `--lateral-meniscus.spacing 2` changes only the lateral meniscus's spacing and leaves its other settings, and the medial meniscus's, as `meniscus` gives them. To clear a field in a structure's own section that the shared one sets, such as `inner_clip_ratio` when giving `inner_clip_height`, set it to null there.
 
 The structure names, keys of `labels`, `label_maps`, and `breps`, pick each structure's pipeline: `lateral_meniscus`, `medial_meniscus`, `patellar_cartilage`, `femoral_cartilage`, `lateral_tibial_cartilage`, `medial_tibial_cartilage`, `femur`, `tibia`, and `patella`. All are implemented. The bones' geometry is a triangulated surface rather than a B-rep; see [Bones](#bones).
 
@@ -113,3 +113,15 @@ A face is an element of its own, a triangle or quadrilateral of the volume eleme
 ```sh
 kneemesh-mesh --config examples/knee_mesh_tet4.json --assembled-mesh knee.vtkhdf
 ```
+
+### Element quality
+
+`.vtu` and `.vtkhdf` meshes also hold each element's quality as cell arrays, measured on its corner nodes, so high-order elements count as first-order ones, by {py:func}`~kneemesh.mesh_optimization.element_quality`. The log reports each structure's worst and mean values as it is meshed.
+
+| Array | Of | Measure |
+|---|---|---|
+| `scaled_jacobian` | Volume elements, or a bone's surface elements | The smallest over its corners of the corner's Jacobian determinant over the product of its edges' lengths, scaled so a cube, square, regular tetrahedron, or equilateral triangle is 1; 0 is degenerate and negative inverted |
+| `frobenius_aspect` | The same | The largest over its corners of Verdict's aspect Frobenius: 1 for the ideal shape, larger as edges differ in length or leave its angles, infinite when inverted |
+| `warp` | Quadrilateral faces, or a bone's quadrilaterals | The angle between the two triangles a diagonal splits it into, the larger over both diagonals, in degrees |
+
+Cells a measure does not apply to, such as faces for the scaled Jacobian, hold NaN.

@@ -1,24 +1,25 @@
 """Form widgets for the B-rep and mesh configurations, derived from their pydantic models, and their values in the GUI's flat state.
 
 trame tracks changes to top-level state keys only, so every field shown in
-a form gets its own key: ``geo__meniscus__spacing`` for a section's field
-and ``geo__output`` for a top-level one. ``output_directory`` is one key that
+a form gets its own key: ``geo__meniscus__spacing`` for a section's field,
+``geo__lateral_meniscus__spacing`` for a structure's own section's, and
+``geo__output`` for a top-level one. ``output_directory`` is one key that
 both configurations share. Fields the GUI manages itself, such as labels,
 breps, and element_types, have no form.
 """
 
 import types
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, Literal, TypeAliasType, get_args, get_origin
+from typing import Any, Literal, TypeAliasType, cast, get_args, get_origin
 
 from annotated_types import Ge, Gt, Le, Lt
 from pydantic import ValidationError
 from pydantic.fields import FieldInfo
 
-from kneemesh.config import BaseConfig, BrepMesh, LabelMapBrep, Structure
+from kneemesh.config import OWN_SECTION_STRUCTURES, STRUCTURE_SECTIONS, STRUCTURES, BaseConfig, BrepMesh, LabelMapBrep, Structure
 
 type Kind = Literal["geometry", "mesh"]
 type Widget = Literal["switch", "select", "number", "text"]
@@ -35,18 +36,16 @@ _MANAGED: dict[Kind, frozenset[str]] = {
     "mesh": frozenset({"breps", "element_types", "output_directory"}),
 }
 
-STRUCTURE_SECTIONS: dict[Structure, str] = {
-    "lateral_meniscus": "meniscus",
-    "medial_meniscus": "meniscus",
-    "lateral_tibial_cartilage": "cartilage",
-    "medial_tibial_cartilage": "cartilage",
-    "patellar_cartilage": "cartilage",
-    "femoral_cartilage": "femoral_cartilage",
-    "femur": "femur",
-    "tibia": "tibia",
-    "patella": "patella",
-}
-"""The configuration section, in both models, that holds each structure's settings."""
+
+def structure_section(structure: Structure, own: Collection[str] = ()) -> str:
+    """The section a structure's settings are in: its own, named for it, if it is in own, or else the one it shares."""
+    return structure if structure in own and structure in OWN_SECTION_STRUCTURES else STRUCTURE_SECTIONS[structure]
+
+
+def sharing_structures(structure: Structure, own: Collection[str] = ()) -> list[Structure]:
+    """The other structures whose settings are in the same section as a structure's, none if it has its own."""
+    section = structure_section(structure, own)
+    return [other for other in STRUCTURES if other != structure and structure_section(other, own) == section]
 
 
 @dataclass(frozen=True)
@@ -119,22 +118,37 @@ def all_fields(kind: Kind) -> list[FieldSpec]:
 
 
 def state_values(kind: Kind, config: BaseConfig | None = None) -> dict[str, Any]:
-    """The state of every form field of kind's model, from config or the model's defaults, and the shared output directory."""
+    """The state of every form field of kind's model, from config or the model's defaults, and the shared output directory.
+
+    A structure's own section that config leaves out takes the values of the section it shares, so it starts from them when made its own.
+    """
     values = (config if config is not None else MODELS[kind]()).model_dump(mode="json")
     state = {OUTPUT_DIRECTORY_KEY: values[OUTPUT_DIRECTORY_KEY]}
     for spec in all_fields(kind):
-        state[spec.key] = values[spec.section][spec.name] if spec.section is not None else values[spec.name]
+        if spec.section is None:
+            state[spec.key] = values[spec.name]
+            continue
+        section = values[spec.section]
+        if section is None:
+            section = values[STRUCTURE_SECTIONS[cast(Structure, spec.section)]]
+        state[spec.key] = section[spec.name]
     return state
 
 
-def config_values(kind: Kind, state: Mapping[str, Any]) -> dict[str, Any]:
+def own_sections(config: BaseConfig) -> list[str]:
+    """The structures with their own section in a configuration."""
+    return [structure for structure in OWN_SECTION_STRUCTURES if getattr(config, structure, None) is not None]
+
+
+def config_values(kind: Kind, state: Mapping[str, Any], own: Collection[str] = ()) -> dict[str, Any]:
     """Unvalidated values of kind's model from the state of its forms, with sections nested and empty optional fields as None.
 
+    Structures' own sections are included for the structures in own only.
     Numbers typed into a form arrive as text, which pydantic's lax mode parses.
     """
     values: dict[str, Any] = {OUTPUT_DIRECTORY_KEY: state.get(OUTPUT_DIRECTORY_KEY, ".")}
     for spec in all_fields(kind):
-        if spec.key not in state:
+        if spec.key not in state or (spec.section in OWN_SECTION_STRUCTURES and spec.section not in own):
             continue
         value = state[spec.key]
         if spec.optional and (value is None or (isinstance(value, str) and not value.strip())):
@@ -175,6 +189,8 @@ def humanize(name: str) -> str:
 
 
 def _section_model(annotation: object) -> type[BaseConfig] | None:
+    """The model of a section, which a structure's own section holds optionally, or None for a plain field."""
+    annotation, _ = _unwrap_optional(annotation)
     return annotation if isinstance(annotation, type) and issubclass(annotation, BaseConfig) else None
 
 

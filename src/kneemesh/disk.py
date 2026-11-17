@@ -268,7 +268,9 @@ def write_meshes[Name: str](meshes: Mapping[Name, Mesh], path: str | PathLike[st
     Nodes and elements are numbered from 1 through the structures in order,
     each structure's elements before its faces, and each structure's sets
     are named "<structure>_<set>", such as "femur_surface". Every node and
-    element carries its number, as "node_id" and "element_id".
+    element carries its number, as "node_id" and "element_id", and every
+    element and face its quality metrics in Mesh.quality as cell arrays by
+    name, NaN where a metric does not apply.
 
     - .vtu: one unstructured grid of every element and face, with a
       "structure" cell array indexing the field array "structures", and a
@@ -369,6 +371,9 @@ def _single_grid(parts: list[tuple[str, Mesh, int, int]], assembled: bool) -> vt
         for name, *_ in parts:
             names.InsertNextValue(name)
         grid.GetFieldData().AddArray(names)
+    for metric in dict.fromkeys(metric for _, mesh, _, _ in parts for metric in mesh.quality):
+        values = [mesh.quality.get(metric, np.full(mesh.element_count, np.nan)) for _, mesh, _, _ in parts]
+        _add_array(grid.GetCellData(), metric, np.concatenate(values))
     for name, mesh, nodes, elements in parts:
         prefix = f"{name}_" if assembled else ""
         for set_name, members in mesh.node_sets.items():
@@ -399,7 +404,9 @@ def _part_blocks(mesh: Mesh, node_offset: int, element_offset: int, prefix: str)
     starts = np.cumsum([0, *(len(rows) for _, rows in numbered)])
     part = vtkMultiBlockDataSet()
     volume = sum(len(rows) for rows in mesh.elements.values())
-    _set_block(part, 0, "elements", _subgrid(mesh, list(mesh.elements.items()), node_offset, element_offset + np.arange(1, volume + 1)))
+    elements = _subgrid(mesh, list(mesh.elements.items()), node_offset, element_offset + np.arange(1, volume + 1))
+    _add_quality(elements, mesh, np.arange(volume))
+    _set_block(part, 0, "elements", elements)
     surfaces = vtkMultiBlockDataSet()
     for index, (name, members) in enumerate(mesh.element_sets.items()):
         members = np.sort(members)
@@ -408,7 +415,9 @@ def _part_blocks(mesh: Mesh, node_offset: int, element_offset: int, prefix: str)
             for (kind, rows), start, end in zip(numbered, starts[:-1], starts[1:], strict=True)
         ]
         cells = [(kind, rows) for kind, rows in cells if len(rows)]
-        _set_block(surfaces, index, prefix + name, _subgrid(mesh, cells, node_offset, element_offset + members + 1))
+        grid = _subgrid(mesh, cells, node_offset, element_offset + members + 1)
+        _add_quality(grid, mesh, members)
+        _set_block(surfaces, index, prefix + name, grid)
     _set_block(part, 1, "surfaces", surfaces)
     node_sets = vtkMultiBlockDataSet()
     for index, (name, members) in enumerate(mesh.node_sets.items()):
@@ -421,6 +430,12 @@ def _part_blocks(mesh: Mesh, node_offset: int, element_offset: int, prefix: str)
         _set_block(node_sets, index, prefix + name, grid)
     _set_block(part, 2, "node_sets", node_sets)
     return part
+
+
+def _add_quality(grid: vtkUnstructuredGrid, mesh: Mesh, numbers: np.ndarray) -> None:
+    """Add the quality metrics of a mesh's elements and faces, by their numbers in the grid's cell order, as cell arrays."""
+    for metric, values in mesh.quality.items():
+        _add_array(grid.GetCellData(), metric, values[numbers])
 
 
 def _set_block(blocks: vtkMultiBlockDataSet, index: int, name: str, block: vtkDataObject) -> None:

@@ -3,11 +3,14 @@
 import argparse
 import json
 import sys
+import types
 from collections.abc import Callable, Mapping, Sequence
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
-from typing import Any, NamedTuple
+from typing import Any, NamedTuple, cast, get_args
 
+import numpy as np
 import SimpleITK as sitk
 from loguru import logger
 from pydantic import ValidationError
@@ -18,12 +21,15 @@ from kneemesh.brep import BRep
 from kneemesh.cartilage import CartilageSides, classify_sides
 from kneemesh.config import (
     BONES,
+    STRUCTURE_SECTIONS,
     BaseConfig,
     BrepMesh,
     CartilageBrep,
     CartilageMesh,
     LabelMapAssembly,
     LabelMapBrep,
+    MeniscusBrep,
+    MeniscusMesh,
     Structure,
     StructureMesh,
 )
@@ -50,7 +56,7 @@ from kneemesh.geo.sheet import CartilageSheet, fit_sheet, sheet_to_brep
 from kneemesh.mesh import bone as bone_mesh
 from kneemesh.mesh import meniscus as meniscus_mesh
 from kneemesh.mesh import sheet as sheet_mesh
-from kneemesh.mesh_optimization import mesh_quality, optimize_hexahedral_mesh
+from kneemesh.mesh_optimization import FROBENIUS_ASPECT, SCALED_JACOBIAN, element_quality, mesh_quality, optimize_hexahedral_mesh
 from kneemesh.segmentation import Interpolator, Segmentation, assemble_label_maps
 from kneemesh.tet_meshing import Mesh, tetrahedral_mesh
 from kneemesh.vol import extract_isocontour, signed_distance_field, smooth_isocontour
@@ -119,8 +125,10 @@ def run_mesh(config: BrepMesh) -> dict[Structure, Mesh]:
     for structure, path in config.breps.items():
         logger.info("Reading {} for {}", path, structure)
         mesh = _MESHERS[structure](path, config.for_structure(structure), structure)
+        mesh = replace(mesh, quality=element_quality(mesh))
         counts = ", ".join(f"{len(connectivity)} {name}" for name, connectivity in mesh.elements.items())
         logger.info("Meshed {} with {} nodes and {}", structure, len(mesh.nodes), counts)
+        _log_quality(structure, mesh.quality)
         logger.info(
             "Sets of {}: {}",
             structure,
@@ -144,6 +152,22 @@ def run_mesh(config: BrepMesh) -> dict[Structure, Mesh]:
             config.assembled_mesh,
         )
     return meshes
+
+
+def _log_quality(structure: Structure, quality: Mapping[str, np.ndarray]) -> None:
+    scaled = quality[SCALED_JACOBIAN][~np.isnan(quality[SCALED_JACOBIAN])]
+    aspects = quality[FROBENIUS_ASPECT][~np.isnan(quality[FROBENIUS_ASPECT])]
+    if not len(scaled):
+        return
+    logger.info(
+        "Quality of {}: scaled Jacobian {:.3f} at least, {:.3f} on average; Frobenius aspect ratio {:.3g} at most",
+        structure,
+        scaled.min(),
+        scaled.mean(),
+        aspects.max(),
+    )
+    if inverted := int(np.count_nonzero(scaled <= 0)):
+        logger.warning("{} has {} inverted or degenerate elements", structure, inverted)
 
 
 def run_assembly(config: LabelMapAssembly) -> Segmentation:
@@ -192,7 +216,7 @@ def load_segmentation(config: LabelMapBrep) -> Segmentation:
 
 
 def _meniscus_brep(segmentation: Segmentation, structure: Structure, brep_config: LabelMapBrep) -> BRep:
-    config = brep_config.meniscus
+    config = brep_config.section(structure, MeniscusBrep)
     label_map, label = segmentation.image, segmentation.value(structure)
     logger.info("Fitting the centerline of {} (label {})", structure, label)
     curve = centerline(label_map, label)
@@ -244,7 +268,7 @@ def _log_sheet(sheet: CartilageSheet) -> None:
 
 
 def _cartilage_brep(segmentation: Segmentation, structure: Structure, brep_config: LabelMapBrep) -> BRep:
-    config = brep_config.cartilage
+    config = brep_config.section(structure, CartilageBrep)
     sides = _cartilage_sides(segmentation, structure, config)
     sheet = fit_sheet(sides, config.resolved_perimeter_radius, config.perimeter_inset, config.resolved_min_thickness, config.resolved_hole_thickness)
     _log_sheet(sheet)
@@ -312,9 +336,9 @@ def _bone_mesh(path: Path, mesh_config: BrepMesh, structure: Structure) -> Mesh:
     )
 
 
-def _meniscus_mesh(path: Path, mesh_config: BrepMesh, _structure: Structure) -> Mesh:
+def _meniscus_mesh(path: Path, mesh_config: BrepMesh, structure: Structure) -> Mesh:
     brep = read_brep(path)
-    config = mesh_config.meniscus
+    config = mesh_config.section(structure, MeniscusMesh)
     logger.info("Meshing with {} elements", mesh_config.element_type)
     if mesh_config.element_shape == "hexahedral":
         mesh = meniscus_mesh.hexahedral_mesh(
@@ -330,7 +354,7 @@ def _meniscus_mesh(path: Path, mesh_config: BrepMesh, _structure: Structure) -> 
 
 def _cartilage_mesh(path: Path, mesh_config: BrepMesh, structure: Structure) -> Mesh:
     brep = read_brep(path)
-    config = mesh_config.cartilage
+    config = mesh_config.section(structure, CartilageMesh)
     logger.info("Meshing with {} elements", mesh_config.element_type)
     if mesh_config.element_shape == "hexahedral":
         return _sheet_hexahedra(brep, config, mesh_config, structure)
@@ -514,7 +538,10 @@ def configure[ConfigType: BaseConfig](
 
 
 def _section_type(annotation: object) -> type[BaseConfig] | None:
-    """The configuration model a field holds, or None if it holds a plain value."""
+    """The configuration model a field holds, alone or optionally, or None if it holds a plain value."""
+    if isinstance(annotation, types.UnionType):
+        sections = [_section_type(argument) for argument in get_args(annotation) if argument is not type(None)]
+        return sections[0] if len(sections) == 1 else None
     return annotation if isinstance(annotation, type) and issubclass(annotation, BaseConfig) else None
 
 
@@ -527,13 +554,15 @@ def _add_config_options(parser: argparse.ArgumentParser, config_type: type[BaseC
             parser.add_argument(f"--{name.replace('_', '-')}", dest=name, default=argparse.SUPPRESS, help=_option_help(field, defaults[name]))
             continue
         group = parser.add_argument_group(f"{name} options", field.description)
+        # A structure's own section is None by default, its fields then taking those of the section it shares.
+        shared = STRUCTURE_SECTIONS.get(cast(Structure, name)) if defaults[name] is None else None
         for option, option_field in section.model_fields.items():
             group.add_argument(
                 f"--{name.replace('_', '-')}.{option.replace('_', '-')}",
                 dest=f"{name}.{option}",
                 metavar=option.upper(),
                 default=argparse.SUPPRESS,
-                help=_option_help(option_field, defaults[name][option]),
+                help=_option_help(option_field, f"{shared}.{option}" if shared is not None else defaults[name][option]),
             )
 
 

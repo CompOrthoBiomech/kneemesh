@@ -11,6 +11,7 @@ from kneemesh.mesh_optimization import (
     _objective,
     _untangling_objective,
     _warp_objective,
+    element_quality,
     frobenius_aspects,
     mesh_quality,
     optimize_hexahedral_mesh,
@@ -409,3 +410,62 @@ def test_optimization_rejects_tetrahedra(meniscus_tetrahedra):
 def test_optimization_rejects_invalid_arguments(arguments, message):
     with pytest.raises(ValueError, match=message):
         optimize_hexahedral_mesh(cube_grid(2), **arguments)
+
+
+REGULAR_TETRAHEDRON = np.array([[0, 0, 0], [1, 0, 0], [0.5, np.sqrt(3) / 2, 0], [0.5, np.sqrt(3) / 6, np.sqrt(2 / 3)]])
+
+
+def single(nodes, name, gmsh_type, connectivity=None):
+    nodes = np.asarray(nodes, dtype=float)
+    rows = np.asarray([connectivity if connectivity is not None else range(len(nodes))])
+    return Mesh(nodes, {name: rows}, {name: gmsh_type})
+
+
+def test_element_quality_is_one_for_ideal_elements():
+    for mesh in (
+        single(UNIT_CUBE, "Hexahedron 8", 5),
+        single(REGULAR_TETRAHEDRON, "Tetrahedron 4", 4),
+        single(REGULAR_TETRAHEDRON[:3], "Triangle 3", 2),
+        single(UNIT_CUBE[:4], "Quadrilateral 4", 3),
+    ):
+        quality = element_quality(mesh)
+        assert np.allclose(quality["scaled_jacobian"], 1.0)
+        assert np.allclose(quality["frobenius_aspect"], 1.0)
+    assert np.allclose(element_quality(single(UNIT_CUBE[:4], "Quadrilateral 4", 3))["warp"], 0.0)
+    assert "warp" not in element_quality(single(REGULAR_TETRAHEDRON, "Tetrahedron 4", 4))
+
+
+def test_element_quality_of_distorted_and_inverted_elements():
+    flat = single(REGULAR_TETRAHEDRON * [1, 1, 0.2], "Tetrahedron 4", 4)
+    quality = element_quality(flat)
+    assert 0 < quality["scaled_jacobian"][0] < 0.5
+    # The map from the regular tetrahedron is diag(1, 1, 0.2).
+    assert np.isclose(quality["frobenius_aspect"][0], 2.04 / (3 * 0.2 ** (2 / 3)))
+    inverted = element_quality(single(REGULAR_TETRAHEDRON, "Tetrahedron 4", 4, [0, 2, 1, 3]))
+    assert np.isclose(inverted["scaled_jacobian"][0], -1.0)
+    assert inverted["frobenius_aspect"][0] == np.inf
+    right = element_quality(single([[0, 0, 0], [1, 0, 0], [0, 1, 0]], "Triangle 3", 2))
+    assert np.isclose(right["scaled_jacobian"][0], np.sqrt(2) / np.sqrt(3))
+    assert np.isclose(right["frobenius_aspect"][0], 2 / np.sqrt(3))
+    lifted = element_quality(single(UNIT_CUBE[:4] + [[0, 0, 0], [0, 0, 0], [0, 0, 0.3], [0, 0, 0]], "Quadrilateral 4", 3))
+    assert lifted["warp"][0] > 10
+    with pytest.raises(ValueError, match="Prism 6"):
+        element_quality(single(UNIT_CUBE[:6], "Prism 6", 6))
+
+
+def test_element_quality_measures_high_order_elements_on_their_corners():
+    rng = np.random.default_rng(0)
+    nodes = np.vstack([REGULAR_TETRAHEDRON, rng.uniform(0, 1, (6, 3))])
+    quality = element_quality(single(nodes, "Tetrahedron 10", 11))
+    assert np.allclose(quality["scaled_jacobian"], 1.0)
+
+
+def test_element_quality_numbers_faces_after_elements():
+    mesh = cube_grid(2).with_face_sets()
+    quality = element_quality(mesh)
+    assert all(len(values) == mesh.element_count for values in quality.values())
+    assert np.allclose(quality["scaled_jacobian"][:8], 1.0)
+    assert np.isnan(quality["scaled_jacobian"][8:]).all()
+    assert np.isnan(quality["warp"][:8]).all()
+    assert np.allclose(quality["warp"][8:], 0.0)
+    assert np.allclose(quality["scaled_jacobian"][:8], scaled_jacobians(mesh))

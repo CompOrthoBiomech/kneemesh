@@ -1,4 +1,5 @@
 import json
+from dataclasses import replace
 
 import gmsh
 import numpy as np
@@ -27,6 +28,7 @@ from kneemesh.disk import (
 from kneemesh.geo.bone import surface_arrays
 from kneemesh.mesh.bone import surface_mesh
 from kneemesh.mesh.meniscus import hexahedral_mesh
+from kneemesh.mesh_optimization import element_quality
 from kneemesh.segmentation import Segmentation
 from kneemesh.tet_meshing import tetrahedral_mesh
 
@@ -334,6 +336,19 @@ def test_write_mesh_vtu_holds_faces_and_sets(tmp_path, small_tetrahedra):
     assert np.flatnonzero(array(grid.GetCellData(), "surface")).tolist() == small_tetrahedra.element_sets["surface"].tolist()
     assert np.flatnonzero(array(grid.GetPointData(), "surface")).tolist() == small_tetrahedra.node_sets["surface"].tolist()
     assert grid.GetCellData().GetArray("structure") is None
+
+
+def test_write_mesh_vtk_holds_quality_metrics(tmp_path, small_tetrahedra, bone_surface):
+    mesh = replace(small_tetrahedra, quality=element_quality(small_tetrahedra))
+    write_mesh(mesh, tmp_path / "mesh.vtu")
+    scaled = array(read_vtu(tmp_path / "mesh.vtu").GetCellData(), "scaled_jacobian")
+    assert np.array_equal(scaled, mesh.quality["scaled_jacobian"], equal_nan=True)
+
+    # A mesh without the metric fills its cells with NaN.
+    write_meshes({"meniscus": mesh, "bone": surface_mesh(bone_surface, 4.0)}, tmp_path / "both.vtu")
+    scaled = array(read_vtu(tmp_path / "both.vtu").GetCellData(), "scaled_jacobian")
+    assert np.array_equal(scaled[: mesh.element_count], mesh.quality["scaled_jacobian"], equal_nan=True)
+    assert np.isnan(scaled[mesh.element_count :]).all()
 
 
 def test_write_mesh_vtkhdf_holds_blocks_of_elements_and_sets(tmp_path, small_tetrahedra):

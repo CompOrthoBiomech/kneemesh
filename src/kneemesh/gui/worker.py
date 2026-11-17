@@ -22,7 +22,7 @@ from kneemesh.config import BrepMesh, LabelMapBrep, Structure
 from kneemesh.disk import read_brep, write_mesh, write_poly_data, write_segmentation
 from kneemesh.gui.labels import LabelEntry, compose_segmentation
 from kneemesh.pipeline import build_structure, run_mesh
-from kneemesh.tet_meshing import Mesh, gmsh_options, import_solid
+from kneemesh.tet_meshing import gmsh_options, import_solid
 
 # Triangles across the shortest side of a B-rep's bounding box in its preview, and per circle of curvature.
 _PREVIEW_DIVISIONS = 40
@@ -45,7 +45,7 @@ def run_job(job: dict[str, Any], queue: JobQueue) -> None:
       ``assembled_label_map`` if that is given, then each of ``structures``
       built with the LabelMapBrep ``config`` and previewed.
     - mesh: the BrepMesh ``config``, whose breps are meshed, each also
-      written as a .vtu preview.
+      written as a .vtu preview with its faces and quality metrics.
     - preview: each B-rep in ``breps`` ({structure: path}) previewed.
 
     Previews go to ``preview_directory``. The result maps each structure to
@@ -101,8 +101,8 @@ def _mesh_job(job: dict[str, Any], preview_directory: Path) -> dict[str, dict[st
     result: dict[str, dict[str, str]] = {}
     for structure, mesh in meshes.items():
         preview = preview_directory / f"{structure}_mesh.vtu"
-        # The elements alone, without the boundary faces that would draw over them.
-        write_mesh(Mesh(mesh.nodes, mesh.elements, mesh.element_types), preview)
+        # The whole mesh, faces and quality metrics included; the view picks the cells to draw.
+        write_mesh(mesh, preview)
         result[structure] = {"output": str(config.output_path(structure)), "preview": str(preview)}
     return result
 

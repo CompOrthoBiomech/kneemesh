@@ -82,9 +82,12 @@ def test_geometry_mesh_and_preview_jobs(tmp_path, meniscus_label):
     assert kind == "done", result
     assert Path(result["lateral_meniscus"]["output"]).is_file()
     grid = read_mesh_preview(result["lateral_meniscus"]["preview"])
-    # The preview holds the tetrahedra only, without boundary faces.
-    assert grid.GetNumberOfCells() > 0
-    assert set(np.unique(vtk_to_numpy(grid.GetCellTypes()))) == {10}
+    # The preview holds the tetrahedra and their boundary triangles, with the quality of each tetrahedron.
+    types = vtk_to_numpy(grid.GetCellTypes())
+    assert set(np.unique(types)) == {5, 10}
+    scaled = vtk_to_numpy(grid.GetCellData().GetArray("scaled_jacobian"))
+    assert np.all(scaled[types == 10] > 0)
+    assert np.isnan(scaled[types == 5]).all()
 
     reports = _Reports()
     run_job({"kind": "preview", "breps": {"lateral_meniscus": str(brep)}, "preview_directory": str(previews)}, reports)
