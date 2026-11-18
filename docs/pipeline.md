@@ -28,7 +28,7 @@ Both sides' surfaces take the domain coordinates as their parameters, so a point
 For the femur, tibia, and patella, {py:func}`kneemesh.pipeline.run_brep` writes a closed, triangulated surface rather than a B-rep:
 
 1. {py:func}`~kneemesh.geo.bone.bone_mask` fills the label's cavities, and cuts shafts the scan cuts off ({py:func}`~kneemesh.geo.bone.find_shaft_ends`) shorter by `shaft_cut_fraction`, in the voxel map.
-2. {py:func}`~kneemesh.vol.signed_distance_field`, {py:func}`~kneemesh.vol.extract_isocontour`, and {py:func}`~kneemesh.vol.smooth_isocontour` extract its smoothed surface, with non-manifold smoothing off.
+2. {py:func}`~kneemesh.vol.signed_distance_field`, {py:func}`~kneemesh.vol.extract_isocontour`, and {py:func}`~kneemesh.vol.smooth_isocontour` extract its smoothed surface.
 3. {py:func}`~kneemesh.geo.bone.decimate_surface` reduces the surface to triangles about `triangle_size` across.
 
 {py:func}`kneemesh.mesh.bone.surface_mesh` and {py:func}`kneemesh.mesh.bone.tetrahedral_mesh` load the surface into gmsh, which splits it into patches it can map to a plane and builds those maps, then mesh it with triangles or quadrilaterals, or the solid it encloses with tetrahedra graded from the cortical shell inward.

@@ -104,7 +104,7 @@ def test_bone_surface_is_closed_and_holds_the_filled_bone(bone_surface):
 
 
 def test_decimation_reaches_the_triangle_size_and_keeps_the_shape(bone_label):
-    surface = smooth_isocontour(extract_isocontour(signed_distance_field(bone_mask(bone_label), 1)), non_manifold_smoothing=False)
+    surface = smooth_isocontour(extract_isocontour(signed_distance_field(bone_mask(bone_label), 1)))
 
     decimated = decimate_surface(surface, 1.0)
 

@@ -12,6 +12,11 @@ from scipy.spatial import ConvexHull, KDTree
 from kneemesh.brep import gmsh_session, turning_angles
 from kneemesh.disk import write_brep
 from kneemesh.geo.meniscus import (
+    _DENSE_POINTS,
+    _PLANE_MARGIN,
+    _plane_overlaps,
+    _separate_planes,
+    _slice_at,
     centerline,
     contours_to_brep,
     contours_to_hex_blocks,
@@ -209,6 +214,29 @@ def test_slice_areas_match_cross_section(meniscus_slices):
         assert contour_slice.area == pytest.approx(42.0, abs=2.0)
         u, v = in_plane(contour_slice)
         assert 0.5 * np.sum(u * np.roll(v, -1) - np.roll(u, -1) * v) == pytest.approx(contour_slice.area, rel=0.05)
+
+
+def test_slice_planes_keep_neighbors_apart(meniscus_slices):
+    assert not len(_plane_overlaps(meniscus_slices, _PLANE_MARGIN * 5.0))
+
+
+def test_kinked_slice_planes_are_tilted_apart(meniscus_mesh, meniscus_slices):
+    # Turning one plane 70 degrees about the arc's axis, as a kink in the centerline does, makes it cut through its neighbors' planes.
+    index, angle = len(meniscus_slices) // 2, np.radians(70.0)
+    kinked = meniscus_slices[index]
+    rotation = np.array([[np.cos(angle), -np.sin(angle), 0.0], [np.sin(angle), np.cos(angle), 0.0], [0.0, 0.0, 1.0]])
+    normal = rotation @ kinked.normal
+    reference = np.array([0.0, 0.0, 1.0])
+    u_axis = np.cross(reference, normal) / np.linalg.norm(np.cross(reference, normal))
+    contour = _slice_at(meniscus_mesh, kinked.center, u_axis, np.cross(normal, u_axis), normal, _DENSE_POINTS)
+    assert contour is not None
+    slices = [*meniscus_slices[:index], contour, *meniscus_slices[index + 1 :]]
+    assert len(_plane_overlaps(slices, _PLANE_MARGIN * 5.0))
+
+    separated = _separate_planes(meniscus_mesh, slices, reference, 5.0)
+
+    assert not len(_plane_overlaps(separated, _PLANE_MARGIN * 5.0))
+    np.testing.assert_allclose([s.center for s in separated], [s.center for s in slices])
 
 
 @pytest.mark.parametrize("spacing", [3.0, 7.0])

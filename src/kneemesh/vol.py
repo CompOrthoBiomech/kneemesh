@@ -24,7 +24,7 @@ LABEL_MAP_PIXEL_IDS = (sitk.sitkUInt8, sitk.sitkUInt16, sitk.sitkInt16)
 
 @dataclass(frozen=True, eq=False)
 class ContourSlice:
-    """An ordered closed contour of a surface in a plane normal to a curve.
+    """An ordered closed contour of a surface in a plane through a curve, normal to it unless tilted.
 
     Attributes:
         points: (N, 3) physical points around the contour, counterclockwise
@@ -37,7 +37,8 @@ class ContourSlice:
         center: Point on the curve where the plane is centered.
         u_axis: Unit vector in the plane.
         v_axis: Unit vector in the plane. (u_axis, v_axis, normal) is right-handed.
-        normal: Unit tangent of the curve at center.
+        normal: Unit normal of the plane: the curve's tangent at center, or
+            tilted from it to keep neighboring slices apart (see slice_isocontour).
         area: Area enclosed by the contour.
         straight_from: For a contour whose thin inner edge was clipped, the
             index of the cut's first corner: the contour is curved from
@@ -135,12 +136,11 @@ def smooth_isocontour(
     mesh: vtkPolyData,
     iterations: int = DEFAULT_SMOOTHING_ITERATIONS,
     pass_band: float = DEFAULT_SMOOTHING_PASS_BAND,
-    non_manifold_smoothing: bool = True,
 ) -> vtkPolyData:
     """Smooth a surface mesh with a windowed sinc filter, keeping its connectivity.
 
     Boundary and feature-edge smoothing are off, so any open edges stay in
-    place, and non-manifold smoothing is on unless turned off. Coordinates are normalized to the unit cube
+    place, and non-manifold smoothing is on. Coordinates are normalized to the unit cube
     while filtering, so the result does not depend on the physical scale.
 
     Args:
@@ -150,7 +150,6 @@ def smooth_isocontour(
             closely. 0 returns the mesh unchanged.
         pass_band: Pass band of the filter, between 0 and 2. Lower values
             smooth more and shrink the surface more.
-        non_manifold_smoothing: Smooth vertices on non-manifold edges too.
 
     Returns:
         A new smoothed mesh, or mesh itself when iterations is 0.
@@ -171,7 +170,7 @@ def smooth_isocontour(
     smoother.SetPassBand(pass_band)
     smoother.BoundarySmoothingOff()
     smoother.FeatureEdgeSmoothingOff()
-    smoother.SetNonManifoldSmoothing(non_manifold_smoothing)
+    smoother.NonManifoldSmoothingOn()
     smoother.NormalizeCoordinatesOn()
     smoother.Update()
     logger.debug("Smoothed the surface with {} iterations and pass band {}", iterations, pass_band)

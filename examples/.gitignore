@@ -4,3 +4,5 @@
 !*_brep_*.json
 !*_mesh_*.json
 !*_assemble.json
+!validation/
+!validation/all_oks.py

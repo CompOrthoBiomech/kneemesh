@@ -298,7 +298,7 @@ def _bone_surface(segmentation: Segmentation, structure: Structure, brep_config:
     logger.info("Extracting the surface at level {}", config.level)
     surface = extract_isocontour(distance_field, config.level)
     logger.info("Smoothing the surface with {} iterations and pass band {}", config.smoothing_iterations, config.smoothing_pass_band)
-    surface = smooth_isocontour(surface, config.smoothing_iterations, config.smoothing_pass_band, non_manifold_smoothing=False)
+    surface = smooth_isocontour(surface, config.smoothing_iterations, config.smoothing_pass_band)
     logger.info("Decimating the surface to triangles of size {}", config.triangle_size)
     return decimate_surface(surface, config.triangle_size)
 

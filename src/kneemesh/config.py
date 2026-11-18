@@ -386,7 +386,7 @@ class BoneBrep(SurfaceBrep):
 
     A bone's geometry is not a B-rep but its closed, triangulated surface,
     written as .stl: the isocontour of its label with cavities filled,
-    smoothed with non-manifold smoothing off, and decimated. gmsh
+    smoothed, and decimated. gmsh
     reparametrizes it when meshing.
     """
 

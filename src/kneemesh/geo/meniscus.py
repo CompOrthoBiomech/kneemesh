@@ -72,6 +72,11 @@ _CORNER_SEPARATION = 1 / 8
 _CLIP_STATIONS = 400
 _MAX_CLIP_HEIGHT = 0.5
 _CLIP_CORNER_MARGIN = 0.05
+# Plane separation: every point of a contour must lie at least _PLANE_MARGIN of the slice spacing on its own side of
+# each neighbor's plane. Where two neighbors come closer, the normals around them are smoothed, up to
+# _PLANE_SMOOTHING_ROUNDS times, and the slices cut again.
+_PLANE_MARGIN = 0.25
+_PLANE_SMOOTHING_ROUNDS = 50
 
 DEFAULT_GROOVE_RATIO = 0.25
 """Default depth, as a fraction of their width, up to which a section's concavities are filled in as noise (see slice_isocontour)."""
@@ -150,6 +155,13 @@ def slice_isocontour(
     spaced between them (_follow_corners). Slices are removed from either end
     of the curve until one encloses at least 20% of the average area.
 
+    Where the curve bends more tightly than the section is wide, or kinks,
+    planes normal to it would cut through their neighbors' contours, and a
+    loft through them folds. There the planes are tilted apart, their
+    centers staying on the curve, until every contour lies at least a
+    quarter of the spacing in front of the plane before it and behind the
+    plane after it (_separate_planes).
+
     In-plane axes are defined from the curve's best-fit plane, so they do not
     twist along a roughly planar curve.
 
@@ -219,9 +231,10 @@ def slice_isocontour(
     if any(contour is None for contour in retained):
         raise ValueError("A plane along the curve does not cut the mesh in a closed contour")
     logger.debug("Kept {} of {} slices after clipping ends below {:.0%} of the mean area", len(retained), len(slices), _MIN_END_AREA_RATIO)
+    retained = _separate_planes(mesh, retained, reference, spacing)  # pyright: ignore[reportArgumentType]
     if groove_ratio:
-        retained = [_fill_grooves(contour, groove_ratio) for contour in retained]  # pyright: ignore[reportArgumentType]
-    aligned = _align_with_previous(retained)  # pyright: ignore[reportArgumentType]
+        retained = [_fill_grooves(contour, groove_ratio) for contour in retained]
+    aligned = _align_with_previous(retained)
     if clip_height or clip_ratio:
         return _clip_inner_edges(aligned, points_per_slice, clip_height, clip_ratio)
     return _follow_corners(aligned, points_per_slice)
@@ -428,6 +441,66 @@ def contours_to_hex_blocks(slices: list[ContourSlice], spline_order: int = 3) ->
         gmsh.model.occ.fragment(blocks[:1], blocks[1:])
         gmsh.model.occ.synchronize()
         return export_brep()
+
+
+def _plane_overlaps(slices: list[ContourSlice], margin: float) -> np.ndarray:
+    """Return the indices i of neighbors i and i + 1 either of which comes within margin of the other's plane or past it."""
+    overlaps = [
+        index
+        for index, (before, after) in enumerate(pairwise(slices))
+        if ((before.points - after.center) @ after.normal).max() > -margin or ((after.points - before.center) @ before.normal).min() < margin
+    ]
+    return np.array(overlaps, dtype=int)
+
+
+def _separate_planes(mesh: vtkPolyData, slices: list[ContourSlice], reference: np.ndarray, spacing: float) -> list[ContourSlice]:
+    """Tilt slice planes away from the curve's normal planes where neighboring contours would overlap.
+
+    Planes normal to a curve meet at its center of curvature, so where the
+    curve bends more tightly than the section is wide, or kinks where the
+    section changes abruptly, neighboring contours cross, and a loft through
+    them folds. Each slice keeps its center on the curve, but the normals of
+    an overlapping pair and their neighbors are smoothed toward each other's,
+    spreading the turn over more slices, until every contour lies at least
+    _PLANE_MARGIN of the spacing in front of the plane before it and behind
+    the plane after it.
+
+    This was designed and tuned on a single structure, the OKS subject
+    oks009's medial meniscus, whose centerline kinked; the other OKS
+    validation data did not shape it (see CLAUDE.md).
+    """
+    margin = _PLANE_MARGIN * spacing
+    tangents = np.array([contour.normal for contour in slices])
+    normals = tangents.copy()
+    slices = list(slices)
+    original = _plane_overlaps(slices, margin)
+    if not len(original):
+        return slices
+    for _ in range(_PLANE_SMOOTHING_ROUNDS):
+        overlaps = _plane_overlaps(slices, margin)
+        if not len(overlaps):
+            break
+        moved = np.unique(np.clip(np.concatenate([overlaps - 1, overlaps, overlaps + 1, overlaps + 2]), 0, len(slices) - 1))
+        padded = np.vstack((normals[:1], normals, normals[-1:]))
+        smoothed = padded[:-2] + 2 * padded[1:-1] + padded[2:]
+        normals[moved] = smoothed[moved] / np.linalg.norm(smoothed[moved], axis=1, keepdims=True)
+        for index in moved:
+            u_axis = np.cross(reference, normals[index])
+            u_axis /= np.linalg.norm(u_axis)
+            contour = _slice_at(mesh, slices[index].center, u_axis, np.cross(normals[index], u_axis), normals[index], _DENSE_POINTS)
+            if contour is None:
+                raise ValueError("A tilted plane along the curve does not cut the mesh in a closed contour")
+            slices[index] = contour
+    remaining = _plane_overlaps(slices, margin)
+    tilts = np.degrees(np.arccos(np.clip(np.einsum("ij,ij->i", normals, tangents), -1.0, 1.0)))
+    logger.debug(
+        "Tilted slice planes apart where neighbors {} overlapped, by up to {:.1f} degrees from the curve's normal planes",
+        original.tolist(),
+        tilts.max(),
+    )
+    if len(remaining):
+        logger.warning("Slices {} still come within {:.3g} of each other's planes; the loft may fold there", remaining.tolist(), margin)
+    return slices
 
 
 def _slice_at(

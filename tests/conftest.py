@@ -369,7 +369,7 @@ def real_femoral_hex_solid(real_femoral_sheet: CartilageSheet) -> BRep:
 def bone_surface_of(label_map: sitk.Image, label: int = 1, shaft_cut_fraction: float = 0.0) -> vtkPolyData:
     """A bone's decimated surface, made as the B-rep pipeline makes it."""
     distance_field = signed_distance_field(bone_mask(label_map, label, shaft_cut_fraction), 1)
-    return decimate_surface(smooth_isocontour(extract_isocontour(distance_field), non_manifold_smoothing=False))
+    return decimate_surface(smooth_isocontour(extract_isocontour(distance_field)))
 
 
 @pytest.fixture(scope="session")
