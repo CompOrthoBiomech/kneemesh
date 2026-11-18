@@ -17,8 +17,9 @@ skipped. Steps run in parallel up to --jobs at a time.
 
 The settings follow examples/knee_*.json. Each subject's directory under
 --output gets the JSON configurations, so a failure can be repeated with the
-console scripts, along with every output and one log per step. The report,
-report.md, with results.json and results.csv beside it, summarizes per
+console scripts, along with every output and one log per step, and
+results.json and results.csv. The report, the docs' Validation page
+(docs/validation.md, --report), records the commit it ran at and summarizes per
 subject and structure: failures and their errors, warnings, element counts,
 scaled Jacobians and Frobenius aspect ratios (before and after optimization
 for hexahedra), inverted elements, surface warp, empty node and element sets,
@@ -29,6 +30,10 @@ Run from the repository root:
     uv run python examples/validation/all_oks.py
     uv run python examples/validation/all_oks.py --subjects oks001 oks002 --shapes hex --jobs 6
     uv run python examples/validation/all_oks.py --report-only   # rebuild the report from results.json
+
+The LabelMaps are cropped to their labels and stored as sitkUInt8 first, by
+examples/validation/crop_oks.py. Commit before running, so the recorded commit
+reproduces the results.
 """
 
 import argparse
@@ -524,25 +529,52 @@ def _table(header: list[str], body: list[list[str]]) -> list[str]:
     return ["| " + " | ".join(header) + " |", "|" + "|".join("---" for _ in header) + "|", *("| " + " | ".join(row) + " |" for row in body)]
 
 
+REPOSITORY_URL = "https://github.com/CompOrthoBiomech/kneemesh"
+# Paths whose uncommitted changes would make the recorded commit misleading.
+_TRACKED_PATHS = ("src", "examples/validation")
+
+
 def _git_commit() -> str:
+    """HEAD's full hash, marked when the package or this script has uncommitted changes."""
     try:
-        commit = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
-        dirty = subprocess.run(["git", "status", "--porcelain", "src"], capture_output=True, text=True, check=True).stdout.strip()
+        commit = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
+        dirty = subprocess.run(["git", "status", "--porcelain", *_TRACKED_PATHS], capture_output=True, text=True, check=True).stdout.strip()
     except (OSError, subprocess.CalledProcessError):
         return "unknown"
-    return commit + (" (src modified)" if dirty else "")
+    return commit + (" (modified)" if dirty else "")
 
 
-def write_report(output: Path, steps: list[Step], results: dict[str, dict[str, Any]], meta: dict[str, Any]) -> Path:
+def _commit_link(commit: str) -> str:
+    """The commit as a Markdown link to it on GitHub, with its modified note after the link."""
+    hash_, _, note = commit.partition(" ")
+    if not re.fullmatch(r"[0-9a-f]{7,40}", hash_):
+        return commit
+    return f"[`{hash_}`]({REPOSITORY_URL}/commit/{hash_})" + (f" {note}" if note else "")
+
+
+def write_report(report: Path, output: Path, steps: list[Step], results: dict[str, dict[str, Any]], meta: dict[str, Any]) -> None:
+    """Write the report to report, a Markdown page of the docs, and results.csv to output."""
     rows = rows_of(steps, results)
     subjects = sorted({row.subject for row in rows})
+    modified = " (modified)" in meta["commit"]
     lines = [
-        "# OpenKnee(s) generalization report",
+        "# Validation",
         "",
-        f"Generated {meta['generated']} at commit {meta['commit']}, shapes {', '.join(meta['shapes'])}, "
-        + f"{meta['jobs']} jobs, timeout {meta['timeout']:.0f} s per step, {meta['wall_seconds']:.0f} s in all.",
+        "kneemesh is developed against one knee, the structures in `tests/dat`. To see how it generalizes, "
+        + "`examples/validation/all_oks.py` runs the full assembly, B-rep, and mesh pipeline on every structure of the "
+        + "[OpenKnee(s)](https://simtk.org/projects/openknee) subjects' segmentations, which `examples/validation/crop_oks.py` "
+        + "crops to their labels and stores as `sitkUInt8`, as `tests/dat` is. The script runs locally, since the data is not "
+        + "distributed with kneemesh, and writes this page.",
         "",
-        "Settings follow `examples/knee_*.json`; each subject's directory holds the configurations to repeat it with the console scripts. "
+        f"Generated {meta['generated']} with kneemesh at commit {_commit_link(meta['commit'])}, shapes {', '.join(meta['shapes'])}, "
+        + f"{meta['jobs']} jobs, timeout {meta['timeout']:.0f} s per step, {meta['wall_seconds']:.0f} s in all."
+        + (
+            " The package or the validation script had uncommitted changes, so the commit does not reproduce these results exactly."
+            if modified
+            else ""
+        ),
+        "",
+        "Settings follow `examples/knee_*.json`; each subject's output directory holds the configurations to repeat it with the console scripts. "
         + "`SJ` is the scaled Jacobian (1 ideal, <= 0 inverted), measured on corner nodes; `raw` is before hexahedral optimization. "
         + "`aspect` is the Frobenius aspect ratio. `warp` is the boundary quadrilaterals' warp in degrees. `vol` is the mesh's volume "
         + "over the assembled label's voxel volume; bones are cut at their shafts, so theirs is not comparable. "
@@ -691,14 +723,13 @@ def write_report(output: Path, steps: list[Step], results: dict[str, dict[str, A
             lines += ["", "<details><summary>warnings</summary>", "", *(f"- `{key}`: {message}" for key, message in warned), "", "</details>"]
         lines.append("")
 
-    report = output / "report.md"
-    _ = report.write_text("\n".join(lines), encoding="utf-8")
+    report.parent.mkdir(parents=True, exist_ok=True)
+    _ = report.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
     with (output / "results.csv").open("w", newline="", encoding="utf-8") as stream:
         writer = csv.DictWriter(stream, fieldnames=list(asdict(rows[0]))) if rows else None
         if writer is not None:
             writer.writeheader()
             writer.writerows(asdict(row) for row in rows)
-    return report
 
 
 # ---------------------------------------------------------------------------
@@ -714,6 +745,7 @@ def main() -> int:
     parser.add_argument("--shapes", nargs="+", choices=SHAPES, default=list(SHAPES), help="element shapes of the soft tissue")
     parser.add_argument("--jobs", type=int, default=4, help="steps run at once; each may take a few GB on full-size images")
     parser.add_argument("--timeout", type=float, default=900.0, help="seconds before a step is killed; gmsh can stall on a folded surface")
+    parser.add_argument("--report", type=Path, default=Path("docs/validation.md"), help="the report, the docs' Validation page")
     parser.add_argument("--report-only", action="store_true", help="rebuild the report from --output's results.json without running")
     arguments = parser.parse_args()
 
@@ -723,8 +755,8 @@ def main() -> int:
     if arguments.report_only:
         saved = json.loads(results_path.read_text(encoding="utf-8"))
         steps = [Step(**step) for step in saved["steps"]]
-        report = write_report(output, steps, saved["results"], saved["meta"])
-        print(f"Wrote {report}")
+        write_report(arguments.report, output, steps, saved["results"], saved["meta"])
+        print(f"Wrote {arguments.report}")
         return 0
 
     subjects = sorted(path for path in arguments.data.glob("oks*") if path.is_dir())
@@ -754,8 +786,8 @@ def main() -> int:
         json.dumps({"meta": meta, "steps": [asdict(step) for step in steps], "results": results}, indent=2, default=_json_default) + "\n",
         encoding="utf-8",
     )
-    report = write_report(output, steps, results, meta)
-    print(f"Wrote {report}")
+    write_report(arguments.report, output, steps, results, meta)
+    print(f"Wrote {arguments.report}")
     return 0 if all(result["status"] == "ok" for result in results.values()) else 1
 
 

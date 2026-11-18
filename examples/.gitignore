@@ -6,3 +6,4 @@
 !*_assemble.json
 !validation/
 !validation/all_oks.py
+!validation/crop_oks.py
