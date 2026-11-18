@@ -39,6 +39,11 @@ def gmsh_session() -> Generator[None]:
     if owns_gmsh:
         gmsh.initialize(readConfigFiles=False, interruptible=False)
         gmsh.option.setNumber("General.Terminal", 0)
+        # Warnings and errors only: MMG3D takes gmsh's verbosity and otherwise prints its report to stdout directly.
+        gmsh.option.setNumber("General.Verbosity", 2)
+        # Parallel booleans give the same shapes; fragmenting the meniscus's ruled butterfly blocks took 9 s
+        # serially against 3, and the real femoral cartilage's partition 118 s against 37.
+        gmsh.option.setNumber("Geometry.OCCParallel", 1)
     previous_model = gmsh.model.getCurrent()
     gmsh.model.add(f"kneemesh-{uuid.uuid4().hex}")
     try:

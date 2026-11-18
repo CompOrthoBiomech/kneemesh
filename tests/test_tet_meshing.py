@@ -59,20 +59,25 @@ def test_tetrahedral_mesh_follows_max_size(meniscus_solid, size):
     assert median_edge_length(tetrahedral_mesh(meniscus_solid, max_size=size)) == pytest.approx(size, rel=0.25)
 
 
-def test_tetrahedral_mesh_min_size_limits_curvature_refinement(meniscus_solid):
-    fine = tetrahedral_mesh(meniscus_solid, min_size=0.0, max_size=4.0, elements_per_circle=12)
+@pytest.fixture(scope="module")
+def curvature_refined_tetrahedra(meniscus_solid):
+    """meniscus_solid's tetrahedra at 12 elements per circle of curvature, with no min_size to stop the refinement."""
+    return tetrahedral_mesh(meniscus_solid, min_size=0.0, max_size=4.0, elements_per_circle=12)
+
+
+def test_tetrahedral_mesh_min_size_limits_curvature_refinement(meniscus_solid, curvature_refined_tetrahedra):
     limited = tetrahedral_mesh(meniscus_solid, min_size=2.0, max_size=4.0, elements_per_circle=12)
 
-    assert len(limited.elements["Tetrahedron 4"]) < len(fine.elements["Tetrahedron 4"])
-    assert median_edge_length(limited) > median_edge_length(fine)
+    assert len(limited.elements["Tetrahedron 4"]) < len(curvature_refined_tetrahedra.elements["Tetrahedron 4"])
+    assert median_edge_length(limited) > median_edge_length(curvature_refined_tetrahedra)
 
 
-def test_curvature_sizing_refines_the_mesh(meniscus_solid):
+def test_curvature_sizing_refines_the_mesh(meniscus_solid, curvature_refined_tetrahedra):
     def count(elements_per_circle):
         mesh = tetrahedral_mesh(meniscus_solid, min_size=0.0, max_size=4.0, elements_per_circle=elements_per_circle)
         return len(mesh.elements["Tetrahedron 4"])
 
-    assert count(0) < count(6) < count(12)
+    assert count(0) < count(6) < len(curvature_refined_tetrahedra.elements["Tetrahedron 4"])
 
 
 def test_tetrahedral_mesh_second_order_has_10_node_tetrahedra(meniscus_solid):
@@ -114,13 +119,13 @@ def test_tetrahedral_mesh_restores_options_of_running_gmsh(meniscus_solid):
         gmsh.finalize()
 
 
-def test_default_min_size_limits_curvature_refinement(meniscus_solid):
-    unlimited = tetrahedral_mesh(meniscus_solid, min_size=0.0, max_size=4.0, elements_per_circle=24)
-    default = tetrahedral_mesh(meniscus_solid, max_size=4.0, elements_per_circle=24)
+def test_default_min_size_limits_curvature_refinement(meniscus_solid, curvature_refined_tetrahedra):
+    # 12 elements per circle halve the edges without min_size (0.44 against 0.59 mm); 24 took 30 s to mesh.
+    default = tetrahedral_mesh(meniscus_solid, max_size=4.0, elements_per_circle=12)
     offsets = default.nodes - default.nodes.mean(axis=0)
     thickness = np.ptp(offsets @ np.linalg.eigh(offsets.T @ offsets)[1], axis=0).min()
 
-    assert len(default.elements["Tetrahedron 4"]) < len(unlimited.elements["Tetrahedron 4"])
+    assert len(default.elements["Tetrahedron 4"]) < len(curvature_refined_tetrahedra.elements["Tetrahedron 4"])
     assert median_edge_length(default) > 0.8 * thickness / 20
 
 

@@ -39,6 +39,7 @@ from loguru import logger
 from scipy import sparse
 
 from kneemesh.brep import gmsh_session
+from kneemesh.mesh_sets import unshared
 from kneemesh.tet_meshing import Mesh
 
 # For each corner of a gmsh hexahedron, the three corners it shares an edge
@@ -699,8 +700,7 @@ def _smoothing_adjacency(corners: np.ndarray, constraints: _Constraints) -> spar
 def _boundary_faces(corners: np.ndarray) -> np.ndarray:
     """Return the quadrilaterals that belong to exactly one hexahedron, (F, 4), ordered outward."""
     faces = corners[:, _FACES].reshape(-1, 4)
-    _, inverse, counts = np.unique(np.sort(faces, axis=1), axis=0, return_inverse=True, return_counts=True)
-    return faces[counts[inverse.ravel()] == 1]
+    return faces[unshared(faces)]
 
 
 def _face_area_vectors(positions: np.ndarray, faces: np.ndarray) -> np.ndarray:

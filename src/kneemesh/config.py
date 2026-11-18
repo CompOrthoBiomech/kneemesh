@@ -532,10 +532,11 @@ class CartilageMesh(StructureMesh):
     )
     elements_through: int = Field(default=3, ge=1, description="Hexahedra through the thickness")
     quad_algorithm: QuadAlgorithm = Field(
-        default="frontal_delaunay",
-        description="gmsh algorithm for the quadrilaterals on the sheet's side: frontal_delaunay keeps their size closest to element_size; "
-        + "quasi_structured aligns them with a cross field, leaving few irregular nodes, but varies their size, down to 0.3 of "
-        + "element_size on the real patellar cartilage",
+        default="quasi_structured",
+        description="gmsh algorithm for the quadrilaterals on the sheet's side: quasi_structured aligns them with a cross field, "
+        + "leaving few irregular nodes, but varies their size, down to 0.3 of element_size on the real patellar cartilage, and "
+        + "takes longer; frontal_delaunay keeps their size closest to element_size and optimizes to slightly better metrics, "
+        + "but leaves many irregular nodes",
     )
     save_partition: bool = Field(
         default=False,

@@ -10,6 +10,7 @@ from kneemesh.mesh_sets import (
     face_groups_of,
     face_sets,
     surface_sets,
+    unshared,
 )
 from kneemesh.tet_meshing import Mesh
 
@@ -54,6 +55,17 @@ def test_boundary_faces_leave_out_shared_faces():
     assert len(quadrilaterals) == 10
     assert not any(set(face) == {1, 4, 7, 10} for face in quadrilaterals.tolist())
     assert closed([quadrilaterals])
+
+
+def test_unshared_matches_counting_unique_rows():
+    rng = np.random.default_rng(0)
+    faces = rng.integers(0, 12, size=(400, 3))
+    _, inverse, counts = np.unique(np.sort(faces, axis=1), axis=0, return_inverse=True, return_counts=True)
+
+    mask = unshared(faces)
+    assert 0 < mask.sum() < len(faces)
+    assert np.array_equal(mask, counts[inverse.ravel()] == 1)
+    assert unshared(np.zeros((0, 4), dtype=np.int64)).shape == (0,)
 
 
 def test_boundary_faces_point_out():

@@ -250,8 +250,8 @@ def test_femoral_tetrahedra_default_to_the_element_size():
 def test_cartilage_hexahedra_settings():
     config = CartilageMesh()
 
-    assert (config.element_size, config.elements_through, config.quad_algorithm, config.save_partition) == (2.0, 3, "frontal_delaunay", False)
-    assert CartilageMesh.model_validate({"quad_algorithm": "quasi_structured"}).quad_algorithm == "quasi_structured"
+    assert (config.element_size, config.elements_through, config.quad_algorithm, config.save_partition) == (2.0, 3, "quasi_structured", False)
+    assert CartilageMesh.model_validate({"quad_algorithm": "frontal_delaunay"}).quad_algorithm == "frontal_delaunay"
     with pytest.raises(pydantic.ValidationError):
         CartilageMesh.model_validate({"quad_algorithm": "butterfly"})
     with pytest.raises(pydantic.ValidationError):

@@ -10,7 +10,6 @@ import math
 
 import gmsh
 import numpy as np
-from scipy.spatial import KDTree
 from vtkmodules.vtkCommonDataModel import vtkPolyData
 from vtkmodules.vtkFiltersCore import vtkImplicitPolyDataDistance
 
@@ -125,32 +124,51 @@ def tetrahedral_mesh(
         raise ValueError(f"cancellous_grad must be positive, got {cancellous_grad}")
     if max_size < cortical_element_size:
         raise ValueError(f"max_size must be at least cortical_element_size, got {max_size} and {cortical_element_size}")
-    # Distances to the surface's vertices, about a triangle apart, overestimate the distance to the surface by
-    # far less than the shell is thick.
-    vertices = KDTree(surface_arrays(surface)[0])
-
-    def size(_dimension: int, _tag: int, x: float, y: float, z: float, _size: float) -> float:
-        depth = float(vertices.query((x, y, z))[0])
-        return min(max_size, cortical_element_size + cancellous_grad * max(0.0, depth - cortical_distance))
-
     with gmsh_session():
         locator = _reparametrize(surface)
-        gmsh.model.geo.addVolume([gmsh.model.geo.addSurfaceLoop([tag for _, tag in gmsh.model.getEntities(2)])])
+        surfaces = [tag for _, tag in gmsh.model.getEntities(2)]
+        gmsh.model.geo.addVolume([gmsh.model.geo.addSurfaceLoop(surfaces)])
         gmsh.model.geo.synchronize()
-        gmsh.model.mesh.setSizeCallback(size)
         sizes = {"Mesh.MeshSizeMin": cortical_element_size, "Mesh.MeshSizeMax": max_size, "Mesh.MeshSizeExtendFromBoundary": 0}
         with gmsh_options(sizes):
             _mesh_surface(locator, cortical_element_size, False, algorithm_2d)
+            # After the surface mesh, whose nodes the distance is measured to.
+            _set_graded_sizes(surfaces, cortical_element_size, cortical_distance, cancellous_grad, max_size)
             # Netgen's optimization removes the slivers the graded sizes leave: on the real femur it raised the
             # smallest volume ratio from 0.01 to 0.29 and the mean from 0.74 to 0.83.
             with gmsh_options({"Mesh.Algorithm3D": Algorithm3D(algorithm_3d).number, "Mesh.OptimizeNetgen": 1}):
                 _generate(3)
-        gmsh.model.mesh.removeSizeCallback()
         _raise_order(locator, element_order, False)
         mesh = gmsh_mesh(3)
     if not mesh.elements:
         raise ValueError("gmsh produced no tetrahedra in the bone")
     return mesh
+
+
+def _set_graded_sizes(surfaces: list[int], cortical_element_size: float, cortical_distance: float, cancellous_grad: float, max_size: float) -> None:
+    """Size the current model's tetrahedra by depth below its surfaces, as tetrahedral_mesh describes, with gmsh's own fields.
+
+    A Distance field measures the distance to the surface's vertices, about a
+    triangle apart, which overestimates the distance to the surface by far
+    less than the shell is thick, and a Threshold field grows the size
+    linearly between cortical_distance and the depth where it reaches
+    max_size. They replaced a Python size callback querying a KDTree of the
+    vertices, which gmsh called millions of times: the real femur took 30 s
+    with it.
+    """
+    field = gmsh.model.mesh.field
+    distance = field.add("Distance")
+    field.setNumbers(distance, "SurfacesList", surfaces)
+    # Sampling 1 measures to the surface's nodes alone, which reproduces the callback's meshes exactly; gmsh's
+    # default, 20 points across each patch's parameters, gave the synthetic bone 10-40% more tetrahedra.
+    field.setNumber(distance, "Sampling", 1)
+    threshold = field.add("Threshold")
+    field.setNumber(threshold, "InField", distance)
+    field.setNumber(threshold, "SizeMin", cortical_element_size)
+    field.setNumber(threshold, "SizeMax", max_size)
+    field.setNumber(threshold, "DistMin", cortical_distance)
+    field.setNumber(threshold, "DistMax", cortical_distance + (max_size - cortical_element_size) / cancellous_grad)
+    field.setAsBackgroundMesh(threshold)
 
 
 def _mesh_surface(locator: vtkImplicitPolyDataDistance, element_size: float, quadrilaterals: bool, algorithm_2d: Algorithm2D) -> None:
