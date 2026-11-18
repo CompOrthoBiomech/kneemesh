@@ -182,6 +182,16 @@ def test_solo_shows_only_one_structure(app):
     assert app.state.solo is None
 
 
+def test_view_ratio_scales_the_rendering_and_its_pixel_sizes(app):
+    assert app.state.view_ratio == 1
+    font = app.scene.scalar_bar.GetLabelTextProperty().GetFontSize()
+    app.set_view_ratio(2.5)
+    assert app.state.view_ratio == 2.5
+    assert app.scene.scalar_bar.GetLabelTextProperty().GetFontSize() == round(font * 2.5)
+    with pytest.raises(ValueError, match="positive"):
+        app.set_view_ratio(0)
+
+
 def test_uploads_are_written_into_the_dialog_directory(app, tmp_path):
     app.add_label()
     app.dialog_open_directory(str(tmp_path))

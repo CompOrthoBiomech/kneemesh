@@ -68,6 +68,12 @@ _UNASSIGNED_COLOR = (0.6, 0.6, 0.6)
 _EDGE_COLOR = (0.15, 0.15, 0.15)
 _BONE_OPACITY = 0.6
 _NAN_COLOR = (0.5, 0.5, 0.5)
+# Sizes in pixels at a pixel ratio of 1.
+_SCALAR_BAR_WIDTH = 90
+_SCALAR_BAR_SEPARATION = 8
+_FONT_SIZE = 14
+_CURVE_WIDTH = 2.0
+_EDGE_WIDTH = 1.0
 
 # VTK's cell types of volume elements and of surface elements, first and second order, and those of second order.
 _VOLUME_CELLS = (10, 12, 24, 25, 29)
@@ -297,14 +303,25 @@ class Scene:
         self.scalar_bar.SetPosition(0.88, 0.1)
         self.scalar_bar.SetHeight(0.8)
         self.scalar_bar.UnconstrainedFontSizeOn()
-        self.scalar_bar.SetVerticalTitleSeparation(8)
         for text in (self.scalar_bar.GetTitleTextProperty(), self.scalar_bar.GetLabelTextProperty()):
-            text.SetFontSize(14)
             text.SetColor(1.0, 1.0, 1.0)
             text.ItalicOff()
             text.ShadowOff()
         self.scalar_bar.VisibilityOff()
         self.renderer.AddViewProp(self.scalar_bar)
+        self.pixel_ratio: float = 1.0
+        self.set_pixel_ratio(1.0)
+
+    def set_pixel_ratio(self, ratio: float) -> None:
+        """Scale what is sized in pixels, the scalar bar and line widths, for a view rendered at ratio times its size on screen.
+
+        Line widths apply to structures shown afterwards.
+        """
+        self.pixel_ratio = ratio
+        self.scalar_bar.SetMaximumWidthInPixels(round(_SCALAR_BAR_WIDTH * ratio))
+        self.scalar_bar.SetVerticalTitleSeparation(round(_SCALAR_BAR_SEPARATION * ratio))
+        for text in (self.scalar_bar.GetTitleTextProperty(), self.scalar_bar.GetLabelTextProperty()):
+            text.SetFontSize(round(_FONT_SIZE * ratio))
 
     def set_label(self, entry_id: int, surface: vtkPolyData | None) -> None:
         """Show an imported label's surface, or remove it with None."""
@@ -325,7 +342,7 @@ class Scene:
             actors[0].GetProperty().SetOpacity(_BONE_OPACITY)
         if len(actors) > 1:
             actors[1].GetProperty().SetColor(*_EDGE_COLOR)
-            actors[1].GetProperty().SetLineWidth(2)
+            actors[1].GetProperty().SetLineWidth(_CURVE_WIDTH * self.pixel_ratio)
         self._replace(self._stages, ("geometry", structure), _Item(actors, displays))
 
     def set_mesh(self, structure: Structure, grid: vtkUnstructuredGrid) -> None:
@@ -355,10 +372,12 @@ class Scene:
             edge_mapper.SetResolveCoincidentTopologyToPolygonOffset()
             edge_actor.SetMapper(edge_mapper)
             edge_actor.GetProperty().SetColor(*_EDGE_COLOR)
+            edge_actor.GetProperty().SetLineWidth(_EDGE_WIDTH * self.pixel_ratio)
             actors.append(edge_actor)
         else:
             surface.GetProperty().EdgeVisibilityOn()
             surface.GetProperty().SetEdgeColor(*_EDGE_COLOR)
+            surface.GetProperty().SetLineWidth(_EDGE_WIDTH * self.pixel_ratio)
         item = _MeshItem(actors, [volume, faces], elements=elements, faces=faces, edges=edges)
         item.show(faces=False)
         self._replace(self._stages, ("mesh", structure), item)
@@ -440,8 +459,17 @@ class Scene:
         self._color_meshes(shown_meshes, METRICS.get(metric) if metric is not None else None)
 
     def reset_camera(self) -> None:
-        """Fit the camera to the visible actors."""
-        self.renderer.ResetCamera()
+        """Fit the camera to what is shown, unclipped.
+
+        Fitting to the clipped cells instead would close in on them, and the
+        plane, which follows the camera, would then clip closer still.
+        """
+        items = [item for item in (*self._labels.values(), *self._stages.values()) if item.actors and item.actors[0].GetVisibility()]
+        bounds = _union_bounds(items)
+        if bounds is None:
+            self.renderer.ResetCamera()
+        else:
+            self.renderer.ResetCamera(*bounds)
 
     def _display(self, data: vtkDataSet, cell_types: Iterable[int] | None = None, normals: bool = True) -> _Display:
         display = _Display(data, self.plane, cell_types, normals)
@@ -490,13 +518,10 @@ class Scene:
 
     def _radius(self) -> float:
         """Half the diagonal of the bounding box of everything in the scene, unclipped."""
-        bounds = [item_display.data.GetBounds() for item in (*self._labels.values(), *self._stages.values()) for item_display in item.displays]
-        bounds = [box for box in bounds if box[0] <= box[1]]
-        if not bounds:
+        bounds = _union_bounds([*self._labels.values(), *self._stages.values()])
+        if bounds is None:
             return 1.0
-        boxes = np.array(bounds)
-        low, high = boxes[:, 0::2].min(axis=0), boxes[:, 1::2].max(axis=0)
-        return float(np.linalg.norm(high - low)) / 2
+        return float(np.linalg.norm(np.array(bounds[1::2]) - np.array(bounds[0::2]))) / 2
 
     def _replace[Key](self, items: dict[Key, _Item], key: Key, new: _Item | None) -> None:
         old = items.pop(key, None)
@@ -506,6 +531,16 @@ class Scene:
             for actor in new.actors:
                 self.renderer.AddActor(actor)
             items[key] = new
+
+
+def _union_bounds(items: Iterable[_Item]) -> tuple[float, ...] | None:
+    """The bounds (xmin, xmax, ymin, ymax, zmin, zmax) of the items' unclipped data together, or None if they hold none."""
+    boxes = [box for item in items for display in item.displays if (box := display.data.GetBounds())[0] <= box[1]]
+    if not boxes:
+        return None
+    array = np.array(boxes)
+    low, high = array[:, 0::2].min(axis=0), array[:, 1::2].max(axis=0)
+    return tuple(float(value) for pair in zip(low, high, strict=True) for value in pair)
 
 
 def _latest(scene: Scene, structure: Structure) -> Stage:

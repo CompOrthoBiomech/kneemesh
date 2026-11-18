@@ -10,8 +10,10 @@
 *.stl
 *.ply
 *.obj
+screencast/last.png
 # Other directories
 /dat/
+screencast/frames/
 # Python-generated files
 __pycache__/
 *.py[oc]

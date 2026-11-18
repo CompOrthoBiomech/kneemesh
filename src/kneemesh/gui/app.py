@@ -159,6 +159,7 @@ class KneemeshApp:
                 "busy_text": "",
                 "log_lines": [],
                 "show_log": True,
+                "view_ratio": 1.0,
                 "tree_open": ["labels", "structures"],
                 "snackbar": False,
                 "snackbar_text": "",
@@ -193,6 +194,13 @@ class KneemeshApp:
         self.server.trigger("kneemesh_download")(self.download_file)
         self.server.trigger("kneemesh_download_outputs")(self.download_outputs)
         self.server.cli.add_argument("--config", help="JSON configuration of kneemesh-brep, kneemesh-mesh, or kneemesh-assemble to import")
+        self.server.cli.add_argument(
+            "--view-ratio",
+            type=float,
+            default=1.0,
+            help="Render the 3D view at this many pixels per screen pixel, such as 2 for sharp images on a high-density display; "
+            + "server rendering costs grow with its square",
+        )
         self.ctrl.on_server_ready.add(self._on_ready)
         for name in (
             "add_label",
@@ -222,9 +230,21 @@ class KneemeshApp:
             setattr(self.ctrl, name, getattr(self, name))
 
     def _on_ready(self, **_: object) -> None:
-        config = self.server.cli.parse_known_args()[0].config
-        if config:
-            asynchronous.create_task(self._import_config(config))
+        args = self.server.cli.parse_known_args()[0]
+        self.set_view_ratio(args.view_ratio)
+        if args.config:
+            asynchronous.create_task(self._import_config(args.config))
+
+    def set_view_ratio(self, ratio: float) -> None:
+        """Render the 3D view at ratio pixels per screen pixel, scaling its fonts and lines to match.
+
+        Raises:
+            ValueError: If ratio is not positive.
+        """
+        if not ratio > 0:
+            raise ValueError(f"The view ratio must be positive, not {ratio}")
+        self.scene.set_pixel_ratio(ratio)
+        self.state.view_ratio = ratio
 
     # Layout
 
@@ -242,7 +262,7 @@ class KneemeshApp:
                     self._settings_panel()
             with layout.content, html.Div(style="display: flex; flex-direction: column; height: 100%;"):
                 with html.Div(style="flex: 1 1 0; min-height: 0; position: relative;"):
-                    view = vtk_widgets.VtkRemoteView(self.scene.render_window, interactive_ratio=1)
+                    view = vtk_widgets.VtkRemoteView(self.scene.render_window, interactive_ratio=("view_ratio",), still_ratio=("view_ratio",))
                     self.ctrl.view_update = view.update
                     self.ctrl.view_reset_camera = view.reset_camera
                 self._log_panel()

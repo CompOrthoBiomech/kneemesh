@@ -7,7 +7,10 @@ pip install "kneemesh[gui]"
 kneemesh-gui                                   # opens a browser tab
 kneemesh-gui --server --port 8080              # serves without opening one
 kneemesh-gui --config examples/knee_brep_hex.json   # starts from a configuration
+kneemesh-gui --view-ratio 2                    # renders the 3D view at twice the screen's pixels
 ```
+
+The 3D view is rendered on the server at the size it takes on screen in CSS pixels, so on a high-density display it looks soft. `--view-ratio` renders it at that many pixels per CSS pixel, with its scalar bar and lines scaled to match. Rendering cost grows with the ratio's square. A ratio of 2.4 showed no image in testing, though 1.5, 2, and 3 work.
 
 The server runs the pipeline on its own machine, and the file dialogs browse that machine's files, so paths in exported configurations are paths there. Relative paths are relative to the directory the GUI was started in, as for the command-line pipelines. When the server runs elsewhere, the file dialog's **Upload to this directory** copies files from your computer into the directory it shows, such as a `.mhd` with its `.raw`, selecting the one to open; its **Download** button saves the selected file to your computer, and the toolbar's download button saves every file the session has written, geometry, meshes, and exported configurations, as one zip. Anyone who can reach the server can read and write the files its user can, so serve it only where that is acceptable.
 

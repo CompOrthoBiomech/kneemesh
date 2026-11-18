@@ -1,6 +1,7 @@
 from dataclasses import replace
 
 import numpy as np
+import pytest
 from vtkmodules.vtkFiltersGeometry import vtkUnstructuredGridGeometryFilter
 
 from kneemesh.disk import write_mesh
@@ -118,6 +119,24 @@ def test_crinkle_clip_keeps_whole_cells_beyond_the_plane(tmp_path):
     assert _cells(actor) == 6 * 4 + 2
     scene.set_clipping(False)
     assert _cells(actor) == 6 * 4 + 2
+
+
+def test_reset_camera_fits_what_is_shown_unclipped(tmp_path):
+    scene = Scene()
+    scene.set_mesh("lateral_meniscus", _cube_mesh(tmp_path / "a.vtu", columns=6))
+    camera = scene.renderer.GetActiveCamera()
+    camera.SetFocalPoint(3.0, 0.5, 0.5)
+    camera.SetPosition(10.0, 0.5, 0.5)
+    scene.reset_camera()
+    unclipped = (camera.GetFocalPoint(), camera.GetDistance())
+
+    # Fitting the clipped cells would close in on the half left; the plane follows the camera, so each render would clip closer.
+    scene.set_clipping(True, offset=0.5)
+    scene.render_window.Render()
+    scene.reset_camera()
+    scene.render_window.Render()
+    assert np.allclose(camera.GetFocalPoint(), unclipped[0])
+    assert camera.GetDistance() == pytest.approx(unclipped[1])
 
 
 def test_nonlinear_meshes_draw_curved_edges_without_the_subdivision(tmp_path):
