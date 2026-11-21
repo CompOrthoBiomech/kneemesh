@@ -1,0 +1,975 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../../../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../../genindex.html"><link rel="search" title="Search" href="../../../search.html">
+
+    <!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
+        <title>kneemesh.geo.sheet - kneemesh</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/autodoc_pydantic.css" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../../../index.html"><div class="brand">kneemesh</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon no-toc" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../../../index.html">
+  
+  <span class="sidebar-brand-text">kneemesh</span>
+  
+</a><form class="sidebar-search-container" method="get" action="../../../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../usage.html">Usage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../gui.html">GUI</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../pipeline.html">Pipeline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../configuration.html">Configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api.html">API reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../validation.html">Validation</a></li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon no-toc" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <h1>Source code for kneemesh.geo.sheet</h1><div class="highlight"><pre>
+<span></span><span class="sd">"""B-rep generation for cartilage sheets, the lateral and medial tibial and the patellar cartilage.</span>
+
+<span class="sd">Each sheet is a pair of height fields over a two-dimensional domain: its</span>
+<span class="sd">articular side above and the side against its bone below, within one smooth</span>
+<span class="sd">perimeter in that domain. A frame maps domain points and heights to physical</span>
+<span class="sd">points. For these cartilages it is the plane normal to the sheet's thinnest</span>
+<span class="sd">principal direction; the femoral cartilage uses the same machinery over a</span>
+<span class="sd">cylinder (geo.femur). Straight walls join the two sides at the perimeter,</span>
+<span class="sd">tilted out of the height lines so they meet both sides closer to right angles.</span>
+<span class="sd">"""</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">ABC</span><span class="p">,</span> <span class="n">abstractmethod</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">collections.abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">Sequence</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">itertools</span><span class="w"> </span><span class="kn">import</span> <span class="n">pairwise</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">override</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">gmsh</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">SimpleITK</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sitk</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">loguru</span><span class="w"> </span><span class="kn">import</span> <span class="n">logger</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">scipy.interpolate</span><span class="w"> </span><span class="kn">import</span> <span class="n">RectBivariateSpline</span><span class="p">,</span> <span class="n">griddata</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">scipy.ndimage</span><span class="w"> </span><span class="kn">import</span> <span class="n">gaussian_filter</span><span class="p">,</span> <span class="n">gaussian_filter1d</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">scipy.spatial</span><span class="w"> </span><span class="kn">import</span> <span class="n">KDTree</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">vtkmodules.util.numpy_support</span><span class="w"> </span><span class="kn">import</span> <span class="n">numpy_to_vtk</span><span class="p">,</span> <span class="n">vtk_to_numpy</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">vtkmodules.vtkCommonDataModel</span><span class="w"> </span><span class="kn">import</span> <span class="n">vtkImageData</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">vtkmodules.vtkFiltersCore</span><span class="w"> </span><span class="kn">import</span> <span class="n">vtkFlyingEdges2D</span><span class="p">,</span> <span class="n">vtkStripper</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">kneemesh.brep</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">BRep</span><span class="p">,</span>
+    <span class="n">add_closed_wire</span><span class="p">,</span>
+    <span class="n">export_brep</span><span class="p">,</span>
+    <span class="n">gmsh_session</span><span class="p">,</span>
+    <span class="n">periodic_spline</span><span class="p">,</span>
+    <span class="n">resample_closed</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">kneemesh.cartilage</span><span class="w"> </span><span class="kn">import</span> <span class="n">CartilageSides</span>
+
+<span class="n">DEFAULT_PERIMETER_RADIUS_HEXAHEDRAL</span> <span class="o">=</span> <span class="mf">3.0</span>
+<span class="sd">"""Default smallest radius of curvature, in physical units, of the perimeter of a sheet built for hexahedra."""</span>
+
+<span class="n">DEFAULT_PERIMETER_RADIUS_TETRAHEDRAL</span> <span class="o">=</span> <span class="mf">1.0</span>
+<span class="sd">"""Default smallest radius of curvature, in physical units, of the perimeter and hole outlines of a sheet built for tetrahedra."""</span>
+
+<span class="n">DEFAULT_MIN_THICKNESS_HEXAHEDRAL</span> <span class="o">=</span> <span class="mf">0.2</span>
+<span class="sd">"""Default minimum thickness of a sheet built for hexahedra, as a fraction of its mean thickness."""</span>
+
+<span class="n">DEFAULT_MIN_THICKNESS_TETRAHEDRAL</span> <span class="o">=</span> <span class="mf">0.1</span>
+<span class="sd">"""Default minimum thickness of a sheet built for tetrahedra, as a fraction of its mean thickness."""</span>
+
+<span class="n">DEFAULT_HOLE_THICKNESS</span> <span class="o">=</span> <span class="mf">0.05</span>
+<span class="sd">"""Default thickness, as a fraction of the mean, below which a sheet built for tetrahedra gets a hole."""</span>
+
+<span class="c1"># Neighboring points that estimate a surface normal when fitting a CylinderFrame.</span>
+<span class="n">_NORMAL_NEIGHBORS</span> <span class="o">=</span> <span class="mi">16</span>
+<span class="c1"># Points around the perimeter and hole outlines.</span>
+<span class="n">_OUTLINE_POINTS</span> <span class="o">=</span> <span class="mi">400</span>
+<span class="c1"># Gaps between surface points closed when finding each side's footprint, in median point spacings.</span>
+<span class="n">_FOOTPRINT_CLOSING_SPACINGS</span> <span class="o">=</span> <span class="mf">4.0</span>
+<span class="c1"># Height grid pixels per median surface point spacing.</span>
+<span class="n">_PIXELS_PER_SPACING</span> <span class="o">=</span> <span class="mf">2.0</span>
+<span class="c1"># Gaussian sigma smoothing the rounded outlines' waviness, as a fraction of perimeter_radius.</span>
+<span class="n">_OUTLINE_SMOOTHING</span> <span class="o">=</span> <span class="mf">0.5</span>
+<span class="c1"># Gaussian sigma, in pixels, smoothing the height grids' linear interpolation.</span>
+<span class="n">_HEIGHT_SMOOTHING_PIXELS</span> <span class="o">=</span> <span class="mf">2.0</span>
+<span class="c1"># Width of the smooth maximum that thickens thin regions, as a fraction of the minimum thickness.</span>
+<span class="n">_THICKENING_BLEND</span> <span class="o">=</span> <span class="mf">0.5</span>
+<span class="n">_SPLINE_ORDER</span> <span class="o">=</span> <span class="mi">3</span>
+<span class="c1"># Spacing, in physical units, of the domain grid each side's surface interpolates, and the grid's margin beyond the perimeter in spacings.</span>
+<span class="n">_SURFACE_SPACING</span> <span class="o">=</span> <span class="mf">0.5</span>
+<span class="n">_SURFACE_MARGIN</span> <span class="o">=</span> <span class="mi">3</span>
+<span class="c1"># Largest wall tilt, as a fraction of the local thickness and of perimeter_radius, and the tilt's smoothing along the perimeter, as a fraction of perimeter_radius.</span>
+<span class="n">_MAX_WALL_TILT</span> <span class="o">=</span> <span class="mf">0.25</span>
+<span class="n">_MAX_TILT_REACH</span> <span class="o">=</span> <span class="mf">0.25</span>
+<span class="n">_TILT_SMOOTHING</span> <span class="o">=</span> <span class="mf">0.5</span>
+
+
+<div class="viewcode-block" id="SheetFrame">
+<a class="viewcode-back" href="../../../api.html#kneemesh.geo.sheet.SheetFrame">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">SheetFrame</span><span class="p">(</span><span class="n">ABC</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Coordinates of a sheet: domain points (s, t) and a height along each domain point's straight line.</span>
+
+<span class="sd">    Domain lengths approximate physical lengths, and heights grow from the</span>
+<span class="sd">    bone toward the articular side. Turning from s toward t is counterclockwise</span>
+<span class="sd">    seen from the articular side.</span>
+<span class="sd">    """</span>
+
+<div class="viewcode-block" id="SheetFrame.local">
+<a class="viewcode-back" href="../../../api.html#kneemesh.geo.sheet.SheetFrame.local">[docs]</a>
+    <span class="nd">@abstractmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">local</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">points</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">"""Return the (N, 2) domain points and (N,) heights of (N, 3) physical points."""</span></div>
+
+
+<div class="viewcode-block" id="SheetFrame.physical">
+<a class="viewcode-back" href="../../../api.html#kneemesh.geo.sheet.SheetFrame.physical">[docs]</a>
+    <span class="nd">@abstractmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">physical</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">domain_points</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">heights</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Return the (N, 3) physical points at (N, 2) domain points and (N,) heights."""</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="PlaneFrame">
+<a class="viewcode-back" href="../../../api.html#kneemesh.geo.sheet.PlaneFrame">[docs]</a>
+<span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">eq</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">PlaneFrame</span><span class="p">(</span><span class="n">SheetFrame</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""A plane: domain point (s, t) and height z give origin + s * axes[0] + t * axes[1] + z * axes[2].</span>
+
+<span class="sd">    Attributes:</span>
+<span class="sd">        origin: Physical origin of the plane.</span>
+<span class="sd">        axes: (3, 3) right-handed orthonormal rows: the plane's s and t axes,</span>
+<span class="sd">            and its normal, which points from the bone toward the articular side.</span>
+<span class="sd">    """</span>
+
+    <span class="n">origin</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
+    <span class="n">axes</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
+
+<div class="viewcode-block" id="PlaneFrame.fit">
+<a class="viewcode-back" href="../../../api.html#kneemesh.geo.sheet.PlaneFrame.fit">[docs]</a>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">fit</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">sides</span><span class="p">:</span> <span class="n">CartilageSides</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">"PlaneFrame"</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Return the plane through the sides' points normal to their thinnest principal direction, s along the longest."""</span>
+        <span class="n">points</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">vstack</span><span class="p">((</span><span class="n">sides</span><span class="o">.</span><span class="n">articular</span><span class="p">,</span> <span class="n">sides</span><span class="o">.</span><span class="n">bone</span><span class="p">))</span>
+        <span class="n">origin</span> <span class="o">=</span> <span class="n">points</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+        <span class="n">eigenvectors</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">eigh</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">cov</span><span class="p">((</span><span class="n">points</span> <span class="o">-</span> <span class="n">origin</span><span class="p">)</span><span class="o">.</span><span class="n">T</span><span class="p">))[</span><span class="mi">1</span><span class="p">]</span>
+        <span class="n">normal</span> <span class="o">=</span> <span class="n">eigenvectors</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">sides</span><span class="o">.</span><span class="n">articular</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span> <span class="o">-</span> <span class="n">sides</span><span class="o">.</span><span class="n">bone</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">))</span> <span class="o">@</span> <span class="n">normal</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">normal</span> <span class="o">=</span> <span class="o">-</span><span class="n">normal</span>
+        <span class="n">s_axis</span> <span class="o">=</span> <span class="n">eigenvectors</span><span class="p">[:,</span> <span class="mi">2</span><span class="p">]</span>
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span><span class="n">origin</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">s_axis</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">cross</span><span class="p">(</span><span class="n">normal</span><span class="p">,</span> <span class="n">s_axis</span><span class="p">),</span> <span class="n">normal</span><span class="p">]))</span></div>
+
+
+<div class="viewcode-block" id="PlaneFrame.local">
+<a class="viewcode-back" href="../../../api.html#kneemesh.geo.sheet.PlaneFrame.local">[docs]</a>
+    <span class="nd">@override</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">local</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">points</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]:</span>
+        <span class="n">local</span> <span class="o">=</span> <span class="p">(</span><span class="n">points</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">origin</span><span class="p">)</span> <span class="o">@</span> <span class="bp">self</span><span class="o">.</span><span class="n">axes</span><span class="o">.</span><span class="n">T</span>
+        <span class="k">return</span> <span class="n">local</span><span class="p">[:,</span> <span class="p">:</span><span class="mi">2</span><span class="p">],</span> <span class="n">local</span><span class="p">[:,</span> <span class="mi">2</span><span class="p">]</span></div>
+
+
+<div class="viewcode-block" id="PlaneFrame.physical">
+<a class="viewcode-back" href="../../../api.html#kneemesh.geo.sheet.PlaneFrame.physical">[docs]</a>
+    <span class="nd">@override</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">physical</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">domain_points</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">heights</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">origin</span> <span class="o">+</span> <span class="n">domain_points</span> <span class="o">@</span> <span class="bp">self</span><span class="o">.</span><span class="n">axes</span><span class="p">[:</span><span class="mi">2</span><span class="p">]</span> <span class="o">+</span> <span class="n">np</span><span class="o">.</span><span class="n">outer</span><span class="p">(</span><span class="n">heights</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">axes</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="CylinderFrame">
+<a class="viewcode-back" href="../../../api.html#kneemesh.geo.sheet.CylinderFrame">[docs]</a>
+<span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">eq</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">CylinderFrame</span><span class="p">(</span><span class="n">SheetFrame</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""A cylinder unrolled: s runs along its axis, t is arc length at a reference radius around it, and heights are distances from the axis.</span>
+
+<span class="sd">    The physical point at (s, t) and height r is center + s * axes[0] +</span>
+<span class="sd">    r * (cos(theta) * axes[1] + sin(theta) * axes[2]), with theta = -t / radius.</span>
+<span class="sd">    Heights lines are rays from the axis, so the frame suits a sheet that</span>
+<span class="sd">    wraps around a convex bone, as the femoral cartilage wraps the condyles.</span>
+
+<span class="sd">    Attributes:</span>
+<span class="sd">        center: Physical point on the axis at s = 0.</span>
+<span class="sd">        axes: (3, 3) right-handed orthonormal rows: the axis, the direction</span>
+<span class="sd">            from it of t = 0, and their cross product.</span>
+<span class="sd">        radius: Reference radius that turns angles into arc lengths.</span>
+<span class="sd">    """</span>
+
+    <span class="n">center</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
+    <span class="n">axes</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
+    <span class="n">radius</span><span class="p">:</span> <span class="nb">float</span>
+
+<div class="viewcode-block" id="CylinderFrame.fit">
+<a class="viewcode-back" href="../../../api.html#kneemesh.geo.sheet.CylinderFrame.fit">[docs]</a>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">fit</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">sides</span><span class="p">:</span> <span class="n">CartilageSides</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">"CylinderFrame"</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Return the cylinder the bone side's points wrap, with t = 0 in the middle of the arc they span.</span>
+
+<span class="sd">        The axis is the direction the bone side's surface normals, estimated</span>
+<span class="sd">        from neighboring points, vary least along, as they all would be</span>
+<span class="sd">        normal to the axis on a cylinder. Its position is the center of the</span>
+<span class="sd">        circle fitted to the bone side projected along it, and the reference</span>
+<span class="sd">        radius the mean distance of both sides' points from it.</span>
+
+<span class="sd">        Raises:</span>
+<span class="sd">            ValueError: If the sides wrap all the way around, leaving no gap of at least 30 degrees.</span>
+<span class="sd">        """</span>
+        <span class="n">bone</span> <span class="o">=</span> <span class="n">sides</span><span class="o">.</span><span class="n">bone</span>
+        <span class="n">_</span><span class="p">,</span> <span class="n">neighbors</span> <span class="o">=</span> <span class="n">KDTree</span><span class="p">(</span><span class="n">bone</span><span class="p">)</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">bone</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="n">_NORMAL_NEIGHBORS</span><span class="p">)</span>
+        <span class="n">offsets</span> <span class="o">=</span> <span class="n">bone</span><span class="p">[</span><span class="n">neighbors</span><span class="p">]</span> <span class="o">-</span> <span class="n">bone</span><span class="p">[</span><span class="n">neighbors</span><span class="p">]</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">keepdims</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">normals</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">eigh</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">einsum</span><span class="p">(</span><span class="s2">"nki,nkj-&gt;nij"</span><span class="p">,</span> <span class="n">offsets</span><span class="p">,</span> <span class="n">offsets</span><span class="p">))[</span><span class="mi">1</span><span class="p">][:,</span> <span class="p">:,</span> <span class="mi">0</span><span class="p">]</span>
+        <span class="n">axis</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">eigh</span><span class="p">(</span><span class="n">normals</span><span class="o">.</span><span class="n">T</span> <span class="o">@</span> <span class="n">normals</span><span class="p">)[</span><span class="mi">1</span><span class="p">][:,</span> <span class="mi">0</span><span class="p">]</span>
+        <span class="n">axis</span> <span class="o">=</span> <span class="n">axis</span> <span class="k">if</span> <span class="n">axis</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">argmax</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">axis</span><span class="p">))]</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="o">-</span><span class="n">axis</span>
+        <span class="n">first</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">cross</span><span class="p">(</span><span class="n">axis</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">eye</span><span class="p">(</span><span class="mi">3</span><span class="p">)[</span><span class="n">np</span><span class="o">.</span><span class="n">argmin</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">axis</span><span class="p">))])</span>
+        <span class="n">first</span> <span class="o">/=</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">first</span><span class="p">)</span>
+        <span class="n">second</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">cross</span><span class="p">(</span><span class="n">axis</span><span class="p">,</span> <span class="n">first</span><span class="p">)</span>
+
+        <span class="n">points</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">vstack</span><span class="p">((</span><span class="n">sides</span><span class="o">.</span><span class="n">articular</span><span class="p">,</span> <span class="n">bone</span><span class="p">))</span>
+        <span class="n">origin</span> <span class="o">=</span> <span class="n">points</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+        <span class="n">x</span><span class="p">,</span> <span class="n">y</span> <span class="o">=</span> <span class="p">(</span><span class="n">bone</span> <span class="o">-</span> <span class="n">origin</span><span class="p">)</span> <span class="o">@</span> <span class="n">first</span><span class="p">,</span> <span class="p">(</span><span class="n">bone</span> <span class="o">-</span> <span class="n">origin</span><span class="p">)</span> <span class="o">@</span> <span class="n">second</span>
+        <span class="n">circle</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">lstsq</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">column_stack</span><span class="p">((</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ones_like</span><span class="p">(</span><span class="n">x</span><span class="p">))),</span> <span class="n">x</span><span class="o">**</span><span class="mi">2</span> <span class="o">+</span> <span class="n">y</span><span class="o">**</span><span class="mi">2</span><span class="p">,</span> <span class="n">rcond</span><span class="o">=</span><span class="kc">None</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">center</span> <span class="o">=</span> <span class="n">origin</span> <span class="o">+</span> <span class="mf">0.5</span> <span class="o">*</span> <span class="n">circle</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="n">first</span> <span class="o">+</span> <span class="mf">0.5</span> <span class="o">*</span> <span class="n">circle</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="n">second</span>
+
+        <span class="n">offsets</span> <span class="o">=</span> <span class="n">points</span> <span class="o">-</span> <span class="n">center</span>
+        <span class="n">angles</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sort</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arctan2</span><span class="p">(</span><span class="n">offsets</span> <span class="o">@</span> <span class="n">second</span><span class="p">,</span> <span class="n">offsets</span> <span class="o">@</span> <span class="n">first</span><span class="p">))</span>
+        <span class="n">gaps</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">((</span><span class="n">angles</span><span class="p">,</span> <span class="p">[</span><span class="n">angles</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="p">])))</span>
+        <span class="n">widest</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">argmax</span><span class="p">(</span><span class="n">gaps</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">gaps</span><span class="p">[</span><span class="n">widest</span><span class="p">]</span> <span class="o">&lt;</span> <span class="n">np</span><span class="o">.</span><span class="n">radians</span><span class="p">(</span><span class="mf">30.0</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"The cartilage wraps </span><span class="si">{</span><span class="n">np</span><span class="o">.</span><span class="n">degrees</span><span class="p">(</span><span class="mi">2</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">gaps</span><span class="p">[</span><span class="n">widest</span><span class="p">])</span><span class="si">:</span><span class="s2">.0f</span><span class="si">}</span><span class="s2"> degrees around its axis, too far to unroll"</span><span class="p">)</span>
+        <span class="n">middle</span> <span class="o">=</span> <span class="n">angles</span><span class="p">[</span><span class="n">widest</span><span class="p">]</span> <span class="o">+</span> <span class="mf">0.5</span> <span class="o">*</span> <span class="n">gaps</span><span class="p">[</span><span class="n">widest</span><span class="p">]</span> <span class="o">+</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span>
+        <span class="n">start</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">middle</span><span class="p">)</span> <span class="o">*</span> <span class="n">first</span> <span class="o">+</span> <span class="n">np</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">middle</span><span class="p">)</span> <span class="o">*</span> <span class="n">second</span>
+        <span class="n">radial</span> <span class="o">=</span> <span class="n">offsets</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">outer</span><span class="p">(</span><span class="n">offsets</span> <span class="o">@</span> <span class="n">axis</span><span class="p">,</span> <span class="n">axis</span><span class="p">)</span>
+        <span class="n">frame</span> <span class="o">=</span> <span class="bp">cls</span><span class="p">(</span><span class="n">center</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">axis</span><span class="p">,</span> <span class="n">start</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">cross</span><span class="p">(</span><span class="n">axis</span><span class="p">,</span> <span class="n">start</span><span class="p">)]),</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">radial</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">mean</span><span class="p">()))</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+            <span class="s2">"Fitted a cylinder of radius </span><span class="si">{:.4g}</span><span class="s2"> along </span><span class="si">{}</span><span class="s2">; the sides span </span><span class="si">{:.0f}</span><span class="s2"> degrees around it"</span><span class="p">,</span>
+            <span class="n">frame</span><span class="o">.</span><span class="n">radius</span><span class="p">,</span>
+            <span class="n">np</span><span class="o">.</span><span class="n">round</span><span class="p">(</span><span class="n">axis</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span><span class="o">.</span><span class="n">tolist</span><span class="p">(),</span>
+            <span class="n">np</span><span class="o">.</span><span class="n">degrees</span><span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span> <span class="o">-</span> <span class="n">gaps</span><span class="p">[</span><span class="n">widest</span><span class="p">]),</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="n">frame</span></div>
+
+
+<div class="viewcode-block" id="CylinderFrame.local">
+<a class="viewcode-back" href="../../../api.html#kneemesh.geo.sheet.CylinderFrame.local">[docs]</a>
+    <span class="nd">@override</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">local</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">points</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]:</span>
+        <span class="n">local</span> <span class="o">=</span> <span class="p">(</span><span class="n">points</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">center</span><span class="p">)</span> <span class="o">@</span> <span class="bp">self</span><span class="o">.</span><span class="n">axes</span><span class="o">.</span><span class="n">T</span>
+        <span class="n">theta</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arctan2</span><span class="p">(</span><span class="n">local</span><span class="p">[:,</span> <span class="mi">2</span><span class="p">],</span> <span class="n">local</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">])</span>
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">column_stack</span><span class="p">((</span><span class="n">local</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">],</span> <span class="o">-</span><span class="bp">self</span><span class="o">.</span><span class="n">radius</span> <span class="o">*</span> <span class="n">theta</span><span class="p">)),</span> <span class="n">np</span><span class="o">.</span><span class="n">hypot</span><span class="p">(</span><span class="n">local</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">],</span> <span class="n">local</span><span class="p">[:,</span> <span class="mi">2</span><span class="p">])</span></div>
+
+
+<div class="viewcode-block" id="CylinderFrame.physical">
+<a class="viewcode-back" href="../../../api.html#kneemesh.geo.sheet.CylinderFrame.physical">[docs]</a>
+    <span class="nd">@override</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">physical</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">domain_points</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">heights</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+        <span class="n">theta</span> <span class="o">=</span> <span class="o">-</span><span class="n">domain_points</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">radius</span>
+        <span class="n">directions</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">outer</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">theta</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">axes</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span> <span class="o">+</span> <span class="n">np</span><span class="o">.</span><span class="n">outer</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">theta</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">axes</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">center</span> <span class="o">+</span> <span class="n">np</span><span class="o">.</span><span class="n">outer</span><span class="p">(</span><span class="n">domain_points</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">+</span> <span class="n">heights</span><span class="p">[:,</span> <span class="n">np</span><span class="o">.</span><span class="n">newaxis</span><span class="p">]</span> <span class="o">*</span> <span class="n">directions</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="CartilageSheet">
+<a class="viewcode-back" href="../../../api.html#kneemesh.geo.sheet.CartilageSheet">[docs]</a>
+<span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">eq</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">CartilageSheet</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""A cartilage sheet as heights of its two sides over a domain, within a perimeter.</span>
+
+<span class="sd">    Attributes:</span>
+<span class="sd">        frame: Maps domain points and heights to physical points.</span>
+<span class="sd">        perimeter: (N, 2) domain points around the sheet, counterclockwise,</span>
+<span class="sd">            without the first repeated.</span>
+<span class="sd">        holes: (M, 2) domain points around each hole, counterclockwise.</span>
+<span class="sd">        articular: Height of the articular side over the domain.</span>
+<span class="sd">        bone: Height of the side against the bone, already lowered where the</span>
+<span class="sd">            sheet was thinner than its minimum thickness.</span>
+<span class="sd">        mean_thickness: Mean thickness along the height lines within the</span>
+<span class="sd">            perimeter, before thickening.</span>
+<span class="sd">        min_thickness: The thickness thin regions were raised to.</span>
+<span class="sd">        tilt: How far outward the wall's articular edge lies from its bone</span>
+<span class="sd">            edge in the domain at each perimeter point. Each side's domain</span>
+<span class="sd">            points move half of it along the perimeter's outward normal,</span>
+<span class="sd">            the articular side outward and the bone side inward, fading</span>
+<span class="sd">            out at tilt_reach inside the perimeter.</span>
+<span class="sd">        tilt_reach: How far inside the perimeter the tilt fades out.</span>
+<span class="sd">    """</span>
+
+    <span class="n">frame</span><span class="p">:</span> <span class="n">SheetFrame</span>
+    <span class="n">perimeter</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
+    <span class="n">holes</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]</span>
+    <span class="n">articular</span><span class="p">:</span> <span class="n">RectBivariateSpline</span>
+    <span class="n">bone</span><span class="p">:</span> <span class="n">RectBivariateSpline</span>
+    <span class="n">mean_thickness</span><span class="p">:</span> <span class="nb">float</span>
+    <span class="n">min_thickness</span><span class="p">:</span> <span class="nb">float</span>
+    <span class="n">tilt</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
+    <span class="n">tilt_reach</span><span class="p">:</span> <span class="nb">float</span>
+
+<div class="viewcode-block" id="CartilageSheet.points">
+<a class="viewcode-back" href="../../../api.html#kneemesh.geo.sheet.CartilageSheet.points">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">points</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">domain_points</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">side</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Return the physical points on a side, "articular" or "bone", over (..., 2) domain points, moved by half the tilt near the perimeter."""</span>
+        <span class="n">heights</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">articular</span> <span class="k">if</span> <span class="n">side</span> <span class="o">==</span> <span class="s2">"articular"</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">bone</span>
+        <span class="n">flat</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">tilted</span><span class="p">(</span><span class="n">domain_points</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span> <span class="n">side</span><span class="p">)</span>
+        <span class="n">physical</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">frame</span><span class="o">.</span><span class="n">physical</span><span class="p">(</span><span class="n">flat</span><span class="p">,</span> <span class="n">heights</span><span class="o">.</span><span class="n">ev</span><span class="p">(</span><span class="n">flat</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">flat</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">]))</span>
+        <span class="k">return</span> <span class="n">physical</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">*</span><span class="n">domain_points</span><span class="o">.</span><span class="n">shape</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="mi">3</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="CartilageSheet.tilted">
+<a class="viewcode-back" href="../../../api.html#kneemesh.geo.sheet.CartilageSheet.tilted">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">tilted</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">domain_points</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">side</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Return (N, 2) domain points of a side, moved along the perimeter's outward normal by half the tilt, out for the articular side and in for the bone side.</span>
+
+<span class="sd">        The move fades as the square of the distance from the perimeter, out</span>
+<span class="sd">        to tilt_reach inside it, at the nearest point of the perimeter.</span>
+<span class="sd">        Outside, the same square of the signed distance continues to grow, up</span>
+<span class="sd">        to four times the tilt at tilt_reach, so a side's surface, which</span>
+<span class="sd">        reaches past the perimeter to be trimmed, has no crease along it.</span>
+<span class="sd">        """</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">tilt</span><span class="o">.</span><span class="n">any</span><span class="p">():</span>
+            <span class="k">return</span> <span class="n">domain_points</span>
+        <span class="n">distance</span><span class="p">,</span> <span class="n">segment</span><span class="p">,</span> <span class="n">fraction</span> <span class="o">=</span> <span class="n">_nearest_on_loop</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">perimeter</span><span class="p">,</span> <span class="n">domain_points</span><span class="p">)</span>
+        <span class="n">following</span> <span class="o">=</span> <span class="p">(</span><span class="n">segment</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">perimeter</span><span class="p">)</span>
+        <span class="n">tilt</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">fraction</span><span class="p">)</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">tilt</span><span class="p">[</span><span class="n">segment</span><span class="p">]</span> <span class="o">+</span> <span class="n">fraction</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">tilt</span><span class="p">[</span><span class="n">following</span><span class="p">]</span>
+        <span class="n">normals</span> <span class="o">=</span> <span class="n">_outward_normals</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">perimeter</span><span class="p">)</span>
+        <span class="n">normal</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">fraction</span><span class="p">)[:,</span> <span class="n">np</span><span class="o">.</span><span class="n">newaxis</span><span class="p">]</span> <span class="o">*</span> <span class="n">normals</span><span class="p">[</span><span class="n">segment</span><span class="p">]</span> <span class="o">+</span> <span class="n">fraction</span><span class="p">[:,</span> <span class="n">np</span><span class="o">.</span><span class="n">newaxis</span><span class="p">]</span> <span class="o">*</span> <span class="n">normals</span><span class="p">[</span><span class="n">following</span><span class="p">]</span>
+        <span class="n">normal</span> <span class="o">/=</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">normal</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">keepdims</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">nearest</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">fraction</span><span class="p">)[:,</span> <span class="n">np</span><span class="o">.</span><span class="n">newaxis</span><span class="p">]</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">perimeter</span><span class="p">[</span><span class="n">segment</span><span class="p">]</span> <span class="o">+</span> <span class="n">fraction</span><span class="p">[:,</span> <span class="n">np</span><span class="o">.</span><span class="n">newaxis</span><span class="p">]</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">perimeter</span><span class="p">[</span><span class="n">following</span><span class="p">]</span>
+        <span class="n">inside</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">einsum</span><span class="p">(</span><span class="s2">"ij,ij-&gt;i"</span><span class="p">,</span> <span class="n">domain_points</span> <span class="o">-</span> <span class="n">nearest</span><span class="p">,</span> <span class="n">normal</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="mi">0</span>
+        <span class="n">weight</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">clip</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">inside</span><span class="p">,</span> <span class="n">distance</span><span class="p">,</span> <span class="o">-</span><span class="n">distance</span><span class="p">)</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">tilt_reach</span><span class="p">,</span> <span class="o">-</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">))</span> <span class="o">**</span> <span class="mi">2</span>
+        <span class="n">sign</span> <span class="o">=</span> <span class="mf">0.5</span> <span class="k">if</span> <span class="n">side</span> <span class="o">==</span> <span class="s2">"articular"</span> <span class="k">else</span> <span class="o">-</span><span class="mf">0.5</span>
+        <span class="k">return</span> <span class="n">domain_points</span> <span class="o">+</span> <span class="p">(</span><span class="n">sign</span> <span class="o">*</span> <span class="n">weight</span> <span class="o">*</span> <span class="n">tilt</span><span class="p">)[:,</span> <span class="n">np</span><span class="o">.</span><span class="n">newaxis</span><span class="p">]</span> <span class="o">*</span> <span class="n">normal</span></div>
+
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">area</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""The domain area inside the perimeter, less the holes."""</span>
+        <span class="k">return</span> <span class="n">_signed_area</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">perimeter</span><span class="p">)</span> <span class="o">-</span> <span class="nb">sum</span><span class="p">(</span><span class="n">_signed_area</span><span class="p">(</span><span class="n">hole</span><span class="p">)</span> <span class="k">for</span> <span class="n">hole</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">holes</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="fit_sheet">
+<a class="viewcode-back" href="../../../api.html#kneemesh.geo.sheet.fit_sheet">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">fit_sheet</span><span class="p">(</span>
+    <span class="n">sides</span><span class="p">:</span> <span class="n">CartilageSides</span><span class="p">,</span>
+    <span class="n">perimeter_radius</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">DEFAULT_PERIMETER_RADIUS_HEXAHEDRAL</span><span class="p">,</span>
+    <span class="n">perimeter_inset</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span>
+    <span class="n">min_thickness</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">DEFAULT_MIN_THICKNESS_HEXAHEDRAL</span><span class="p">,</span>
+    <span class="n">hole_thickness</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span>
+    <span class="n">frame</span><span class="p">:</span> <span class="n">SheetFrame</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">CartilageSheet</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Fit a cartilage sheet to the two sides of a cartilage surface.</span>
+
+<span class="sd">    By default the domain is the plane normal to the thinnest principal</span>
+<span class="sd">    direction of the side points. Each side's footprint is where its points</span>
+<span class="sd">    project onto the domain,</span>
+<span class="sd">    with gaps of a few point spacings closed, and the sheet covers where both</span>
+<span class="sd">    footprints overlap, so the steep perimeter between the sides is cut off.</span>
+<span class="sd">    The overlap is moved perimeter_inset inward and rounded by rolling a disk</span>
+<span class="sd">    of radius perimeter_radius around it, inside and out: a morphological</span>
+<span class="sd">    closing then opening, from exact distance maps. Its outline then curves</span>
+<span class="sd">    no more tightly than that radius anywhere, concave or convex, which</span>
+<span class="sd">    removes the jagged edge and the notches and spurs narrower than the</span>
+<span class="sd">    elements that must follow it. A Gaussian of half that radius then smooths</span>
+<span class="sd">    the outline's remaining waviness. Holes in the overlap are filled unless</span>
+<span class="sd">    they become holes.</span>
+
+<span class="sd">    Heights are interpolated linearly between each side's points on a grid,</span>
+<span class="sd">    smoothed lightly, and fitted with bicubic splines. Where the thickness</span>
+<span class="sd">    falls below min_thickness of the mean, the bone side is lowered to that</span>
+<span class="sd">    thickness by a smooth maximum, leaving the articular side alone.</span>
+
+<span class="sd">    The wall at the perimeter is tilted so it leaves both sides at about</span>
+<span class="sd">    equal angles: where the sheet curves down at its rim, a wall along the</span>
+<span class="sd">    height lines meets the articular side at up to 130 degrees or more. A</span>
+<span class="sd">    straight wall cannot meet both sides of a tapering rim at right angles,</span>
+<span class="sd">    so the tilt balances the two, limited to _MAX_WALL_TILT of the local</span>
+<span class="sd">    thickness and _MAX_TILT_REACH of perimeter_radius, and smoothed along</span>
+<span class="sd">    the perimeter. Its band fades out at perimeter_radius inside the perimeter.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        sides: Points of the cartilage's articular and bone sides from classify_sides.</span>
+<span class="sd">        perimeter_radius: Smallest radius of curvature of the perimeter and</span>
+<span class="sd">            hole outlines, in physical units. Keep it above about half the</span>
+<span class="sd">            elements' size along the perimeter, or elements across a tight</span>
+<span class="sd">            notch can invert.</span>
+<span class="sd">        perimeter_inset: How far inside the sides' overlap to put the</span>
+<span class="sd">            perimeter, in physical units, cutting off more of the thin rim.</span>
+<span class="sd">        min_thickness: Minimum thickness as a fraction of the mean.</span>
+<span class="sd">        hole_thickness: Thickness as a fraction of the mean below which the</span>
+<span class="sd">            sheet gets a hole, smaller than min_thickness. Regions of the</span>
+<span class="sd">            overlap with no cartilage become holes too. Only regions whose</span>
+<span class="sd">            outlines lie at least perimeter_radius inside the perimeter</span>
+<span class="sd">            become holes; others are thickened. Holes are rounded like the</span>
+<span class="sd">            perimeter, so those narrower than perimeter_radius vanish. 0</span>
+<span class="sd">            makes no holes.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        The fitted sheet.</span>
+
+<span class="sd">    Raises:</span>
+<span class="sd">        ValueError: If a parameter is out of range, or the sides do not overlap</span>
+<span class="sd">            enough to leave a region inside the perimeter.</span>
+<span class="sd">    """</span>
+    <span class="k">if</span> <span class="n">perimeter_radius</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"perimeter_radius must be positive, got </span><span class="si">{</span><span class="n">perimeter_radius</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">perimeter_inset</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"perimeter_inset must not be negative, got </span><span class="si">{</span><span class="n">perimeter_inset</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="mi">0</span> <span class="o">&lt;</span> <span class="n">min_thickness</span> <span class="o">&lt;</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"min_thickness must be in (0, 1), got </span><span class="si">{</span><span class="n">min_thickness</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">hole_thickness</span> <span class="o">&lt;</span> <span class="n">min_thickness</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"hole_thickness must be at least 0 and below min_thickness </span><span class="si">{</span><span class="n">min_thickness</span><span class="si">}</span><span class="s2">, got </span><span class="si">{</span><span class="n">hole_thickness</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+
+    <span class="n">frame</span> <span class="o">=</span> <span class="n">frame</span> <span class="ow">or</span> <span class="n">PlaneFrame</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">sides</span><span class="p">)</span>
+    <span class="n">articular_plane</span><span class="p">,</span> <span class="n">articular_z</span> <span class="o">=</span> <span class="n">frame</span><span class="o">.</span><span class="n">local</span><span class="p">(</span><span class="n">sides</span><span class="o">.</span><span class="n">articular</span><span class="p">)</span>
+    <span class="n">bone_plane</span><span class="p">,</span> <span class="n">bone_z</span> <span class="o">=</span> <span class="n">frame</span><span class="o">.</span><span class="n">local</span><span class="p">(</span><span class="n">sides</span><span class="o">.</span><span class="n">bone</span><span class="p">)</span>
+    <span class="n">spacing</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">median</span><span class="p">(</span><span class="n">KDTree</span><span class="p">(</span><span class="n">sides</span><span class="o">.</span><span class="n">articular</span><span class="p">)</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">sides</span><span class="o">.</span><span class="n">articular</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="mi">2</span><span class="p">)[</span><span class="mi">0</span><span class="p">][:,</span> <span class="mi">1</span><span class="p">]))</span>
+    <span class="n">closing</span> <span class="o">=</span> <span class="n">_FOOTPRINT_CLOSING_SPACINGS</span> <span class="o">*</span> <span class="n">spacing</span>
+    <span class="n">grid</span> <span class="o">=</span> <span class="n">_Grid</span><span class="o">.</span><span class="n">around</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">vstack</span><span class="p">((</span><span class="n">articular_plane</span><span class="p">,</span> <span class="n">bone_plane</span><span class="p">)),</span> <span class="n">spacing</span> <span class="o">/</span> <span class="n">_PIXELS_PER_SPACING</span><span class="p">,</span> <span class="n">closing</span> <span class="o">+</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">perimeter_radius</span><span class="p">)</span>
+
+    <span class="c1"># Pixels near points of both sides, shrunk back by the same distance, are</span>
+    <span class="c1"># covered: gaps narrower than the closing distance between points close.</span>
+    <span class="n">near_both</span> <span class="o">=</span> <span class="n">_largest_component</span><span class="p">(</span><span class="n">grid</span><span class="o">.</span><span class="n">near</span><span class="p">(</span><span class="n">articular_plane</span><span class="p">,</span> <span class="n">closing</span><span class="p">)</span> <span class="o">&amp;</span> <span class="n">grid</span><span class="o">.</span><span class="n">near</span><span class="p">(</span><span class="n">bone_plane</span><span class="p">,</span> <span class="n">closing</span><span class="p">))</span>
+    <span class="n">covered</span> <span class="o">=</span> <span class="n">grid</span><span class="o">.</span><span class="n">distance</span><span class="p">(</span><span class="n">near_both</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="o">-</span><span class="n">closing</span>
+    <span class="n">filled</span> <span class="o">=</span> <span class="n">sitk</span><span class="o">.</span><span class="n">GetArrayFromImage</span><span class="p">(</span><span class="n">sitk</span><span class="o">.</span><span class="n">BinaryFillhole</span><span class="p">(</span><span class="n">sitk</span><span class="o">.</span><span class="n">GetImageFromArray</span><span class="p">(</span><span class="n">covered</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">uint8</span><span class="p">))))</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">bool</span><span class="p">)</span>
+    <span class="n">region</span> <span class="o">=</span> <span class="n">grid</span><span class="o">.</span><span class="n">rounded</span><span class="p">(</span><span class="n">grid</span><span class="o">.</span><span class="n">distance</span><span class="p">(</span><span class="n">filled</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="o">-</span><span class="n">perimeter_inset</span><span class="p">,</span> <span class="n">perimeter_radius</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">region</span><span class="o">.</span><span class="n">any</span><span class="p">():</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"The cartilage's sides do not overlap enough to leave a sheet inside the perimeter"</span><span class="p">)</span>
+    <span class="n">outline</span> <span class="o">=</span> <span class="n">grid</span><span class="o">.</span><span class="n">smoothed_distance</span><span class="p">(</span><span class="n">region</span><span class="p">,</span> <span class="n">_OUTLINE_SMOOTHING</span> <span class="o">*</span> <span class="n">perimeter_radius</span><span class="p">)</span>
+    <span class="n">inside</span> <span class="o">=</span> <span class="n">outline</span> <span class="o">&lt;=</span> <span class="mf">0.0</span>
+    <span class="n">perimeter</span> <span class="o">=</span> <span class="n">_ccw</span><span class="p">(</span><span class="n">resample_closed</span><span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="n">grid</span><span class="o">.</span><span class="n">contours</span><span class="p">(</span><span class="n">outline</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">),</span> <span class="n">key</span><span class="o">=</span><span class="n">_loop_length</span><span class="p">),</span> <span class="n">_OUTLINE_POINTS</span><span class="p">))</span>
+
+    <span class="n">articular</span> <span class="o">=</span> <span class="n">grid</span><span class="o">.</span><span class="n">heights</span><span class="p">(</span><span class="n">articular_plane</span><span class="p">,</span> <span class="n">articular_z</span><span class="p">)</span>
+    <span class="n">bone</span> <span class="o">=</span> <span class="n">grid</span><span class="o">.</span><span class="n">heights</span><span class="p">(</span><span class="n">bone_plane</span><span class="p">,</span> <span class="n">bone_z</span><span class="p">)</span>
+    <span class="n">thickness</span> <span class="o">=</span> <span class="n">articular</span> <span class="o">-</span> <span class="n">bone</span>
+    <span class="n">mean_thickness</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">thickness</span><span class="p">[</span><span class="n">inside</span><span class="p">]</span><span class="o">.</span><span class="n">mean</span><span class="p">())</span>
+    <span class="n">minimum</span> <span class="o">=</span> <span class="n">min_thickness</span> <span class="o">*</span> <span class="n">mean_thickness</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+        <span class="s2">"Sheet thickness within the perimeter: mean </span><span class="si">{:.3g}</span><span class="s2">, minimum </span><span class="si">{:.3g}</span><span class="s2">; </span><span class="si">{:.1%}</span><span class="s2"> of its area is below the minimum </span><span class="si">{:.3g}</span><span class="s2">"</span><span class="p">,</span>
+        <span class="n">mean_thickness</span><span class="p">,</span>
+        <span class="nb">float</span><span class="p">(</span><span class="n">thickness</span><span class="p">[</span><span class="n">inside</span><span class="p">]</span><span class="o">.</span><span class="n">min</span><span class="p">()),</span>
+        <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">thickness</span><span class="p">[</span><span class="n">inside</span><span class="p">]</span> <span class="o">&lt;</span> <span class="n">minimum</span><span class="p">)),</span>
+        <span class="n">minimum</span><span class="p">,</span>
+    <span class="p">)</span>
+
+    <span class="n">holes</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">if</span> <span class="n">hole_thickness</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">thin</span> <span class="o">=</span> <span class="p">((</span><span class="n">thickness</span> <span class="o">&lt;</span> <span class="n">hole_thickness</span> <span class="o">*</span> <span class="n">mean_thickness</span><span class="p">)</span> <span class="o">|</span> <span class="p">(</span><span class="n">filled</span> <span class="o">&amp;</span> <span class="o">~</span><span class="n">covered</span><span class="p">))</span> <span class="o">&amp;</span> <span class="n">inside</span>
+        <span class="n">clear_of_perimeter</span> <span class="o">=</span> <span class="n">outline</span> <span class="o">&lt;=</span> <span class="o">-</span><span class="n">perimeter_radius</span>
+        <span class="k">for</span> <span class="n">thin_region</span> <span class="ow">in</span> <span class="n">_components</span><span class="p">(</span><span class="n">thin</span><span class="p">):</span>
+            <span class="n">hole</span> <span class="o">=</span> <span class="n">grid</span><span class="o">.</span><span class="n">rounded</span><span class="p">(</span><span class="n">thin_region</span><span class="p">,</span> <span class="n">perimeter_radius</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">hole</span><span class="o">.</span><span class="n">any</span><span class="p">():</span>
+                <span class="k">continue</span>
+            <span class="n">hole_outline</span> <span class="o">=</span> <span class="n">grid</span><span class="o">.</span><span class="n">smoothed_distance</span><span class="p">(</span><span class="n">hole</span><span class="p">,</span> <span class="n">_OUTLINE_SMOOTHING</span> <span class="o">*</span> <span class="n">perimeter_radius</span><span class="p">)</span>
+            <span class="n">loops</span> <span class="o">=</span> <span class="n">grid</span><span class="o">.</span><span class="n">contours</span><span class="p">(</span><span class="n">hole_outline</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">loops</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">np</span><span class="o">.</span><span class="n">all</span><span class="p">(</span><span class="n">clear_of_perimeter</span><span class="p">[</span><span class="n">hole_outline</span> <span class="o">&lt;=</span> <span class="mf">0.0</span><span class="p">]):</span>
+                <span class="k">continue</span>
+            <span class="n">holes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">_ccw</span><span class="p">(</span><span class="n">resample_closed</span><span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="n">loops</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="n">_loop_length</span><span class="p">),</span> <span class="n">_OUTLINE_POINTS</span><span class="p">)))</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">"Cutting </span><span class="si">{}</span><span class="s2"> holes thinner than </span><span class="si">{:.3g}</span><span class="s2">"</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">holes</span><span class="p">),</span> <span class="n">hole_thickness</span> <span class="o">*</span> <span class="n">mean_thickness</span><span class="p">)</span>
+
+    <span class="n">blend</span> <span class="o">=</span> <span class="n">_THICKENING_BLEND</span> <span class="o">*</span> <span class="n">minimum</span>
+    <span class="n">thickened</span> <span class="o">=</span> <span class="mf">0.5</span> <span class="o">*</span> <span class="p">(</span><span class="n">thickness</span> <span class="o">+</span> <span class="n">minimum</span> <span class="o">+</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">((</span><span class="n">thickness</span> <span class="o">-</span> <span class="n">minimum</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span> <span class="o">+</span> <span class="n">blend</span><span class="o">**</span><span class="mi">2</span><span class="p">))</span>
+    <span class="n">articular_spline</span><span class="p">,</span> <span class="n">bone_spline</span> <span class="o">=</span> <span class="n">grid</span><span class="o">.</span><span class="n">spline</span><span class="p">(</span><span class="n">articular</span><span class="p">),</span> <span class="n">grid</span><span class="o">.</span><span class="n">spline</span><span class="p">(</span><span class="n">articular</span> <span class="o">-</span> <span class="n">thickened</span><span class="p">)</span>
+    <span class="n">tilt</span> <span class="o">=</span> <span class="n">_wall_tilt</span><span class="p">(</span><span class="n">perimeter</span><span class="p">,</span> <span class="n">articular_spline</span><span class="p">,</span> <span class="n">bone_spline</span><span class="p">,</span> <span class="n">perimeter_radius</span><span class="p">)</span>
+    <span class="n">sheet</span> <span class="o">=</span> <span class="n">CartilageSheet</span><span class="p">(</span><span class="n">frame</span><span class="p">,</span> <span class="n">perimeter</span><span class="p">,</span> <span class="n">holes</span><span class="p">,</span> <span class="n">articular_spline</span><span class="p">,</span> <span class="n">bone_spline</span><span class="p">,</span> <span class="n">mean_thickness</span><span class="p">,</span> <span class="n">minimum</span><span class="p">,</span> <span class="n">tilt</span><span class="p">,</span> <span class="n">perimeter_radius</span><span class="p">)</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+        <span class="s2">"Fitted a sheet with perimeter length </span><span class="si">{:.4g}</span><span class="s2">, </span><span class="si">{}</span><span class="s2"> holes, and walls tilted by </span><span class="si">{:.3g}</span><span class="s2"> at the median and up to </span><span class="si">{:.3g}</span><span class="s2">"</span><span class="p">,</span>
+        <span class="n">_loop_length</span><span class="p">(</span><span class="n">perimeter</span><span class="p">),</span>
+        <span class="nb">len</span><span class="p">(</span><span class="n">holes</span><span class="p">),</span>
+        <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">median</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">tilt</span><span class="p">))),</span>
+        <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">tilt</span><span class="p">)</span><span class="o">.</span><span class="n">max</span><span class="p">()),</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="n">sheet</span></div>
+
+
+
+<div class="viewcode-block" id="sheet_to_brep">
+<a class="viewcode-back" href="../../../api.html#kneemesh.geo.sheet.sheet_to_brep">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">sheet_to_brep</span><span class="p">(</span><span class="n">sheet</span><span class="p">:</span> <span class="n">CartilageSheet</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">BRep</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Build a solid of a cartilage sheet: its two sides, the wall between them at the perimeter, and the walls of its holes.</span>
+
+<span class="sd">    Each side is one bicubic B-spline surface interpolating the side's points</span>
+<span class="sd">    over a grid of domain points, trimmed by the perimeter and the hole</span>
+<span class="sd">    outlines drawn in its parameter space, so both sides share one</span>
+<span class="sd">    parameterization: the surface parameters are the domain coordinates</span>
+<span class="sd">    (s, t). Each wall is ruled between matching edges of the two sides, so it</span>
+<span class="sd">    is straight from side to side, tilted at the perimeter as fit_sheet</span>
+<span class="sd">    describes and along the height lines at the holes. Hexahedral meshing</span>
+<span class="sd">    relies on both: mesh.sheet.hexahedral_mesh pairs the sides' points at</span>
+<span class="sd">    equal parameters and follows the walls' straight lines.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        The solid as one volume.</span>
+<span class="sd">    """</span>
+    <span class="k">with</span> <span class="n">gmsh_session</span><span class="p">():</span>
+        <span class="n">loops</span> <span class="o">=</span> <span class="p">[</span><span class="n">sheet</span><span class="o">.</span><span class="n">perimeter</span><span class="p">,</span> <span class="o">*</span><span class="n">sheet</span><span class="o">.</span><span class="n">holes</span><span class="p">]</span>
+        <span class="n">faces</span> <span class="o">=</span> <span class="p">[</span><span class="n">_add_side</span><span class="p">(</span><span class="n">sheet</span><span class="p">,</span> <span class="n">side</span><span class="p">,</span> <span class="n">loops</span><span class="p">)</span> <span class="k">for</span> <span class="n">side</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"articular"</span><span class="p">,</span> <span class="s2">"bone"</span><span class="p">)]</span>
+        <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">occ</span><span class="o">.</span><span class="n">synchronize</span><span class="p">()</span>
+        <span class="n">rims</span> <span class="o">=</span> <span class="p">[</span><span class="n">_rims_by_loop</span><span class="p">(</span><span class="n">face</span><span class="p">,</span> <span class="n">loops</span><span class="p">)</span> <span class="k">for</span> <span class="n">face</span> <span class="ow">in</span> <span class="n">faces</span><span class="p">]</span>
+        <span class="n">walls</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">articular_rim</span><span class="p">,</span> <span class="n">bone_rim</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="o">*</span><span class="n">rims</span><span class="p">,</span> <span class="n">strict</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+            <span class="n">wires</span> <span class="o">=</span> <span class="p">[</span><span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">occ</span><span class="o">.</span><span class="n">addWire</span><span class="p">([</span><span class="n">articular_rim</span><span class="p">]),</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">occ</span><span class="o">.</span><span class="n">addWire</span><span class="p">([</span><span class="n">bone_rim</span><span class="p">])]</span>
+            <span class="n">walls</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">tag</span> <span class="k">for</span> <span class="n">dim</span><span class="p">,</span> <span class="n">tag</span> <span class="ow">in</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">occ</span><span class="o">.</span><span class="n">addThruSections</span><span class="p">(</span><span class="n">wires</span><span class="p">,</span> <span class="n">makeSolid</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">makeRuled</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span> <span class="k">if</span> <span class="n">dim</span> <span class="o">==</span> <span class="mi">2</span><span class="p">)</span>
+        <span class="n">shell</span> <span class="o">=</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">occ</span><span class="o">.</span><span class="n">addSurfaceLoop</span><span class="p">([</span><span class="o">*</span><span class="n">faces</span><span class="p">,</span> <span class="o">*</span><span class="n">walls</span><span class="p">],</span> <span class="n">sewing</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">occ</span><span class="o">.</span><span class="n">addVolume</span><span class="p">([</span><span class="n">shell</span><span class="p">])</span>
+        <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">occ</span><span class="o">.</span><span class="n">synchronize</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">export_brep</span><span class="p">()</span></div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_add_side</span><span class="p">(</span><span class="n">sheet</span><span class="p">:</span> <span class="n">CartilageSheet</span><span class="p">,</span> <span class="n">side</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">loops</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Add one side of a sheet as a B-spline surface over the domain, trimmed by loops in its parameter space, returning its tag.</span>
+
+<span class="sd">    The surface interpolates the side's points on a grid of domain points</span>
+<span class="sd">    reaching _SURFACE_MARGIN spacings beyond the perimeter, with knots at the</span>
+<span class="sd">    grid's s and t coordinates, so its parameters are the domain coordinates.</span>
+<span class="sd">    """</span>
+    <span class="n">low</span> <span class="o">=</span> <span class="n">sheet</span><span class="o">.</span><span class="n">perimeter</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span> <span class="o">-</span> <span class="n">_SURFACE_MARGIN</span> <span class="o">*</span> <span class="n">_SURFACE_SPACING</span>
+    <span class="n">high</span> <span class="o">=</span> <span class="n">sheet</span><span class="o">.</span><span class="n">perimeter</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span> <span class="o">+</span> <span class="n">_SURFACE_MARGIN</span> <span class="o">*</span> <span class="n">_SURFACE_SPACING</span>
+    <span class="n">s</span><span class="p">,</span> <span class="n">t</span> <span class="o">=</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="n">low</span><span class="p">[</span><span class="n">axis</span><span class="p">],</span> <span class="n">high</span><span class="p">[</span><span class="n">axis</span><span class="p">],</span> <span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">ceil</span><span class="p">((</span><span class="n">high</span><span class="p">[</span><span class="n">axis</span><span class="p">]</span> <span class="o">-</span> <span class="n">low</span><span class="p">[</span><span class="n">axis</span><span class="p">])</span> <span class="o">/</span> <span class="n">_SURFACE_SPACING</span><span class="p">))</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="k">for</span> <span class="n">axis</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">2</span><span class="p">))</span>
+    <span class="n">points</span> <span class="o">=</span> <span class="n">sheet</span><span class="o">.</span><span class="n">points</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">meshgrid</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="n">t</span><span class="p">,</span> <span class="n">indexing</span><span class="o">=</span><span class="s2">"ij"</span><span class="p">),</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">),</span> <span class="n">side</span><span class="p">)</span>
+    <span class="n">splines</span> <span class="o">=</span> <span class="p">[</span><span class="n">RectBivariateSpline</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="n">t</span><span class="p">,</span> <span class="n">points</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="n">axis</span><span class="p">],</span> <span class="n">kx</span><span class="o">=</span><span class="n">_SPLINE_ORDER</span><span class="p">,</span> <span class="n">ky</span><span class="o">=</span><span class="n">_SPLINE_ORDER</span><span class="p">,</span> <span class="n">s</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span> <span class="k">for</span> <span class="n">axis</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">3</span><span class="p">)]</span>
+    <span class="n">knots_s</span><span class="p">,</span> <span class="n">knots_t</span> <span class="o">=</span> <span class="n">splines</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">get_knots</span><span class="p">()</span>
+    <span class="n">count_s</span><span class="p">,</span> <span class="n">count_t</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">knots_s</span><span class="p">)</span> <span class="o">-</span> <span class="n">_SPLINE_ORDER</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">knots_t</span><span class="p">)</span> <span class="o">-</span> <span class="n">_SPLINE_ORDER</span> <span class="o">-</span> <span class="mi">1</span>
+    <span class="n">poles</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">stack</span><span class="p">([</span><span class="n">spline</span><span class="o">.</span><span class="n">get_coeffs</span><span class="p">()</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">count_s</span><span class="p">,</span> <span class="n">count_t</span><span class="p">)</span> <span class="k">for</span> <span class="n">spline</span> <span class="ow">in</span> <span class="n">splines</span><span class="p">],</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+    <span class="c1"># gmsh takes the poles with u, here s, varying fastest.</span>
+    <span class="n">tags</span> <span class="o">=</span> <span class="p">[</span><span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">occ</span><span class="o">.</span><span class="n">addPoint</span><span class="p">(</span><span class="o">*</span><span class="n">pole</span><span class="p">)</span> <span class="k">for</span> <span class="n">pole</span> <span class="ow">in</span> <span class="n">poles</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">)]</span>
+    <span class="n">unique_s</span><span class="p">,</span> <span class="n">multiplicities_s</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">unique</span><span class="p">(</span><span class="n">knots_s</span><span class="p">,</span> <span class="n">return_counts</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">unique_t</span><span class="p">,</span> <span class="n">multiplicities_t</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">unique</span><span class="p">(</span><span class="n">knots_t</span><span class="p">,</span> <span class="n">return_counts</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">wires</span> <span class="o">=</span> <span class="p">[</span><span class="n">add_closed_wire</span><span class="p">(</span><span class="n">periodic_spline</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">column_stack</span><span class="p">((</span><span class="n">loop</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">loop</span><span class="p">)))),</span> <span class="n">_SPLINE_ORDER</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">loop</span><span class="p">))</span> <span class="k">for</span> <span class="n">loop</span> <span class="ow">in</span> <span class="n">loops</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">occ</span><span class="o">.</span><span class="n">addBSplineSurface</span><span class="p">(</span>
+        <span class="n">tags</span><span class="p">,</span>
+        <span class="n">count_s</span><span class="p">,</span>
+        <span class="n">degreeU</span><span class="o">=</span><span class="n">_SPLINE_ORDER</span><span class="p">,</span>
+        <span class="n">degreeV</span><span class="o">=</span><span class="n">_SPLINE_ORDER</span><span class="p">,</span>
+        <span class="n">knotsU</span><span class="o">=</span><span class="n">unique_s</span><span class="o">.</span><span class="n">tolist</span><span class="p">(),</span>
+        <span class="n">knotsV</span><span class="o">=</span><span class="n">unique_t</span><span class="o">.</span><span class="n">tolist</span><span class="p">(),</span>
+        <span class="n">multiplicitiesU</span><span class="o">=</span><span class="n">multiplicities_s</span><span class="o">.</span><span class="n">tolist</span><span class="p">(),</span>
+        <span class="n">multiplicitiesV</span><span class="o">=</span><span class="n">multiplicities_t</span><span class="o">.</span><span class="n">tolist</span><span class="p">(),</span>
+        <span class="n">wireTags</span><span class="o">=</span><span class="n">wires</span><span class="p">,</span>
+        <span class="n">wire3D</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_rims_by_loop</span><span class="p">(</span><span class="n">face</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">loops</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""Return the boundary curve of a trimmed side over each loop, in the loops' order, matched by its points' parameters."""</span>
+    <span class="n">rims</span> <span class="o">=</span> <span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">loops</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">curve</span> <span class="ow">in</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">getBoundary</span><span class="p">([(</span><span class="mi">2</span><span class="p">,</span> <span class="n">face</span><span class="p">)],</span> <span class="n">combined</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">oriented</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+        <span class="n">low</span><span class="p">,</span> <span class="n">high</span> <span class="o">=</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">getParametrizationBounds</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="nb">abs</span><span class="p">(</span><span class="n">curve</span><span class="p">))</span>
+        <span class="n">point</span> <span class="o">=</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">getValue</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="nb">abs</span><span class="p">(</span><span class="n">curve</span><span class="p">),</span> <span class="p">[</span><span class="mf">0.5</span> <span class="o">*</span> <span class="p">(</span><span class="n">low</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">high</span><span class="p">[</span><span class="mi">0</span><span class="p">])])</span>
+        <span class="n">domain_point</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">getParametrization</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="n">face</span><span class="p">,</span> <span class="n">point</span><span class="p">),</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span>
+        <span class="n">rims</span><span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">argmin</span><span class="p">([</span><span class="n">_nearest_on_loop</span><span class="p">(</span><span class="n">loop</span><span class="p">,</span> <span class="n">domain_point</span><span class="p">)[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">loop</span> <span class="ow">in</span> <span class="n">loops</span><span class="p">]))]</span> <span class="o">=</span> <span class="nb">abs</span><span class="p">(</span><span class="n">curve</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">rims</span>
+
+
+<span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">_Grid</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""A pixel grid over the sheet's plane, with arrays indexed [t, s]."""</span>
+
+    <span class="n">origin</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
+    <span class="n">pixel</span><span class="p">:</span> <span class="nb">float</span>
+    <span class="n">shape</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span>
+
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">around</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">points</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">pixel</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">margin</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">"_Grid"</span><span class="p">:</span>
+        <span class="n">low</span> <span class="o">=</span> <span class="n">points</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span> <span class="o">-</span> <span class="n">margin</span>
+        <span class="n">high</span> <span class="o">=</span> <span class="n">points</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span> <span class="o">+</span> <span class="n">margin</span>
+        <span class="n">counts</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ceil</span><span class="p">((</span><span class="n">high</span> <span class="o">-</span> <span class="n">low</span><span class="p">)</span> <span class="o">/</span> <span class="n">pixel</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">int</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span>
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span><span class="n">low</span><span class="p">,</span> <span class="n">pixel</span><span class="p">,</span> <span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">counts</span><span class="p">[</span><span class="mi">1</span><span class="p">]),</span> <span class="nb">int</span><span class="p">(</span><span class="n">counts</span><span class="p">[</span><span class="mi">0</span><span class="p">])))</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">s</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">origin</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">pixel</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">t</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">origin</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">pixel</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">centers</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+        <span class="n">s</span><span class="p">,</span> <span class="n">t</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">meshgrid</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">s</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">column_stack</span><span class="p">((</span><span class="n">s</span><span class="o">.</span><span class="n">ravel</span><span class="p">(),</span> <span class="n">t</span><span class="o">.</span><span class="n">ravel</span><span class="p">()))</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">near</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">points</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">distance</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Pixels within distance of any of points."""</span>
+        <span class="n">found</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">KDTree</span><span class="p">(</span><span class="n">points</span><span class="p">)</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">centers</span><span class="p">(),</span> <span class="n">distance_upper_bound</span><span class="o">=</span><span class="n">distance</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">found</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">heights</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">points</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">heights</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Heights interpolated linearly between points, nearest beyond them, then smoothed lightly."""</span>
+        <span class="n">centers</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">centers</span><span class="p">()</span>
+        <span class="n">values</span> <span class="o">=</span> <span class="n">griddata</span><span class="p">(</span><span class="n">points</span><span class="p">,</span> <span class="n">heights</span><span class="p">,</span> <span class="n">centers</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="s2">"linear"</span><span class="p">)</span>
+        <span class="n">missing</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">values</span><span class="p">)</span>
+        <span class="n">values</span><span class="p">[</span><span class="n">missing</span><span class="p">]</span> <span class="o">=</span> <span class="n">griddata</span><span class="p">(</span><span class="n">points</span><span class="p">,</span> <span class="n">heights</span><span class="p">,</span> <span class="n">centers</span><span class="p">[</span><span class="n">missing</span><span class="p">],</span> <span class="n">method</span><span class="o">=</span><span class="s2">"nearest"</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">gaussian_filter</span><span class="p">(</span><span class="n">values</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">),</span> <span class="n">_HEIGHT_SMOOTHING_PIXELS</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s2">"nearest"</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">distance</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">mask</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Signed distance to a mask's outline in physical units, negative inside."""</span>
+        <span class="n">image</span> <span class="o">=</span> <span class="n">sitk</span><span class="o">.</span><span class="n">GetImageFromArray</span><span class="p">(</span><span class="n">mask</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">uint8</span><span class="p">))</span>
+        <span class="n">image</span><span class="o">.</span><span class="n">SetSpacing</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">pixel</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">pixel</span><span class="p">))</span>
+        <span class="c1"># One map alone is zero on boundary pixel centers; averaging with the inverse's centers it on their edges.</span>
+        <span class="n">inside</span> <span class="o">=</span> <span class="n">sitk</span><span class="o">.</span><span class="n">SignedMaurerDistanceMap</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">insideIsPositive</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">squaredDistance</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">useImageSpacing</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">outside</span> <span class="o">=</span> <span class="n">sitk</span><span class="o">.</span><span class="n">SignedMaurerDistanceMap</span><span class="p">(</span><span class="n">sitk</span><span class="o">.</span><span class="n">BinaryNot</span><span class="p">(</span><span class="n">image</span><span class="p">),</span> <span class="n">insideIsPositive</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">squaredDistance</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">useImageSpacing</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">sitk</span><span class="o">.</span><span class="n">GetArrayFromImage</span><span class="p">((</span><span class="n">inside</span> <span class="o">-</span> <span class="n">outside</span><span class="p">)</span> <span class="o">*</span> <span class="mf">0.5</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">smoothed_distance</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">mask</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">sigma</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Signed distance to a mask's outline, smoothed with a Gaussian of sigma in physical units."""</span>
+        <span class="k">return</span> <span class="n">gaussian_filter</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">distance</span><span class="p">(</span><span class="n">mask</span><span class="p">),</span> <span class="n">sigma</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">pixel</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s2">"nearest"</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">rounded</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">mask</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">radius</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""A mask closed and then opened by a disk of radius, so its outline curves no more tightly than radius."""</span>
+        <span class="n">closed</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">distance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">distance</span><span class="p">(</span><span class="n">mask</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="n">radius</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="o">-</span><span class="n">radius</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">distance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">distance</span><span class="p">(</span><span class="n">closed</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="o">-</span><span class="n">radius</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="n">radius</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">contours</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">field</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">level</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">"""Closed loops of plane points where field crosses level."""</span>
+        <span class="n">image</span> <span class="o">=</span> <span class="n">vtkImageData</span><span class="p">()</span>
+        <span class="n">image</span><span class="o">.</span><span class="n">SetDimensions</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="n">image</span><span class="o">.</span><span class="n">SetSpacing</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">pixel</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">pixel</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">)</span>
+        <span class="n">image</span><span class="o">.</span><span class="n">SetOrigin</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">origin</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span> <span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">origin</span><span class="p">[</span><span class="mi">1</span><span class="p">]),</span> <span class="mf">0.0</span><span class="p">)</span>
+        <span class="n">image</span><span class="o">.</span><span class="n">GetPointData</span><span class="p">()</span><span class="o">.</span><span class="n">SetScalars</span><span class="p">(</span><span class="n">numpy_to_vtk</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">ascontiguousarray</span><span class="p">(</span><span class="n">field</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span><span class="o">.</span><span class="n">ravel</span><span class="p">(),</span> <span class="n">deep</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
+        <span class="n">contour</span> <span class="o">=</span> <span class="n">vtkFlyingEdges2D</span><span class="p">()</span>
+        <span class="n">contour</span><span class="o">.</span><span class="n">SetInputData</span><span class="p">(</span><span class="n">image</span><span class="p">)</span>
+        <span class="n">contour</span><span class="o">.</span><span class="n">SetValue</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">level</span><span class="p">)</span>
+        <span class="n">stripper</span> <span class="o">=</span> <span class="n">vtkStripper</span><span class="p">()</span>
+        <span class="n">stripper</span><span class="o">.</span><span class="n">SetInputConnection</span><span class="p">(</span><span class="n">contour</span><span class="o">.</span><span class="n">GetOutputPort</span><span class="p">())</span>
+        <span class="n">stripper</span><span class="o">.</span><span class="n">JoinContiguousSegmentsOn</span><span class="p">()</span>
+        <span class="n">stripper</span><span class="o">.</span><span class="n">SetMaximumLength</span><span class="p">(</span><span class="n">field</span><span class="o">.</span><span class="n">size</span><span class="p">)</span>
+        <span class="n">stripper</span><span class="o">.</span><span class="n">Update</span><span class="p">()</span>
+        <span class="n">output</span> <span class="o">=</span> <span class="n">stripper</span><span class="o">.</span><span class="n">GetOutput</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">output</span><span class="o">.</span><span class="n">GetNumberOfPoints</span><span class="p">()</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[]</span>
+        <span class="n">points</span> <span class="o">=</span> <span class="n">vtk_to_numpy</span><span class="p">(</span><span class="n">output</span><span class="o">.</span><span class="n">GetPoints</span><span class="p">()</span><span class="o">.</span><span class="n">GetData</span><span class="p">())[:,</span> <span class="p">:</span><span class="mi">2</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">float</span><span class="p">)</span>
+        <span class="n">lines</span> <span class="o">=</span> <span class="n">output</span><span class="o">.</span><span class="n">GetLines</span><span class="p">()</span>
+        <span class="n">connectivity</span> <span class="o">=</span> <span class="n">vtk_to_numpy</span><span class="p">(</span><span class="n">lines</span><span class="o">.</span><span class="n">GetConnectivityArray</span><span class="p">())</span>
+        <span class="n">offsets</span> <span class="o">=</span> <span class="n">vtk_to_numpy</span><span class="p">(</span><span class="n">lines</span><span class="o">.</span><span class="n">GetOffsetsArray</span><span class="p">())</span>
+        <span class="n">loops</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">start</span><span class="p">,</span> <span class="n">end</span> <span class="ow">in</span> <span class="n">pairwise</span><span class="p">(</span><span class="n">offsets</span><span class="p">):</span>
+            <span class="n">ids</span> <span class="o">=</span> <span class="n">connectivity</span><span class="p">[</span><span class="n">start</span><span class="p">:</span><span class="n">end</span><span class="p">]</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">ids</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">3</span> <span class="ow">and</span> <span class="n">ids</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="n">ids</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]:</span>
+                <span class="n">loops</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">points</span><span class="p">[</span><span class="n">ids</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]])</span>
+        <span class="k">return</span> <span class="n">loops</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">inside</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">loop</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Pixels whose centers lie inside a closed loop of points, filled row by row between its crossings."""</span>
+        <span class="n">start</span><span class="p">,</span> <span class="n">end</span> <span class="o">=</span> <span class="n">loop</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">roll</span><span class="p">(</span><span class="n">loop</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+        <span class="n">s</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">s</span>
+        <span class="n">mask</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">bool</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">row</span><span class="p">,</span> <span class="n">t</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">):</span>
+            <span class="n">straddles</span> <span class="o">=</span> <span class="p">(</span><span class="n">start</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">&gt;</span> <span class="n">t</span><span class="p">)</span> <span class="o">!=</span> <span class="p">(</span><span class="n">end</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">&gt;</span> <span class="n">t</span><span class="p">)</span>
+            <span class="n">first</span><span class="p">,</span> <span class="n">second</span> <span class="o">=</span> <span class="n">start</span><span class="p">[</span><span class="n">straddles</span><span class="p">],</span> <span class="n">end</span><span class="p">[</span><span class="n">straddles</span><span class="p">]</span>
+            <span class="n">crossings</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sort</span><span class="p">(</span><span class="n">first</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="p">(</span><span class="n">t</span> <span class="o">-</span> <span class="n">first</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">])</span> <span class="o">*</span> <span class="p">(</span><span class="n">second</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="n">first</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">])</span> <span class="o">/</span> <span class="p">(</span><span class="n">second</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="n">first</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">]))</span>
+            <span class="k">for</span> <span class="n">low</span><span class="p">,</span> <span class="n">high</span> <span class="ow">in</span> <span class="n">crossings</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">):</span>
+                <span class="n">mask</span><span class="p">[</span><span class="n">row</span><span class="p">]</span> <span class="o">|=</span> <span class="p">(</span><span class="n">s</span> <span class="o">&gt;</span> <span class="n">low</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">s</span> <span class="o">&lt;</span> <span class="n">high</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">mask</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">spline</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">values</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">RectBivariateSpline</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">RectBivariateSpline</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">s</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">,</span> <span class="n">values</span><span class="o">.</span><span class="n">T</span><span class="p">,</span> <span class="n">kx</span><span class="o">=</span><span class="n">_SPLINE_ORDER</span><span class="p">,</span> <span class="n">ky</span><span class="o">=</span><span class="n">_SPLINE_ORDER</span><span class="p">,</span> <span class="n">s</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_largest_component</span><span class="p">(</span><span class="n">mask</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+    <span class="n">components</span> <span class="o">=</span> <span class="n">_components</span><span class="p">(</span><span class="n">mask</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">components</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"The cartilage's articular and bone sides do not overlap in the plane"</span><span class="p">)</span>
+    <span class="k">return</span> <span class="nb">max</span><span class="p">(</span><span class="n">components</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">component</span><span class="p">:</span> <span class="nb">int</span><span class="p">(</span><span class="n">component</span><span class="o">.</span><span class="n">sum</span><span class="p">()))</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_components</span><span class="p">(</span><span class="n">mask</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]:</span>
+    <span class="n">labels</span> <span class="o">=</span> <span class="n">sitk</span><span class="o">.</span><span class="n">GetArrayFromImage</span><span class="p">(</span><span class="n">sitk</span><span class="o">.</span><span class="n">ConnectedComponent</span><span class="p">(</span><span class="n">sitk</span><span class="o">.</span><span class="n">GetImageFromArray</span><span class="p">(</span><span class="n">mask</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">uint8</span><span class="p">))))</span>
+    <span class="k">return</span> <span class="p">[</span><span class="n">labels</span> <span class="o">==</span> <span class="n">value</span> <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">labels</span><span class="o">.</span><span class="n">max</span><span class="p">())</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)]</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_loop_length</span><span class="p">(</span><span class="n">loop</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+    <span class="k">return</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">loop</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">roll</span><span class="p">(</span><span class="n">loop</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">),</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)))</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_signed_area</span><span class="p">(</span><span class="n">loop</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+    <span class="n">s</span><span class="p">,</span> <span class="n">t</span> <span class="o">=</span> <span class="n">loop</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">loop</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">]</span>
+    <span class="k">return</span> <span class="mf">0.5</span> <span class="o">*</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">s</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">roll</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">roll</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">t</span><span class="p">))</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_ccw</span><span class="p">(</span><span class="n">loop</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">loop</span> <span class="k">if</span> <span class="n">_signed_area</span><span class="p">(</span><span class="n">loop</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="n">loop</span><span class="p">[::</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_outward_normals</span><span class="p">(</span><span class="n">loop</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Return the unit outward normal at each point of a counterclockwise loop of plane points, from its neighbors."""</span>
+    <span class="n">tangents</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">roll</span><span class="p">(</span><span class="n">loop</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">roll</span><span class="p">(</span><span class="n">loop</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">column_stack</span><span class="p">((</span><span class="n">tangents</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">],</span> <span class="o">-</span><span class="n">tangents</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]))</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">tangents</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">keepdims</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_nearest_on_loop</span><span class="p">(</span><span class="n">loop</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">points</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""Return each point's distance to a closed polyline, the index of the nearest segment's first point, and the fraction along it."""</span>
+    <span class="n">following</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">roll</span><span class="p">(</span><span class="n">loop</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+    <span class="n">_</span><span class="p">,</span> <span class="n">nearest</span> <span class="o">=</span> <span class="n">KDTree</span><span class="p">(</span><span class="n">loop</span><span class="p">)</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">points</span><span class="p">)</span>
+    <span class="n">best</span> <span class="o">=</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">full</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">points</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">inf</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">points</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">points</span><span class="p">)))</span>
+    <span class="c1"># The nearest point of the polyline lies on one of the two segments at its nearest vertex.</span>
+    <span class="k">for</span> <span class="n">segment</span> <span class="ow">in</span> <span class="p">(</span><span class="n">nearest</span><span class="p">,</span> <span class="p">(</span><span class="n">nearest</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="n">loop</span><span class="p">)):</span>
+        <span class="n">start</span><span class="p">,</span> <span class="n">direction</span> <span class="o">=</span> <span class="n">loop</span><span class="p">[</span><span class="n">segment</span><span class="p">],</span> <span class="n">following</span><span class="p">[</span><span class="n">segment</span><span class="p">]</span> <span class="o">-</span> <span class="n">loop</span><span class="p">[</span><span class="n">segment</span><span class="p">]</span>
+        <span class="n">fraction</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">clip</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">einsum</span><span class="p">(</span><span class="s2">"ij,ij-&gt;i"</span><span class="p">,</span> <span class="n">points</span> <span class="o">-</span> <span class="n">start</span><span class="p">,</span> <span class="n">direction</span><span class="p">)</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">einsum</span><span class="p">(</span><span class="s2">"ij,ij-&gt;i"</span><span class="p">,</span> <span class="n">direction</span><span class="p">,</span> <span class="n">direction</span><span class="p">),</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">)</span>
+        <span class="n">distance</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">points</span> <span class="o">-</span> <span class="n">start</span> <span class="o">-</span> <span class="n">fraction</span><span class="p">[:,</span> <span class="n">np</span><span class="o">.</span><span class="n">newaxis</span><span class="p">]</span> <span class="o">*</span> <span class="n">direction</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">closer</span> <span class="o">=</span> <span class="n">distance</span> <span class="o">&lt;</span> <span class="n">best</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">best</span> <span class="o">=</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">closer</span><span class="p">,</span> <span class="n">distance</span><span class="p">,</span> <span class="n">best</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">closer</span><span class="p">,</span> <span class="n">segment</span><span class="p">,</span> <span class="n">best</span><span class="p">[</span><span class="mi">1</span><span class="p">]),</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">closer</span><span class="p">,</span> <span class="n">fraction</span><span class="p">,</span> <span class="n">best</span><span class="p">[</span><span class="mi">2</span><span class="p">]))</span>
+    <span class="k">return</span> <span class="n">best</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_wall_tilt</span><span class="p">(</span><span class="n">perimeter</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">articular</span><span class="p">:</span> <span class="n">RectBivariateSpline</span><span class="p">,</span> <span class="n">bone</span><span class="p">:</span> <span class="n">RectBivariateSpline</span><span class="p">,</span> <span class="n">reach</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Return the tilt at each perimeter point that leaves the wall at equal angles to both sides, within its limits.</span>
+
+<span class="sd">    In the plane of the perimeter's outward normal and the heights, a wall</span>
+<span class="sd">    whose articular edge lies d outward of its bone edge, over thickness h,</span>
+<span class="sd">    is perpendicular to a side of slope g when d = -h g. The tilt takes the</span>
+<span class="sd">    mean over the two sides, which balances the two angles.</span>
+<span class="sd">    """</span>
+    <span class="n">outward</span> <span class="o">=</span> <span class="n">_outward_normals</span><span class="p">(</span><span class="n">perimeter</span><span class="p">)</span>
+    <span class="n">step</span> <span class="o">=</span> <span class="mf">1e-3</span> <span class="o">*</span> <span class="n">reach</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">slope</span><span class="p">(</span><span class="n">heights</span><span class="p">:</span> <span class="n">RectBivariateSpline</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+        <span class="n">ahead</span><span class="p">,</span> <span class="n">behind</span> <span class="o">=</span> <span class="n">perimeter</span> <span class="o">+</span> <span class="n">step</span> <span class="o">*</span> <span class="n">outward</span><span class="p">,</span> <span class="n">perimeter</span> <span class="o">-</span> <span class="n">step</span> <span class="o">*</span> <span class="n">outward</span>
+        <span class="k">return</span> <span class="p">(</span><span class="n">heights</span><span class="o">.</span><span class="n">ev</span><span class="p">(</span><span class="n">ahead</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">ahead</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">])</span> <span class="o">-</span> <span class="n">heights</span><span class="o">.</span><span class="n">ev</span><span class="p">(</span><span class="n">behind</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">behind</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">]))</span> <span class="o">/</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">step</span><span class="p">)</span>
+
+    <span class="n">thickness</span> <span class="o">=</span> <span class="n">articular</span><span class="o">.</span><span class="n">ev</span><span class="p">(</span><span class="n">perimeter</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">perimeter</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">])</span> <span class="o">-</span> <span class="n">bone</span><span class="o">.</span><span class="n">ev</span><span class="p">(</span><span class="n">perimeter</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">perimeter</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">])</span>
+    <span class="n">limit</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">minimum</span><span class="p">(</span><span class="n">_MAX_WALL_TILT</span> <span class="o">*</span> <span class="n">thickness</span><span class="p">,</span> <span class="n">_MAX_TILT_REACH</span> <span class="o">*</span> <span class="n">reach</span><span class="p">)</span>
+    <span class="n">tilt</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">clip</span><span class="p">(</span><span class="o">-</span><span class="n">thickness</span> <span class="o">*</span> <span class="p">(</span><span class="n">slope</span><span class="p">(</span><span class="n">articular</span><span class="p">)</span> <span class="o">+</span> <span class="n">slope</span><span class="p">(</span><span class="n">bone</span><span class="p">))</span> <span class="o">/</span> <span class="mi">2</span><span class="p">,</span> <span class="o">-</span><span class="n">limit</span><span class="p">,</span> <span class="n">limit</span><span class="p">)</span>
+    <span class="c1"># Smoothing spreads the tilt of thick stretches into thin ones, so it is limited again afterward.</span>
+    <span class="n">spacing</span> <span class="o">=</span> <span class="n">_loop_length</span><span class="p">(</span><span class="n">perimeter</span><span class="p">)</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">perimeter</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">clip</span><span class="p">(</span><span class="n">gaussian_filter1d</span><span class="p">(</span><span class="n">tilt</span><span class="p">,</span> <span class="n">_TILT_SMOOTHING</span> <span class="o">*</span> <span class="n">reach</span> <span class="o">/</span> <span class="n">spacing</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s2">"wrap"</span><span class="p">),</span> <span class="o">-</span><span class="n">limit</span><span class="p">,</span> <span class="n">limit</span><span class="p">)</span>
+</pre></div>
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          
+          
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026, Scott Sibole
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer no-toc">
+      
+      
+      
+    </aside>
+  </div>
+</div><script src="../../../_static/documentation_options.js?v=a47416a6"></script>
+    <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/scripts/furo.js?v=46bd48cc"></script>
+    </body>
+</html>

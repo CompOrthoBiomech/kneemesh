@@ -1,0 +1,461 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="./">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="genindex.html"><link rel="search" title="Search" href="search.html"><link rel="next" title="GUI" href="gui.html"><link rel="prev" title="kneemesh" href="index.html">
+
+    <!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
+        <title>Usage - kneemesh</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="_static/autodoc_pydantic.css" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/furo-extensions.css?v=8dab3a3b" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="index.html"><div class="brand">kneemesh</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="index.html">
+  
+  <span class="sidebar-brand-text">kneemesh</span>
+  
+</a><form class="sidebar-search-container" method="get" action="search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <ul class="current">
+<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Usage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="gui.html">GUI</a></li>
+<li class="toctree-l1"><a class="reference internal" href="pipeline.html">Pipeline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="configuration.html">Configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api.html">API reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="validation.html">Validation</a></li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page">
+  <a class="muted-link" href="_sources/usage.md.txt" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div>
+<div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section class="tex2jax_ignore mathjax_ignore" id="usage">
+<h1>Usage<a class="headerlink" href="#usage" title="Link to this heading">¶</a></h1>
+<p><code class="docutils literal notranslate"><span class="pre">kneemesh-assemble</span></code> combines single-label LabelMaps into one multilabel LabelMap. <code class="docutils literal notranslate"><span class="pre">kneemesh-brep</span></code> builds a B-rep of every structure in a segmentation, and <code class="docutils literal notranslate"><span class="pre">kneemesh-mesh</span></code> meshes each structure’s B-rep. Each takes a JSON configuration, <code class="docutils literal notranslate"><span class="pre">--option</span> <span class="pre">value</span></code> overrides, or both, and <code class="docutils literal notranslate"><span class="pre">--help</span></code> lists every option and its default. Every option is a field of the command’s model, <a class="reference internal" href="api.html#kneemesh.config.LabelMapAssembly" title="kneemesh.config.LabelMapAssembly"><code class="xref py py-class docutils literal notranslate"><span class="pre">LabelMapAssembly</span></code></a>, <a class="reference internal" href="api.html#kneemesh.config.LabelMapBrep" title="kneemesh.config.LabelMapBrep"><code class="xref py py-class docutils literal notranslate"><span class="pre">LabelMapBrep</span></code></a>, or <a class="reference internal" href="api.html#kneemesh.config.BrepMesh" title="kneemesh.config.BrepMesh"><code class="xref py py-class docutils literal notranslate"><span class="pre">BrepMesh</span></code></a>, with underscores written as dashes. Settings for one kind of structure sit in a section, such as <code class="docutils literal notranslate"><span class="pre">meniscus</span></code>, and are given on the command line as <code class="docutils literal notranslate"><span class="pre">--meniscus.points-per-slice</span> <span class="pre">10</span></code>. The two menisci share <code class="docutils literal notranslate"><span class="pre">meniscus</span></code>, and the tibial and patellar cartilage <code class="docutils literal notranslate"><span class="pre">cartilage</span></code>; any of them can have settings of its own instead, in a section named for it, such as <code class="docutils literal notranslate"><span class="pre">lateral_meniscus</span></code>. Its own section is layered over the shared one field by field, so <code class="docutils literal notranslate"><span class="pre">--lateral-meniscus.spacing</span> <span class="pre">2</span></code> changes only the lateral meniscus’s spacing and leaves its other settings, and the medial meniscus’s, as <code class="docutils literal notranslate"><span class="pre">meniscus</span></code> gives them. To clear a field in a structure’s own section that the shared one sets, such as <code class="docutils literal notranslate"><span class="pre">inner_clip_ratio</span></code> when giving <code class="docutils literal notranslate"><span class="pre">inner_clip_height</span></code>, set it to null there.</p>
+<p>The structure names, keys of <code class="docutils literal notranslate"><span class="pre">labels</span></code>, <code class="docutils literal notranslate"><span class="pre">label_maps</span></code>, and <code class="docutils literal notranslate"><span class="pre">breps</span></code>, pick each structure’s pipeline: <code class="docutils literal notranslate"><span class="pre">lateral_meniscus</span></code>, <code class="docutils literal notranslate"><span class="pre">medial_meniscus</span></code>, <code class="docutils literal notranslate"><span class="pre">patellar_cartilage</span></code>, <code class="docutils literal notranslate"><span class="pre">femoral_cartilage</span></code>, <code class="docutils literal notranslate"><span class="pre">lateral_tibial_cartilage</span></code>, <code class="docutils literal notranslate"><span class="pre">medial_tibial_cartilage</span></code>, <code class="docutils literal notranslate"><span class="pre">femur</span></code>, <code class="docutils literal notranslate"><span class="pre">tibia</span></code>, and <code class="docutils literal notranslate"><span class="pre">patella</span></code>. All are implemented. The bones’ geometry is a triangulated surface rather than a B-rep; see <a class="reference internal" href="#bones"><span class="xref myst">Bones</span></a>.</p>
+<p>Each structure’s output is written to <code class="docutils literal notranslate"><span class="pre">&lt;output-directory&gt;/&lt;structure&gt;&lt;output&gt;</span></code>, where <code class="docutils literal notranslate"><span class="pre">--output</span></code> is a suffix. B-rep suffixes end in <code class="docutils literal notranslate"><span class="pre">.brep</span></code>, <code class="docutils literal notranslate"><span class="pre">.brep</span></code> by default; bones’ surfaces take their own section’s <code class="docutils literal notranslate"><span class="pre">--femur.output</span></code>, <code class="docutils literal notranslate"><span class="pre">--tibia.output</span></code>, or <code class="docutils literal notranslate"><span class="pre">--patella.output</span></code>, <code class="docutils literal notranslate"><span class="pre">.stl</span></code> by default. Mesh suffixes default to <code class="docutils literal notranslate"><span class="pre">_{element_type}.msh</span></code>, with <code class="docutils literal notranslate"><span class="pre">{element_type}</span></code> replaced by <code class="docutils literal notranslate"><span class="pre">--element-type</span></code>: <code class="docutils literal notranslate"><span class="pre">hex8</span></code>, <code class="docutils literal notranslate"><span class="pre">hex20</span></code>, <code class="docutils literal notranslate"><span class="pre">hex27</span></code>, <code class="docutils literal notranslate"><span class="pre">tet4</span></code> (the default), or <code class="docutils literal notranslate"><span class="pre">tet10</span></code>, or for a bone by its own <code class="docutils literal notranslate"><span class="pre">--femur.element-type</span></code>, <code class="docutils literal notranslate"><span class="pre">--tibia.element-type</span></code>, or <code class="docutils literal notranslate"><span class="pre">--patella.element-type</span></code>. <code class="docutils literal notranslate"><span class="pre">.vtu</span></code> and <code class="docutils literal notranslate"><span class="pre">.vtkhdf</span></code> meshes hold their node and element sets (see <a class="reference internal" href="#node-and-element-sets"><span class="xref myst">Node and element sets</span></a>); gmsh infers other formats from the extension and writes the elements only.</p>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>kneemesh-brep<span class="w"> </span>--label-map<span class="w"> </span>meniscus.nii<span class="w"> </span>--labels<span class="w"> </span><span class="s1">'{"medial_meniscus": 1}'</span><span class="w"> </span>--meniscus.cap<span class="w"> </span>planar
+kneemesh-brep<span class="w"> </span>--label-map<span class="w"> </span>knee.nii<span class="w"> </span>--labels<span class="w"> </span><span class="s1">'{"lateral_meniscus": 2, "medial_meniscus": 3}'</span>
+kneemesh-mesh<span class="w"> </span>--breps<span class="w"> </span><span class="s1">'{"medial_meniscus": "medial_meniscus.brep"}'</span><span class="w"> </span>--meniscus.max-size<span class="w"> </span><span class="m">1</span>.0
+</pre></div>
+</div>
+<p>The last command writes <code class="docutils literal notranslate"><span class="pre">medial_meniscus_tet4.msh</span></code>. Each run saves the configuration it used, so it can be repeated with <code class="docutils literal notranslate"><span class="pre">--config</span></code>. Without <code class="docutils literal notranslate"><span class="pre">--config</span></code> it is saved as <code class="docutils literal notranslate"><span class="pre">settings&lt;timestamp&gt;.json</span></code> in the working directory. With <code class="docutils literal notranslate"><span class="pre">--config</span></code> and overrides, the changed configuration is saved beside the original as <code class="docutils literal notranslate"><span class="pre">&lt;name&gt;_modified.json</span></code>. Section overrides change only the fields given, leaving the section’s other values from <code class="docutils literal notranslate"><span class="pre">--config</span></code>.</p>
+<p>For a hexahedral mesh, build the menisci’s B-reps with <code class="docutils literal notranslate"><span class="pre">--meniscus.hex-blocks</span> <span class="pre">true</span></code>, and preferably the cartilage’s with <code class="docutils literal notranslate"><span class="pre">--cartilage.hex-blocks</span> <span class="pre">true</span></code> (<code class="docutils literal notranslate"><span class="pre">--femoral-cartilage.hex-blocks</span> <span class="pre">true</span></code> for the femoral cartilage), and mesh them with <code class="docutils literal notranslate"><span class="pre">--element-type</span> <span class="pre">hex8</span></code>, <code class="docutils literal notranslate"><span class="pre">hex20</span></code>, or <code class="docutils literal notranslate"><span class="pre">hex27</span></code>. <code class="docutils literal notranslate"><span class="pre">--element-type</span></code> applies to every structure but the bones; <code class="docutils literal notranslate"><span class="pre">--element-types</span></code> gives individual structures their own, such as <code class="docutils literal notranslate"><span class="pre">--element-types</span> <span class="pre">'{&quot;medial_meniscus&quot;:</span> <span class="pre">&quot;hex8&quot;,</span> <span class="pre">&quot;patellar_cartilage&quot;:</span> <span class="pre">&quot;tet4&quot;}'</span></code>, and each structure’s output suffix takes its own type. Bones take theirs from their own sections (see Bones). <code class="docutils literal notranslate"><span class="pre">--meniscus.hex-design</span></code> picks the meniscus’s hexahedra. <code class="docutils literal notranslate"><span class="pre">butterfly</span></code>, the default, builds five blocks meshed with structured hexahedra, whose regular layout makes the more simulation-ready mesh; their edges around the middle section and along the meniscus take the two sizes below. <code class="docutils literal notranslate"><span class="pre">swept_quads</span></code> lofts the meniscus with planar caps; meshing fills its largest cross-section with unstructured quadrilaterals (gmsh’s Frontal-Delaunay for quads) about <code class="docutils literal notranslate"><span class="pre">--meniscus.transverse-size</span></code> across, 1 mm by default, and sweeps them along the meniscus in layers about <code class="docutils literal notranslate"><span class="pre">--meniscus.circumferential-size</span></code> apart, 2 mm by default, so the elements shrink across the narrower sections toward the horns. For <code class="docutils literal notranslate"><span class="pre">swept_quads</span></code>, the section’s thin inner edge is first cut off straight where the section is a quarter of its mean outer height thick (<code class="docutils literal notranslate"><span class="pre">--meniscus.inner-clip-ratio</span></code>, 0.25 by default for <code class="docutils literal notranslate"><span class="pre">swept_quads</span></code>, or <code class="docutils literal notranslate"><span class="pre">--meniscus.inner-clip-height</span></code> in mm): the loft gets a narrow face for the cut, whose top and bottom are edges the hexahedra keep nodes on, in place of an edge too sharp for them to follow. On the real menisci the cut is about 1.1-1.2 mm tall and costs 0.5-1.5% of the volume. <code class="docutils literal notranslate"><span class="pre">--meniscus.inner-clip-ratio</span> <span class="pre">0</span></code> keeps the sharp edge. Either way the slice contours put each other corner of the section between the same two points on every slice, so the B-rep’s lines along the meniscus follow its ridges. On the real menisci at the default sizes the swept hexahedra of the clipped loft optimize to minimum scaled Jacobians of about 0.5, means of 0.92-0.93, and largest Frobenius aspect ratios of 7.2-8.7, against 0.38-0.41 unclipped and the butterfly’s 0.27-0.29 with twice the elements. Mesh optimization moves the nodes afterward for better scaled Jacobians with <a class="reference internal" href="api.html#kneemesh.mesh_optimization.optimize_hexahedral_mesh" title="kneemesh.mesh_optimization.optimize_hexahedral_mesh"><code class="xref py py-func docutils literal notranslate"><span class="pre">optimize_hexahedral_mesh()</span></code></a>. The meniscus optimizes by default, since swept hexahedra can start with a few inverted elements, weighs aspect ratios lightly (<code class="docutils literal notranslate"><span class="pre">--meniscus.aspect-weight</span></code> 0.02), since the scaled Jacobian alone stretched elements near the horns to aspect ratios of 90, and flattens warped surface faces (<code class="docutils literal notranslate"><span class="pre">--meniscus.warp-weight</span></code> 50, tuned for the butterfly blocks; swept hexahedra were tuned at 30). A face’s warp is the angle between the two triangles a diagonal splits it into; scaled Jacobians and aspect ratios miss it, though it is what makes a surface look crumpled, so the log reports it after each optimization too. On the real menisci the warp term lowers the butterfly’s 99th percentile of warp from 20-33 degrees to 17-23, and halves the swept hexahedra’s, to 16-27 degrees; the cartilage takes <code class="docutils literal notranslate"><span class="pre">--cartilage.optimize</span> <span class="pre">true</span></code>. It first untangles any inverted elements. Boundary nodes may then leave the B-rep’s surface by up to <code class="docutils literal notranslate"><span class="pre">--meniscus.surface-deviation</span></code> times the local element size, 0.1 by default, without changing the volume overall; <code class="docutils literal notranslate"><span class="pre">--meniscus.surface-deviation</span> <span class="pre">0</span></code> keeps them on its tangent planes.</p>
+<section id="segmentations">
+<h2>Segmentations<a class="headerlink" href="#segmentations" title="Link to this heading">¶</a></h2>
+<p>When the structures are segmented in separate files, assemble them once with <code class="docutils literal notranslate"><span class="pre">kneemesh-assemble</span></code>, a pipeline configured by <a class="reference internal" href="api.html#kneemesh.config.LabelMapAssembly" title="kneemesh.config.LabelMapAssembly"><code class="xref py py-class docutils literal notranslate"><span class="pre">LabelMapAssembly</span></code></a>:</p>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>kneemesh-assemble<span class="w"> </span>--label-maps<span class="w"> </span><span class="s1">'{"lateral_meniscus": "lateral.nii", "medial_meniscus": "medial.nii"}'</span><span class="w"> </span>--output<span class="w"> </span>knee.nrrd
+</pre></div>
+</div>
+<p>It writes <code class="docutils literal notranslate"><span class="pre">knee.nrrd</span></code> and its labels in <code class="docutils literal notranslate"><span class="pre">knee_labels.json</span></code> beside it, logging to <code class="docutils literal notranslate"><span class="pre">assemble&lt;timestamp&gt;.log</span></code>. Structures get the values 1, 2, … in the order given.</p>
+<p><code class="docutils literal notranslate"><span class="pre">kneemesh-brep</span></code> reads a segmentation and builds every structure named in it. Give the segmentation one of two ways:</p>
+<ul class="simple">
+<li><p><strong>A multilabel LabelMap</strong> with <code class="docutils literal notranslate"><span class="pre">--label-map</span></code>, and <code class="docutils literal notranslate"><span class="pre">--labels</span></code> naming its values as JSON, such as <code class="docutils literal notranslate"><span class="pre">'{&quot;lateral_meniscus&quot;:</span> <span class="pre">2,</span> <span class="pre">&quot;medial_meniscus&quot;:</span> <span class="pre">3}'</span></code>. <code class="docutils literal notranslate"><span class="pre">--labels</span></code> is required, and values it does not name are ignored. An assembled LabelMap is read with <code class="docutils literal notranslate"><span class="pre">--label-map</span> <span class="pre">knee.nrrd</span> <span class="pre">--labels</span> <span class="pre">&quot;$(cat</span> <span class="pre">knee_labels.json)&quot;</span></code>.</p></li>
+<li><p><strong>Single-label LabelMaps</strong> with <code class="docutils literal notranslate"><span class="pre">--label-maps</span></code>, assembled within the run as <code class="docutils literal notranslate"><span class="pre">kneemesh-assemble</span></code> does, one file per structure by name, such as <code class="docutils literal notranslate"><span class="pre">'{&quot;lateral_meniscus&quot;:</span> <span class="pre">&quot;lateral.nii&quot;,</span> <span class="pre">&quot;medial_meniscus&quot;:</span> <span class="pre">&quot;medial.nii&quot;}'</span></code>. Every nonzero voxel of a file is its structure. <a class="reference internal" href="api.html#kneemesh.segmentation.assemble_label_maps" title="kneemesh.segmentation.assemble_label_maps"><code class="xref py py-func docutils literal notranslate"><span class="pre">assemble_label_maps()</span></code></a> resamples them onto one grid, in the first file’s orientation, with the smallest voxel spacing along each axis and a background margin of <code class="docutils literal notranslate"><span class="pre">--padding</span></code> voxels. <code class="docutils literal notranslate"><span class="pre">--interpolator</span></code> chooses <code class="docutils literal notranslate"><span class="pre">label_gaussian</span></code> (the default) or <code class="docutils literal notranslate"><span class="pre">nearest_neighbor</span></code>. Where structures overlap after resampling, the one listed later wins. <code class="docutils literal notranslate"><span class="pre">--assembled-label-map</span> <span class="pre">knee.nrrd</span></code> also writes the assembled LabelMap and <code class="docutils literal notranslate"><span class="pre">knee_labels.json</span></code>, as <code class="docutils literal notranslate"><span class="pre">kneemesh-assemble</span></code> does. <a class="reference internal" href="api.html#kneemesh.disk.read_segmentation" title="kneemesh.disk.read_segmentation"><code class="xref py py-func docutils literal notranslate"><span class="pre">read_segmentation()</span></code></a> reads them in Python.</p></li>
+</ul>
+<p>Every structure in the segmentation is built. A cartilage needs the bone beneath it in the segmentation too: <code class="docutils literal notranslate"><span class="pre">patella</span></code> for <code class="docutils literal notranslate"><span class="pre">patellar_cartilage</span></code>, <code class="docutils literal notranslate"><span class="pre">femur</span></code> for <code class="docutils literal notranslate"><span class="pre">femoral_cartilage</span></code>, and <code class="docutils literal notranslate"><span class="pre">tibia</span></code> for either tibial cartilage. The bone tells the cartilage’s sides apart, and its surface is built as well.</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">  </span><span class="nt">"label_maps"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"lateral_meniscus"</span><span class="p">:</span><span class="w"> </span><span class="s2">"lateral_meniscus.nii"</span><span class="p">,</span><span class="w"> </span><span class="nt">"medial_meniscus"</span><span class="p">:</span><span class="w"> </span><span class="s2">"medial_meniscus.nii"</span><span class="p">},</span>
+<span class="w">  </span><span class="nt">"assembled_label_map"</span><span class="p">:</span><span class="w"> </span><span class="s2">"knee.nrrd"</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"output"</span><span class="p">:</span><span class="w"> </span><span class="s2">"_hex.brep"</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"meniscus"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"hex_blocks"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>The repository’s <code class="docutils literal notranslate"><span class="pre">examples/</span></code> holds configurations for the real structures in <code class="docutils literal notranslate"><span class="pre">tests/dat</span></code>, run from the repository root. The <code class="docutils literal notranslate"><span class="pre">knee_*</span></code> ones handle all nine structures in one go:</p>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>kneemesh-assemble<span class="w"> </span>--config<span class="w"> </span>examples/knee_assemble.json<span class="w">   </span><span class="c1"># writes examples/knee.nrrd</span>
+kneemesh-brep<span class="w"> </span>--config<span class="w"> </span>examples/knee_brep_hex.json<span class="w">       </span><span class="c1"># or knee_brep_tet.json</span>
+kneemesh-mesh<span class="w"> </span>--config<span class="w"> </span>examples/knee_mesh_hex8.json<span class="w">      </span><span class="c1"># or knee_mesh_tet4.json</span>
+</pre></div>
+</div>
+</section>
+<section id="cartilage">
+<h2>Cartilage<a class="headerlink" href="#cartilage" title="Link to this heading">¶</a></h2>
+<p>The tibial and patellar cartilage are built as sheets between their articular side and the side against their bone. Each B-rep is one solid: the two sides, and a straight wall around the perimeter, tilted so it meets the two sides at about equal angles, where a wall along the sheet’s normal met the articular side, which curves down at the rim, at up to 130 degrees or more. Either element shape can mesh it, but the <code class="docutils literal notranslate"><span class="pre">cartilage</span></code> settings pick defaults by <code class="docutils literal notranslate"><span class="pre">hex_blocks</span></code>. For hexahedra, the perimeter curves no more tightly than a 3 mm radius, so elements can follow the real lateral tibial cartilage’s notch, and regions thinner than 0.2 of the mean thickness are thickened by lowering the bone side. For tetrahedra, the perimeter follows the label more closely, with a 1 mm radius, regions thinner than 0.1 of the mean are thickened, and those thinner than 0.05 of the mean, or missing from the label, become holes. Thickened cartilage may overlap its bone.</p>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>kneemesh-brep<span class="w"> </span>--label-maps<span class="w"> </span><span class="s1">'{"tibia": "tibia.nii", "lateral_tibial_cartilage": "lateral.nii"}'</span><span class="w"> </span>--cartilage.hex-blocks<span class="w"> </span><span class="nb">true</span><span class="w"> </span>--output<span class="w"> </span>_hex.brep
+kneemesh-mesh<span class="w"> </span>--breps<span class="w"> </span><span class="s1">'{"lateral_tibial_cartilage": "lateral_tibial_cartilage_hex.brep"}'</span><span class="w"> </span>--element-type<span class="w"> </span>hex8<span class="w"> </span>--cartilage.optimize<span class="w"> </span><span class="nb">true</span>
+</pre></div>
+</div>
+<p>Hexahedral meshing partitions the sheet itself. It meshes one side with quadrilaterals about <code class="docutils literal notranslate"><span class="pre">--cartilage.element-size</span></code> across, 2 mm by default, and stacks <code class="docutils literal notranslate"><span class="pre">--cartilage.elements-through</span></code> hexahedra, 3 by default, along straight columns to the other side; the columns through the walls follow the wall. <code class="docutils literal notranslate"><span class="pre">--cartilage.quad-algorithm</span></code> picks gmsh’s algorithm for the quadrilaterals: <code class="docutils literal notranslate"><span class="pre">quasi_structured</span></code>, the default, aligns them with a cross field, leaving few irregular nodes, the more simulation-ready layout, but sizes down to 0.3 of the target on curved sheets; <code class="docutils literal notranslate"><span class="pre">frontal_delaunay</span></code> keeps their size closest to the target and optimizes to slightly better scaled Jacobians, but leaves many irregular nodes. If gmsh leaves triangles, the size is changed by a few percent until it does not. <code class="docutils literal notranslate"><span class="pre">--cartilage.save-partition</span> <span class="pre">true</span></code> also writes <code class="docutils literal notranslate"><span class="pre">&lt;structure&gt;_partition.brep</span></code>, the blocks the quadrilaterals’ irregular nodes divide the sheet into, one volume each: about 10 to 30 with <code class="docutils literal notranslate"><span class="pre">quasi_structured</span></code>, and mostly single elements with <code class="docutils literal notranslate"><span class="pre">frontal_delaunay</span></code>.</p>
+<p>Optimizing cartilage hexahedra also weighs their Frobenius aspect ratios, by <code class="docutils literal notranslate"><span class="pre">--cartilage.aspect-weight</span></code>, 0.5 by default: optimizing the scaled Jacobian alone squares up corners by stretching elements, to a largest aspect ratio of 8 on the real patellar cartilage against 2.3 at 0.5. Optimizing keeps each column of nodes through the walls straight. The thinnest stretches of the rim hold the worst elements; <code class="docutils literal notranslate"><span class="pre">--cartilage.perimeter-inset</span></code> cuts them off at the cost of area.</p>
+</section>
+<section id="femoral-cartilage">
+<h2>Femoral cartilage<a class="headerlink" href="#femoral-cartilage" title="Link to this heading">¶</a></h2>
+<p>The femoral cartilage wraps the condyles, so it is built as a sheet over the cylinder its side against the femur wraps, unrolled into a U: the trochlea joining the two condyles around the intercondylar notch. Its <code class="docutils literal notranslate"><span class="pre">femoral_cartilage</span></code> settings extend the <code class="docutils literal notranslate"><span class="pre">cartilage</span></code> settings, with the same defaults by <code class="docutils literal notranslate"><span class="pre">hex_blocks</span></code>, and its solid and hexahedra are made the same way.</p>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>kneemesh-brep<span class="w"> </span>--label-maps<span class="w"> </span><span class="s1">'{"femur": "femur.nii", "femoral_cartilage": "femoral.nii"}'</span><span class="w"> </span>--femoral-cartilage.hex-blocks<span class="w"> </span><span class="nb">true</span><span class="w"> </span>--output<span class="w"> </span>_hex.brep
+kneemesh-mesh<span class="w"> </span>--breps<span class="w"> </span><span class="s1">'{"femoral_cartilage": "femoral_cartilage_hex.brep"}'</span><span class="w"> </span>--element-type<span class="w"> </span>hex8<span class="w"> </span>--femoral-cartilage.optimize<span class="w"> </span><span class="nb">true</span>
+</pre></div>
+</div>
+<p>Tetrahedra default to <code class="docutils literal notranslate"><span class="pre">--femoral-cartilage.element-size</span></code> too, since the default from the oriented bounding box, about 30 mm across for the wrapped cartilage, gives nearly flat tetrahedra.</p>
+</section>
+<section id="bones">
+<h2>Bones<a class="headerlink" href="#bones" title="Link to this heading">¶</a></h2>
+<p>The femur, tibia, and patella are not meshed with hexahedra, and their geometry is not a B-rep. Each bone has its own settings section, <code class="docutils literal notranslate"><span class="pre">femur</span></code>, <code class="docutils literal notranslate"><span class="pre">tibia</span></code>, or <code class="docutils literal notranslate"><span class="pre">patella</span></code>, so options are given as <code class="docutils literal notranslate"><span class="pre">--tibia.shaft-cut-fraction</span> <span class="pre">0.3</span></code>; below, <code class="docutils literal notranslate"><span class="pre">--&lt;bone&gt;</span></code> stands for any of them. <code class="docutils literal notranslate"><span class="pre">kneemesh-brep</span></code> writes each bone’s closed, triangulated surface as <code class="docutils literal notranslate"><span class="pre">.stl</span></code>:</p>
+<ol class="arabic simple">
+<li><p><a class="reference internal" href="api.html#kneemesh.geo.bone.bone_mask" title="kneemesh.geo.bone.bone_mask"><code class="xref py py-func docutils literal notranslate"><span class="pre">bone_mask()</span></code></a> fills the label’s cavities. Where the scan cuts a shaft off, as it does the femur’s and tibia’s, <code class="docutils literal notranslate"><span class="pre">--&lt;bone&gt;.shaft-cut-fraction</span></code> removes that fraction of the bone’s length along the shaft from the cut end, square in the voxel map, to make the mesh smaller; 0, the default, keeps the shaft as scanned. A shaft is cut off where the label’s last slice along an image axis is a whole cross-section, nearly the same as the slices 2 mm inside it.</p></li>
+<li><p>The surface is the isocontour of the mask’s smoothed distance field, as for the other structures, smoothed by a windowed sinc filter with feature-edge smoothing off and coordinates normalized. Smoothing rounds the flat end of a cut shaft.</p></li>
+<li><p><a class="reference internal" href="api.html#kneemesh.geo.bone.decimate_surface" title="kneemesh.geo.bone.decimate_surface"><code class="xref py py-func docutils literal notranslate"><span class="pre">decimate_surface()</span></code></a> reduces the triangles to <code class="docutils literal notranslate"><span class="pre">--&lt;bone&gt;.triangle-size</span></code>, 1 by default, which moves the real bones’ surfaces by at most 0.02. gmsh took minutes to reparametrize the real femur’s 340,000 triangles.</p></li>
+</ol>
+<p><code class="docutils literal notranslate"><span class="pre">kneemesh-mesh</span></code> meshes a bone given its <code class="docutils literal notranslate"><span class="pre">.stl</span></code> in <code class="docutils literal notranslate"><span class="pre">--breps</span></code>. gmsh splits the surface into patches it can map to a plane and meshes them (<a class="reference internal" href="api.html#module-kneemesh.mesh.bone" title="kneemesh.mesh.bone"><code class="xref py py-mod docutils literal notranslate"><span class="pre">kneemesh.mesh.bone</span></code></a>). <code class="docutils literal notranslate"><span class="pre">--&lt;bone&gt;.element-type</span></code> chooses the elements, separately from <code class="docutils literal notranslate"><span class="pre">--element-type</span></code>:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">tri3</span></code> (the default) or <code class="docutils literal notranslate"><span class="pre">tri6</span></code> triangles, or <code class="docutils literal notranslate"><span class="pre">quad4</span></code>, <code class="docutils literal notranslate"><span class="pre">quad8</span></code>, or <code class="docutils literal notranslate"><span class="pre">quad9</span></code> quadrilaterals, on the surface, about <code class="docutils literal notranslate"><span class="pre">--&lt;bone&gt;.element-size</span></code> across, 2 by default. Quadrilateral meshes hold quadrilaterals only. The mesh is smoothed across the seams between gmsh’s patches, and every node, second-order ones included, lies on the surface.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tet4</span></code> or <code class="docutils literal notranslate"><span class="pre">tet10</span></code> tetrahedra through the volume, <code class="docutils literal notranslate"><span class="pre">--&lt;bone&gt;.cortical-element-size</span></code> across, 1 by default, within <code class="docutils literal notranslate"><span class="pre">--&lt;bone&gt;.cortical-distance</span></code> of the surface, 3 by default, where the cortical bone lies. Deeper, in the cancellous bone, their edges grow by <code class="docutils literal notranslate"><span class="pre">--&lt;bone&gt;.cancellous-grad</span></code> per unit of depth, 0.5 by default, up to <code class="docutils literal notranslate"><span class="pre">--&lt;bone&gt;.max-size</span></code>, 4 by default; a smaller grad makes a smoother transition and more elements.</p></li>
+</ul>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>kneemesh-brep<span class="w"> </span>--label-maps<span class="w"> </span><span class="s1">'{"femur": "femur.nii", "tibia": "tibia.nii"}'</span><span class="w"> </span>--femur.shaft-cut-fraction<span class="w"> </span><span class="m">0</span>.4<span class="w"> </span>--tibia.shaft-cut-fraction<span class="w"> </span><span class="m">0</span>.3
+kneemesh-mesh<span class="w"> </span>--breps<span class="w"> </span><span class="s1">'{"femur": "femur.stl"}'</span><span class="w"> </span>--femur.element-type<span class="w"> </span>quad4
+kneemesh-mesh<span class="w"> </span>--breps<span class="w"> </span><span class="s1">'{"femur": "femur.stl"}'</span><span class="w"> </span>--femur.element-type<span class="w"> </span>tet10<span class="w"> </span>--femur.cortical-distance<span class="w"> </span><span class="m">2</span>
+</pre></div>
+</div>
+</section>
+<section id="node-and-element-sets">
+<h2>Node and element sets<a class="headerlink" href="#node-and-element-sets" title="Link to this heading">¶</a></h2>
+<p>Every mesh has named sets of faces on its surface, element sets, and of their nodes, node sets, by the same names:</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Structure</p></th>
+<th class="head"><p>Sets</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Every structure</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">surface</span></code>: every boundary face, or a bone’s surface mesh’s own elements</p></td>
+</tr>
+<tr class="row-odd"><td><p>Bones</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">surface</span></code> only</p></td>
+</tr>
+<tr class="row-even"><td><p>Cartilage</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">articular_side</span></code>, the side away from the bone, and <code class="docutils literal notranslate"><span class="pre">bone_side</span></code>, the side against it; the walls between them are in <code class="docutils literal notranslate"><span class="pre">surface</span></code> only</p></td>
+</tr>
+<tr class="row-odd"><td><p>Menisci</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">anterior_horn</span></code> and <code class="docutils literal notranslate"><span class="pre">posterior_horn</span></code>, the caps at its ends, and <code class="docutils literal notranslate"><span class="pre">body</span></code>, the rest</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>A face is an element of its own, a triangle or quadrilateral of the volume elements’ order, numbered after the volume elements. The anterior horn is the one toward the patient’s front, at lower y in the LPS physical space SimpleITK reads images into, so it relies on the image’s orientation being right.</p>
+<p><code class="docutils literal notranslate"><span class="pre">.vtu</span></code> and <code class="docutils literal notranslate"><span class="pre">.vtkhdf</span></code> hold the sets; gmsh’s formats hold only the elements. In a <code class="docutils literal notranslate"><span class="pre">.vtu</span></code>, the faces are cells after the volume elements, and each set is a point or cell array, 1 for its members. A <code class="docutils literal notranslate"><span class="pre">.vtkhdf</span></code> is a multiblock: an <code class="docutils literal notranslate"><span class="pre">elements</span></code> grid of the volume elements, and <code class="docutils literal notranslate"><span class="pre">surfaces</span></code> and <code class="docutils literal notranslate"><span class="pre">node_sets</span></code> blocks holding a grid per set, of its faces or of vertices at its nodes. In an assembled <code class="docutils literal notranslate"><span class="pre">.vtkhdf</span></code> the set blocks are named <code class="docutils literal notranslate"><span class="pre">&lt;structure&gt;_&lt;set&gt;</span></code>, as in a <code class="docutils literal notranslate"><span class="pre">.vtu</span></code>, and every set grid’s <code class="docutils literal notranslate"><span class="pre">node_id</span></code> is the same node, at the same coordinates, as in its structure’s <code class="docutils literal notranslate"><span class="pre">elements</span></code> grid. Every node and element carries its number, from 1, as <code class="docutils literal notranslate"><span class="pre">node_id</span></code> and <code class="docutils literal notranslate"><span class="pre">element_id</span></code>.</p>
+<p><code class="docutils literal notranslate"><span class="pre">--assembled-mesh</span></code> also writes every structure’s mesh as one, as <code class="docutils literal notranslate"><span class="pre">.vtu</span></code> or <code class="docutils literal notranslate"><span class="pre">.vtkhdf</span></code>. Nodes and elements are numbered on through the structures in the order of <code class="docutils literal notranslate"><span class="pre">--breps</span></code>, each structure’s volume elements before its faces, and sets are named <code class="docutils literal notranslate"><span class="pre">&lt;structure&gt;_&lt;set&gt;</span></code>, such as <code class="docutils literal notranslate"><span class="pre">lateral_meniscus_anterior_horn</span></code>. The <code class="docutils literal notranslate"><span class="pre">.vtu</span></code> is one grid with a <code class="docutils literal notranslate"><span class="pre">structure</span></code> cell array indexing the field array <code class="docutils literal notranslate"><span class="pre">structures</span></code>; the <code class="docutils literal notranslate"><span class="pre">.vtkhdf</span></code> has a block per structure, named for it. Structures share no nodes.</p>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>kneemesh-mesh<span class="w"> </span>--config<span class="w"> </span>examples/knee_mesh_tet4.json<span class="w"> </span>--assembled-mesh<span class="w"> </span>knee.vtkhdf
+</pre></div>
+</div>
+<section id="element-quality">
+<h3>Element quality<a class="headerlink" href="#element-quality" title="Link to this heading">¶</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">.vtu</span></code> and <code class="docutils literal notranslate"><span class="pre">.vtkhdf</span></code> meshes also hold each element’s quality as cell arrays, by <a class="reference internal" href="api.html#kneemesh.mesh_optimization.element_quality" title="kneemesh.mesh_optimization.element_quality"><code class="xref py py-func docutils literal notranslate"><span class="pre">element_quality()</span></code></a>: the scaled Jacobian, the Frobenius aspect ratio, the edge ratio (longest corner edge over shortest, comparable across element shapes), each tetrahedron’s smallest dihedral angle in degrees, which sees slivers the scaled Jacobian and edge ratio miss, and each quadrilateral face’s warp. A metric that does not apply to an element, such as the dihedral angle of a hexahedron, is NaN there, so a mixed mesh carries every metric of any of its shapes. Metrics are measured on corner nodes, except that the scaled Jacobian and aspect ratio of high-order hexahedra and tetrahedra take the element’s own Jacobian at its corner nodes and at the points of the Gauss rules a simulation integrates it with: curved edges can invert an element whose straight-sided corners are valid, and leave one valid whose corners are not. Hexahedral optimization keeps those points valid too, and second-order tetrahedra are curved by gmsh’s high-order optimization (<code class="docutils literal notranslate"><span class="pre">Mesh.HighOrderOptimize</span></code> 2), which untangles the thin ones beside the surface. The log reports each structure’s worst and mean values as it is meshed.</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Array</p></th>
+<th class="head"><p>Of</p></th>
+<th class="head"><p>Measure</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">scaled_jacobian</span></code></p></td>
+<td><p>Volume elements, or a bone’s surface elements</p></td>
+<td><p>The smallest over its corners of the corner’s Jacobian determinant over the product of its edges’ lengths, scaled so a cube, square, regular tetrahedron, or equilateral triangle is 1; 0 is degenerate and negative inverted</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">frobenius_aspect</span></code></p></td>
+<td><p>The same</p></td>
+<td><p>The largest over its corners of Verdict’s aspect Frobenius: 1 for the ideal shape, larger as edges differ in length or leave its angles, infinite when inverted</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">warp</span></code></p></td>
+<td><p>Quadrilateral faces, or a bone’s quadrilaterals</p></td>
+<td><p>The angle between the two triangles a diagonal splits it into, the larger over both diagonals, in degrees</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Cells a measure does not apply to, such as faces for the scaled Jacobian, hold NaN.</p>
+</section>
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          <a class="next-page" href="gui.html">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">GUI</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="index.html">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">Home</div>
+                
+              </div>
+            </a>
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026, Scott Sibole
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">Usage</a><ul>
+<li><a class="reference internal" href="#segmentations">Segmentations</a></li>
+<li><a class="reference internal" href="#cartilage">Cartilage</a></li>
+<li><a class="reference internal" href="#femoral-cartilage">Femoral cartilage</a></li>
+<li><a class="reference internal" href="#bones">Bones</a></li>
+<li><a class="reference internal" href="#node-and-element-sets">Node and element sets</a><ul>
+<li><a class="reference internal" href="#element-quality">Element quality</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="_static/documentation_options.js?v=a47416a6"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/scripts/furo.js?v=46bd48cc"></script>
+    </body>
+</html>
