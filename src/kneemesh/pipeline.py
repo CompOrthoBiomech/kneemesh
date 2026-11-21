@@ -56,7 +56,15 @@ from kneemesh.geo.sheet import CartilageSheet, fit_sheet, sheet_to_brep
 from kneemesh.mesh import bone as bone_mesh
 from kneemesh.mesh import meniscus as meniscus_mesh
 from kneemesh.mesh import sheet as sheet_mesh
-from kneemesh.mesh_optimization import FROBENIUS_ASPECT, SCALED_JACOBIAN, element_quality, mesh_quality, optimize_hexahedral_mesh
+from kneemesh.mesh_optimization import (
+    EDGE_RATIO,
+    FROBENIUS_ASPECT,
+    MIN_DIHEDRAL_ANGLE,
+    SCALED_JACOBIAN,
+    element_quality,
+    mesh_quality,
+    optimize_hexahedral_mesh,
+)
 from kneemesh.segmentation import Interpolator, Segmentation, assemble_label_maps
 from kneemesh.tet_meshing import Mesh, tetrahedral_mesh
 from kneemesh.vol import extract_isocontour, signed_distance_field, smooth_isocontour
@@ -159,13 +167,18 @@ def _log_quality(structure: Structure, quality: Mapping[str, np.ndarray]) -> Non
     aspects = quality[FROBENIUS_ASPECT][~np.isnan(quality[FROBENIUS_ASPECT])]
     if not len(scaled):
         return
+    ratios = quality[EDGE_RATIO][~np.isnan(quality[EDGE_RATIO])]
     logger.info(
-        "Quality of {}: scaled Jacobian {:.3f} at least, {:.3f} on average; Frobenius aspect ratio {:.3g} at most",
+        "Quality of {}: scaled Jacobian {:.3f} at least, {:.3f} on average; Frobenius aspect ratio {:.3g} at most; edge ratio {:.3g} at most",
         structure,
         scaled.min(),
         scaled.mean(),
         aspects.max(),
+        ratios.max(),
     )
+    if MIN_DIHEDRAL_ANGLE in quality:
+        dihedrals = quality[MIN_DIHEDRAL_ANGLE][~np.isnan(quality[MIN_DIHEDRAL_ANGLE])]
+        logger.info("Tetrahedra of {}: smallest dihedral angle {:.1f} degrees, {:.1f} on average", structure, dihedrals.min(), dihedrals.mean())
     if inverted := int(np.count_nonzero(scaled <= 0)):
         logger.warning("{} has {} inverted or degenerate elements", structure, inverted)
 

@@ -301,7 +301,10 @@ class KneemeshApp:
                 variant="outlined",
                 style="max-width: 170px;",
             )
-            with _tooltip("Color meshes by structure or by a quality metric of their elements, measured on corner nodes"):
+            with _tooltip(
+                "Color meshes by structure or by a quality metric of their elements: the scaled Jacobian is the smallest at "
+                + "any corner or Gauss point; the dihedral angle measures tetrahedra only"
+            ):
                 v3.VSelect(
                     v_model=("color_by",),
                     items=("color_by_items",),

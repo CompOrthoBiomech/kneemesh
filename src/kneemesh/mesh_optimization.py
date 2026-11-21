@@ -82,8 +82,8 @@ class MeshQuality:
     Attributes:
         minimum: Smallest element scaled Jacobian (see scaled_jacobians). Negative means an inverted element.
         mean: Mean element scaled Jacobian.
-        inverted: Number of elements with a Jacobian determinant at or below zero at a corner, or at a Gauss point
-            of a high-order element.
+        inverted: Number of elements with a Jacobian determinant at or below zero at a corner, or for a
+            high-order element, of its own Jacobian at a corner node or Gauss point.
         max_aspect: Largest element Frobenius aspect ratio, infinite if any element is inverted.
         mean_aspect: Mean element Frobenius aspect ratio, infinite if any element is inverted.
         max_warp: Largest warp of a boundary quadrilateral, in degrees (see surface_warps).
@@ -133,9 +133,8 @@ class _GaussSamples:
 def _gauss_samples(mesh: Mesh) -> list[_GaussSamples]:
     """Return the Gauss point Jacobians of each type of high-order hexahedra in a mesh of hexahedra.
 
-    An element of order p is sampled at the points of the reduced and full
-    Gauss rules, p and p + 1 points along each axis, as simulations
-    integrate it. Linear hexahedra have none.
+    An element is sampled at its corner nodes and the points of its Gauss
+    rules (_sample_basis). Linear hexahedra have none.
     """
     samples: list[_GaussSamples] = []
     if all(connectivity.shape[1] == 8 for connectivity in mesh.elements.values()):
@@ -148,12 +147,8 @@ def _gauss_samples(mesh: Mesh) -> list[_GaussSamples]:
             if connectivity.shape[1] == 8:
                 continue
             element_type = mesh.element_types[name]
-            properties = gmsh.model.mesh.getElementProperties(element_type)
-            order, local = int(properties[2]), np.reshape(properties[4], (-1, 3))
-            rules = (f"Gauss{2 * order - 1}", f"Gauss{2 * order + 1}")
-            points = np.vstack([np.reshape(gmsh.model.mesh.getIntegrationPoints(element_type, rule)[0], (-1, 3)) for rule in rules])
-            _, basis, _ = gmsh.model.mesh.getBasisFunctions(element_type, points.ravel(), "GradLagrange")
-            basis = np.reshape(basis, (len(points), connectivity.shape[1], 3))
+            local = np.reshape(gmsh.model.mesh.getElementProperties(element_type)[4], (-1, 3))
+            points, basis = _sample_basis(element_type)
             # Trilinear shape functions (1 + u u_c)(1 + v v_c)(1 + w w_c) / 8 differentiated along each axis.
             factors = 1 + points[:, None, :] * local[None, :8, :]
             gradients = np.stack([local[None, :8, axis] * np.prod(np.delete(factors, axis, axis=-1), axis=-1) / 8 for axis in range(3)], axis=-1)
@@ -164,12 +159,64 @@ def _gauss_samples(mesh: Mesh) -> list[_GaussSamples]:
     return samples
 
 
+def _sample_basis(element_type: int) -> tuple[np.ndarray, np.ndarray]:
+    """Return the points a high-order volume element is measured at, in local coordinates, (G, 3), and its shape functions' gradients there, (G, n, 3).
+
+    The points are its corner nodes, then the points of the two Gauss rules
+    simulations integrate an element of order p with. A hexahedron's are the
+    reduced and full rules, p and p + 1 points along each axis, exact to
+    orders 2p - 1 and 2p + 1; a tetrahedron's are exact to orders 2p - 2 and
+    2p, 4 and 11 points for second order, the stiffness and mass rules.
+    Needs a gmsh session.
+    """
+    properties = gmsh.model.mesh.getElementProperties(element_type)
+    name, order, count = str(properties[0]), int(properties[2]), int(properties[3])
+    tetrahedron = name.startswith("Tetrahedron")
+    corners = np.reshape(properties[4], (-1, 3))[: 4 if tetrahedron else 8]
+    degrees = (2 * order - 2, 2 * order) if tetrahedron else (2 * order - 1, 2 * order + 1)
+    gauss = [np.reshape(gmsh.model.mesh.getIntegrationPoints(element_type, f"Gauss{degree}")[0], (-1, 3)) for degree in degrees]
+    points = np.vstack([corners, *gauss])
+    _, basis, _ = gmsh.model.mesh.getBasisFunctions(element_type, points.ravel(), "GradLagrange")
+    return points, np.reshape(basis, (len(points), count, 3))
+
+
+def _tetrahedron_sample_jacobians(nodes: np.ndarray, connectivity: np.ndarray, element_type: int) -> np.ndarray:
+    """Return high-order tetrahedra's Jacobians at their corners and Gauss points, (M, G, 3, 3), with rows dx/du, dx/dv, dx/dw.
+
+    The rows are a straight tetrahedron's edges from its first corner, in the
+    order _tetrahedron_quality takes them.
+    """
+    with gmsh_session():
+        _, basis = _sample_basis(element_type)
+    return np.einsum("gni,knx->kgix", basis, nodes[connectivity])
+
+
 def _element_scaled_jacobians(nodes: np.ndarray, corners: np.ndarray, samples: Sequence[_GaussSamples] = ()) -> np.ndarray:
     """Return each hexahedron's smallest scaled Jacobian over its corners and Gauss points, (M,)."""
     quality = _corner_scaled_jacobians(nodes, corners).min(axis=1)
     for sample in samples:
         quality[sample.elements] = np.minimum(quality[sample.elements], _scaled_jacobians_of(sample.tangents(nodes, corners)).min(axis=1))
     return quality
+
+
+def _hexahedron_metrics(nodes: np.ndarray, corners: np.ndarray, samples: Sequence[_GaussSamples] = ()) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Return each hexahedron's scaled Jacobian, Frobenius aspect ratio, and whether it is inverted, as reported, (M,) each.
+
+    A linear hexahedron is measured on its corners' edges. A high-order one is
+    measured by its own Jacobian at its corner nodes and Gauss points alone,
+    since its straight-sided corners' edges are not its shape: a curved
+    element can be valid where they are inverted, and the reverse.
+    """
+    edges = _corner_edges(nodes, corners)
+    scaled = _scaled_jacobians_of(edges).min(axis=1)
+    aspects = _corner_aspects(edges).max(axis=1)
+    inverted = (np.linalg.det(edges) <= 0).any(axis=1)
+    for sample in samples:
+        tangents = sample.tangents(nodes, corners)
+        scaled[sample.elements] = _scaled_jacobians_of(tangents).min(axis=1)
+        aspects[sample.elements] = _corner_aspects(tangents).max(axis=1)
+        inverted[sample.elements] = (np.linalg.det(tangents) <= 0).any(axis=1)
+    return scaled, aspects, inverted
 
 
 def _any_inverted(nodes: np.ndarray, corners: np.ndarray, samples: Sequence[_GaussSamples] = ()) -> np.ndarray:
@@ -249,15 +296,16 @@ def scaled_jacobians(mesh: Mesh) -> np.ndarray:
     A corner's scaled Jacobian is the determinant of its three edge vectors
     divided by the product of their lengths: 1 for a right angle corner, 0
     for a flat one, and negative for an inverted one. A high-order element
-    is also measured at the points of its reduced and full Gauss rules, p and
-    p + 1 along each axis for order p, with its Jacobian's tangents along the
-    local axes in place of edges: curved edges can invert it there though
-    its corners are valid.
+    is measured instead by its own Jacobian, its tangents along the local
+    axes in place of edges, at its corner nodes and the points of its
+    reduced and full Gauss rules, p and p + 1 along each axis for order p:
+    curved edges can invert it there though its straight-sided corners are
+    valid, and leave it valid though they are not.
 
     Raises:
         ValueError: If the mesh has elements other than hexahedra.
     """
-    return _element_scaled_jacobians(mesh.nodes, _hexahedron_corners(mesh), _gauss_samples(mesh))
+    return _hexahedron_metrics(mesh.nodes, _hexahedron_corners(mesh), _gauss_samples(mesh))[0]
 
 
 def frobenius_aspects(mesh: Mesh) -> np.ndarray:
@@ -267,15 +315,13 @@ def frobenius_aspects(mesh: Mesh) -> np.ndarray:
     matrix E of its three edge vectors, as Verdict's maximum aspect Frobenius
     measures it: 1 for a cube's corner, and larger as the corner's edges
     differ in length or leave right angles. It is infinite for a degenerate
-    or inverted corner. High-order elements are measured on their corner
-    nodes, and are infinite if inverted at a Gauss point (see scaled_jacobians).
+    or inverted corner. High-order elements are measured by their own
+    Jacobian at their corner nodes and Gauss points (see scaled_jacobians).
 
     Raises:
         ValueError: If the mesh has elements other than hexahedra.
     """
-    corners = _hexahedron_corners(mesh)
-    aspects = _corner_aspects(_corner_edges(mesh.nodes, corners)).max(axis=1)
-    return np.where(_any_inverted(mesh.nodes, corners, _gauss_samples(mesh)), np.inf, aspects)
+    return _hexahedron_metrics(mesh.nodes, _hexahedron_corners(mesh), _gauss_samples(mesh))[1]
 
 
 def surface_warps(mesh: Mesh) -> np.ndarray:
@@ -314,10 +360,7 @@ def mesh_quality(mesh: Mesh) -> MeshQuality:
         ValueError: If the mesh has elements other than hexahedra.
     """
     corners = _hexahedron_corners(mesh)
-    samples = _gauss_samples(mesh)
-    quality = _element_scaled_jacobians(mesh.nodes, corners, samples)
-    inverted = _any_inverted(mesh.nodes, corners, samples)
-    aspects = np.where(inverted, np.inf, _corner_aspects(_corner_edges(mesh.nodes, corners)).max(axis=1))
+    quality, aspects, inverted = _hexahedron_metrics(mesh.nodes, corners, _gauss_samples(mesh))
     warps = surface_warps(mesh)
     return MeshQuality(
         float(quality.min()),
@@ -339,8 +382,21 @@ FROBENIUS_ASPECT = "frobenius_aspect"
 WARP = "warp"
 """Name of the quadrilaterals' warp in element_quality."""
 
+EDGE_RATIO = "edge_ratio"
+"""Name of the edge ratio in element_quality."""
+
+MIN_DIHEDRAL_ANGLE = "min_dihedral_angle"
+"""Name of the tetrahedra's smallest dihedral angle in element_quality."""
+
 # Corners of each element shape: high-order elements are measured on these first nodes alone.
 _CORNER_COUNTS = {"Tetrahedron": 4, "Hexahedron": 8, "Triangle": 3, "Quadrilateral": 4}
+# Edges between the corners of each element shape, in gmsh's corner numbering.
+_SHAPE_EDGES = {
+    "Tetrahedron": np.array([(0, 1), (1, 2), (2, 0), (0, 3), (1, 3), (2, 3)]),
+    "Hexahedron": _EDGES,
+    "Triangle": np.array([(0, 1), (1, 2), (2, 0)]),
+    "Quadrilateral": np.array([(0, 1), (1, 2), (2, 3), (3, 0)]),
+}
 
 # A regular tetrahedron's edges from its first corner, one per row, with unit length.
 _REGULAR_TETRAHEDRON = np.array([[1.0, 0.0, 0.0], [0.5, np.sqrt(3) / 2, 0.0], [0.5, np.sqrt(3) / 6, np.sqrt(2 / 3)]])
@@ -350,11 +406,15 @@ def element_quality(mesh: Mesh) -> dict[str, np.ndarray]:
     """Return quality metrics of every element and face of a mesh, measured on corner nodes, by name.
 
     Each array holds one value per element and face, in their numbering
-    (Mesh.elements, then Mesh.faces), NaN where the metric does not apply.
+    (Mesh.elements, then Mesh.faces), NaN where the metric does not apply,
+    so meshes mixing element shapes take every metric of any of them.
     Higher-order elements are measured on their corner nodes, as if they
-    were first order, except that a high-order hexahedron's scaled Jacobian
-    also takes its Gauss points (see scaled_jacobians), and its aspect ratio
-    is infinite if it is inverted at one.
+    were first order, except for the scaled Jacobian and Frobenius aspect
+    ratio of high-order hexahedra and tetrahedra, which take the element's
+    own Jacobian at its corner nodes and Gauss points (see scaled_jacobians
+    and _sample_basis): curved edges can invert an element whose
+    straight-sided corners are valid, and leave one valid whose corners are
+    not.
 
     - scaled_jacobian, of volume elements, or of a surface mesh's elements:
       the smallest over its corners of the corner's Jacobian determinant over
@@ -371,13 +431,22 @@ def element_quality(mesh: Mesh) -> dict[str, np.ndarray]:
       the angle between the two triangles either diagonal splits it into,
       the larger of the two, in degrees (see surface_warps). Present only
       when the mesh has quadrilaterals.
+    - edge_ratio, of volume elements, or of a surface mesh's elements: the
+      longest edge between corners over the shortest, 1 for the ideal
+      shapes and infinite for a collapsed edge. Comparable across shapes.
+    - min_dihedral_angle, of tetrahedra: the smallest angle between two
+      faces along an edge, in degrees, about 70.5 for the regular
+      tetrahedron and 0 for a flat one, a sliver included, which the edge
+      ratio misses. Like the edge ratio it does not see orientation, so an
+      inverted tetrahedron measures as its mirror image does; its scaled
+      Jacobian tells. Present only when the mesh has tetrahedra.
 
     Raises:
         ValueError: If the mesh has an element shape other than tetrahedra, hexahedra, triangles, and quadrilaterals.
     """
     count = mesh.element_count
-    quality = {SCALED_JACOBIAN: np.full(count, np.nan), FROBENIUS_ASPECT: np.full(count, np.nan)}
-    warps = np.full(count, np.nan)
+    quality = {SCALED_JACOBIAN: np.full(count, np.nan), FROBENIUS_ASPECT: np.full(count, np.nan), EDGE_RATIO: np.full(count, np.nan)}
+    warps, dihedrals = np.full(count, np.nan), np.full(count, np.nan)
     start = 0
     for kind, connectivity in [*(("element", item) for item in mesh.elements.items()), *(("face", item) for item in mesh.faces.items())]:
         name, rows = connectivity
@@ -391,20 +460,52 @@ def element_quality(mesh: Mesh) -> dict[str, np.ndarray]:
             warps[span] = _warps(mesh.nodes[corners])
         if kind == "face":
             continue
+        quality[EDGE_RATIO][span] = _edge_ratios(mesh.nodes[corners], _SHAPE_EDGES[shape])
         if shape == "Hexahedron":
             samples = _gauss_samples(Mesh(mesh.nodes, {name: rows}, {name: mesh.element_types[name]}))
-            aspects = _corner_aspects(_corner_edges(mesh.nodes, corners)).max(axis=1)
-            quality[SCALED_JACOBIAN][span] = _element_scaled_jacobians(mesh.nodes, corners, samples)
-            quality[FROBENIUS_ASPECT][span] = np.where(_any_inverted(mesh.nodes, corners, samples), np.inf, aspects)
+            quality[SCALED_JACOBIAN][span], quality[FROBENIUS_ASPECT][span], _ = _hexahedron_metrics(mesh.nodes, corners, samples)
         elif shape == "Tetrahedron":
-            quality[SCALED_JACOBIAN][span], quality[FROBENIUS_ASPECT][span] = _tetrahedron_quality(mesh.nodes[corners])
+            scaled, aspects = _tetrahedron_quality(mesh.nodes[corners])
+            if rows.shape[1] > 4:
+                jacobians = _tetrahedron_sample_jacobians(mesh.nodes, rows, mesh.element_types[name])
+                # Each point's tangents are the edges of the straight tetrahedron with the same Jacobian.
+                points = np.concatenate((np.zeros((*jacobians.shape[:2], 1, 3)), jacobians), axis=2).reshape(-1, 4, 3)
+                at_points, aspects_at_points = (values.reshape(jacobians.shape[:2]) for values in _tetrahedron_quality(points))
+                scaled, aspects = at_points.min(axis=1), aspects_at_points.max(axis=1)
+            quality[SCALED_JACOBIAN][span], quality[FROBENIUS_ASPECT][span] = scaled, aspects
+            dihedrals[span] = _min_dihedral_angles(mesh.nodes[corners])
         elif shape == "Triangle":
             quality[SCALED_JACOBIAN][span], quality[FROBENIUS_ASPECT][span] = _triangle_quality(mesh.nodes[corners])
         else:
             quality[SCALED_JACOBIAN][span], quality[FROBENIUS_ASPECT][span] = _quadrilateral_quality(mesh.nodes[corners])
     if not np.isnan(warps).all():
         quality[WARP] = warps
+    if not np.isnan(dihedrals).all():
+        quality[MIN_DIHEDRAL_ANGLE] = dihedrals
     return quality
+
+
+def _edge_ratios(points: np.ndarray, edges: np.ndarray) -> np.ndarray:
+    """Longest over shortest of the given (E, 2) corner edges of (M, corners, 3) elements, infinite where an edge has collapsed."""
+    lengths = np.linalg.norm(points[:, edges[:, 1]] - points[:, edges[:, 0]], axis=-1)
+    shortest, longest = lengths.min(axis=1), lengths.max(axis=1)
+    positive = shortest > 0
+    return np.where(positive, longest / np.where(positive, shortest, 1.0), np.inf)
+
+
+def _min_dihedral_angles(points: np.ndarray) -> np.ndarray:
+    """Smallest interior dihedral angles of (M, 4, 3) tetrahedra, in degrees, 0 for a flat one."""
+    angles = []
+    for (a, b), (c, d) in zip(_SHAPE_EDGES["Tetrahedron"], [(3, 2), (0, 3), (1, 3), (1, 2), (2, 0), (0, 1)], strict=True):
+        # The angle at edge ab between the faces abc and abd: between c's and d's offsets from the edge, normal to it.
+        axis = points[:, b] - points[:, a]
+        axis /= np.maximum(np.linalg.norm(axis, axis=-1, keepdims=True), np.finfo(float).tiny)
+        first, second = points[:, c] - points[:, a], points[:, d] - points[:, a]
+        first -= np.einsum("mi,mi->m", first, axis)[:, None] * axis
+        second -= np.einsum("mi,mi->m", second, axis)[:, None] * axis
+        lengths = np.maximum(np.linalg.norm(first, axis=-1) * np.linalg.norm(second, axis=-1), np.finfo(float).tiny)
+        angles.append(np.degrees(np.arccos(np.clip(np.einsum("mi,mi->m", first, second) / lengths, -1.0, 1.0))))
+    return np.min(angles, axis=0)
 
 
 def _tetrahedron_quality(points: np.ndarray) -> tuple[np.ndarray, np.ndarray]:

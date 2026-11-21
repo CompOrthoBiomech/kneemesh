@@ -38,7 +38,7 @@ from vtkmodules.vtkRenderingCore import (
 
 from kneemesh.config import BONE_STRUCTURES, STRUCTURES, Structure
 from kneemesh.gui.labels import LabelEntry
-from kneemesh.mesh_optimization import FROBENIUS_ASPECT, SCALED_JACOBIAN, WARP
+from kneemesh.mesh_optimization import EDGE_RATIO, FROBENIUS_ASPECT, MIN_DIHEDRAL_ANGLE, SCALED_JACOBIAN, WARP
 
 type Stage = Literal["label", "geometry", "mesh"]
 type DisplayMode = Literal["latest", "label", "geometry", "mesh"]
@@ -113,10 +113,16 @@ METRICS: dict[str, Metric] = {
     for metric in (
         Metric(SCALED_JACOBIAN, "Scaled Jacobian", higher_is_better=True),
         Metric(FROBENIUS_ASPECT, "Frobenius aspect ratio", higher_is_better=False),
+        Metric(EDGE_RATIO, "Edge ratio", higher_is_better=False),
+        Metric(MIN_DIHEDRAL_ANGLE, "Minimum dihedral angle (degrees)", higher_is_better=True),
         Metric(WARP, "Surface warp (degrees)", higher_is_better=False, faces=True),
     )
 }
-"""The quality metrics meshes can be colored by, by name."""
+"""The quality metrics meshes can be colored by, by name.
+
+The scaled Jacobian is each element's smallest over its corners and, for high-order elements, its Gauss points
+(mesh_optimization.element_quality). The minimum dihedral angle applies to tetrahedra alone.
+"""
 
 
 class _Display:
@@ -480,10 +486,11 @@ class Scene:
         values = [] if metric is None else [_array(item.surface(metric.faces).data, metric.name) for item in meshes]
         finite = np.concatenate([np.zeros(0), *(array[np.isfinite(array)] for array in values if array is not None)])
         colored = metric is not None and len(finite) > 0
-        for item in meshes:
+        for item, array in zip(meshes, values if values else [None] * len(meshes), strict=True):
             item.show(faces=colored and metric is not None and metric.faces)
             mapper = _mapper(item.actors[0])
-            if not colored or metric is None:
+            # A mesh the metric does not apply to, such as hexahedra by the dihedral angle, keeps its structure's color.
+            if not colored or metric is None or array is None:
                 mapper.ScalarVisibilityOff()
                 continue
             mapper.SetScalarModeToUseCellFieldData()

@@ -1,9 +1,12 @@
 from dataclasses import replace
 
+import gmsh
 import numpy as np
 import pytest
+from vtkmodules.util.numpy_support import vtk_to_numpy
 from vtkmodules.vtkFiltersGeometry import vtkUnstructuredGridGeometryFilter
 
+from kneemesh.brep import gmsh_session
 from kneemesh.disk import write_mesh
 from kneemesh.gui.labels import LabelEntry
 from kneemesh.gui.view import Scene, edge_lines, read_mesh_preview
@@ -38,7 +41,7 @@ def test_meshes_are_colored_by_a_metric_with_a_scalar_bar(tmp_path):
     scene = Scene()
     scene.set_mesh("lateral_meniscus", _cube_mesh(tmp_path / "a.vtu"))
     scene.set_mesh("medial_meniscus", _cube_mesh(tmp_path / "b.vtu", lift=0.5))
-    assert scene.metrics() == ["scaled_jacobian", "frobenius_aspect", "warp"]
+    assert scene.metrics() == ["scaled_jacobian", "frobenius_aspect", "edge_ratio", "warp"]
 
     scene.refresh([], "latest", [], metric="scaled_jacobian")
     assert scene.scalar_bar.GetVisibility()
@@ -63,6 +66,67 @@ def test_meshes_are_colored_by_a_metric_with_a_scalar_bar(tmp_path):
     scene.refresh([], "latest", [])
     assert not scene.scalar_bar.GetVisibility()
     assert not mapper.GetScalarVisibility()
+
+
+def _straight_high_order(corners, name, gmsh_type):
+    """One element of a gmsh type with its high-order nodes where its corners' linear map puts them."""
+    with gmsh_session():
+        local = np.reshape(gmsh.model.mesh.getElementProperties(gmsh_type)[4], (-1, 3))
+    corners = np.asarray(corners, dtype=float)
+    if len(corners) == 4:
+        nodes = corners[0] + local @ (corners[1:] - corners[0])
+    else:
+        weights = np.prod(1 + local[:, None, :] * local[None, :8, :], axis=-1) / 8
+        nodes = weights @ corners
+    return Mesh(nodes, {name: np.arange(len(nodes))[None]}, {name: gmsh_type})
+
+
+UNIT_CUBE = [[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0], [0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]]
+
+
+def _drawn(scene, structure, metric):
+    mapper = scene._stages[("mesh", structure)].actors[0].GetMapper()
+    mapper.Update()
+    return mapper, vtk_to_numpy(mapper.GetInput().GetCellData().GetArray(metric))
+
+
+def test_a_high_order_element_is_drawn_with_its_smallest_scaled_jacobian_at_any_gauss_point(tmp_path):
+    mesh = _straight_high_order(UNIT_CUBE, "Hexahedron 20", 17)
+    # Node 8, the middle of the edge from corner 0 to corner 1, pushed far inward folds the element there; its corners stay square.
+    mesh.nodes[8] += [0.0, 1.5, 0.0]
+    mesh = mesh.with_face_sets()
+    quality = element_quality(mesh)
+    assert quality["scaled_jacobian"][0] < 0
+    write_mesh(replace(mesh, quality=quality), tmp_path / "bent.vtu")
+    scene = Scene()
+    scene.set_mesh("lateral_meniscus", read_mesh_preview(tmp_path / "bent.vtu"))
+
+    scene.refresh([], "latest", [], metric="scaled_jacobian")
+
+    _, drawn = _drawn(scene, "lateral_meniscus", "scaled_jacobian")
+    assert len(drawn) > 0
+    assert np.allclose(drawn, quality["scaled_jacobian"][0])
+    assert np.isclose(scene.lookup_table.GetTableRange()[0], quality["scaled_jacobian"][0])
+
+
+def test_a_metric_of_tetrahedra_alone_leaves_hexahedra_in_their_structure_colors(tmp_path):
+    tetrahedra = Mesh(
+        np.array([[0, 0, 0], [1, 0, 0], [0.5, np.sqrt(3) / 2, 0], [0.5, np.sqrt(3) / 6, np.sqrt(2 / 3)]]),
+        {"Tetrahedron 4": np.array([[0, 1, 2, 3]])},
+        {"Tetrahedron 4": 4},
+    ).with_face_sets()
+    write_mesh(replace(tetrahedra, quality=element_quality(tetrahedra)), tmp_path / "tet.vtu")
+    scene = Scene()
+    scene.set_mesh("femur", read_mesh_preview(tmp_path / "tet.vtu"))
+    scene.set_mesh("lateral_meniscus", _cube_mesh(tmp_path / "hex.vtu"))
+    assert "min_dihedral_angle" in scene.metrics()
+
+    scene.refresh([], "latest", [], metric="min_dihedral_angle")
+
+    tet_mapper, drawn = _drawn(scene, "femur", "min_dihedral_angle")
+    assert tet_mapper.GetScalarVisibility()
+    assert np.allclose(drawn, np.degrees(np.arccos(1 / 3)))
+    assert not _drawn(scene, "lateral_meniscus", "scaled_jacobian")[0].GetScalarVisibility()
 
 
 def test_solo_hides_every_other_structure_and_its_labels(tmp_path):

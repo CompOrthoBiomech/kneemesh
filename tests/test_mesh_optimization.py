@@ -95,13 +95,17 @@ def real_hex_meshes(real_hex_blocks):
 
 
 def gauss_determinants(mesh):
-    """Jacobian determinants of every element at the points of Gauss rules of order 2 * p - 1 and 2 * p + 1, from gmsh's basis functions."""
+    """Jacobian determinants of every element of one type at the points of its Gauss rules, from gmsh's basis functions.
+
+    The rules are exact to orders 2p - 1 and 2p + 1 for hexahedra of order p, 2p - 2 and 2p for tetrahedra.
+    """
     determinants = []
     with gmsh_session():
         for name, connectivity in mesh.elements.items():
             element_type = mesh.element_types[name]
             order = gmsh.model.mesh.getElementProperties(element_type)[2]
-            for rule in (f"Gauss{2 * order - 1}", f"Gauss{2 * order + 1}"):
+            degrees = (2 * order - 2, 2 * order) if name.startswith("Tetrahedron") else (2 * order - 1, 2 * order + 1)
+            for rule in (f"Gauss{degree}" for degree in degrees):
                 points, _ = gmsh.model.mesh.getIntegrationPoints(element_type, rule)
                 _, gradients, _ = gmsh.model.mesh.getBasisFunctions(element_type, points, "GradLagrange")
                 gradients = np.reshape(gradients, (len(points) // 3, connectivity.shape[1], 3))
@@ -464,13 +468,14 @@ def test_gauss_point_jacobians_follow_moved_corners_as_gmsh_computes_them(name, 
 
     expected = gauss_determinants(replace(mesh, nodes=_move_high_order_nodes(mesh, corners, moved)))
 
-    assert np.allclose(np.linalg.det(samples.tangents(moved, corners)), expected, rtol=1e-10, atol=1e-12)
+    # The samples are the corner nodes, then the Gauss points.
+    assert np.allclose(np.linalg.det(samples.tangents(moved, corners))[:, 8:], expected, rtol=1e-10, atol=1e-12)
 
 
 def bent_quadratic_grid():
-    """A perturbed 3^3 grid of 20-node hexahedra whose second-order nodes are moved randomly, putting one Gauss point at a scaled Jacobian of 0.15."""
+    """A perturbed 3^3 grid of 20-node hexahedra whose second-order nodes are moved randomly, leaving two below the barrier, the worst at 0.15."""
     mesh = quadratic_hexahedra(cube_grid(3, perturbation=0.15))
-    mesh.nodes[64:] += np.random.default_rng(2).uniform(-0.05, 0.05, mesh.nodes[64:].shape)
+    mesh.nodes[64:] += np.random.default_rng(3).uniform(-0.04, 0.04, mesh.nodes[64:].shape)
     return mesh
 
 
@@ -578,11 +583,79 @@ def test_element_quality_of_distorted_and_inverted_elements():
         element_quality(single(UNIT_CUBE[:6], "Prism 6", 6))
 
 
-def test_element_quality_measures_high_order_elements_on_their_corners():
-    rng = np.random.default_rng(0)
-    nodes = np.vstack([REGULAR_TETRAHEDRON, rng.uniform(0, 1, (6, 3))])
-    quality = element_quality(single(nodes, "Tetrahedron 10", 11))
+def straight_tetrahedron_10(corners):
+    """A 10-node tetrahedron with its middle nodes on its straight edges' midpoints."""
+    with gmsh_session():
+        local = np.reshape(gmsh.model.mesh.getElementProperties(11)[4], (-1, 3))
+    corners = np.asarray(corners, dtype=float)
+    return corners[0] + local @ (corners[1:] - corners[0])
+
+
+def test_element_quality_measures_straight_high_order_tetrahedra_as_linear_ones():
+    quality = element_quality(single(straight_tetrahedron_10(REGULAR_TETRAHEDRON), "Tetrahedron 10", 11))
     assert np.allclose(quality["scaled_jacobian"], 1.0)
+    assert np.allclose(quality["frobenius_aspect"], 1.0)
+
+
+def test_element_quality_measures_curved_tetrahedra_at_their_gauss_points():
+    nodes = straight_tetrahedron_10(REGULAR_TETRAHEDRON)
+    # Node 4, the middle of the edge from corner 0 to corner 1, pulled across the element inverts it near that edge.
+    nodes[4] += [0.0, 1.2, 0.0]
+    mesh = single(nodes, "Tetrahedron 10", 11)
+    assert (gauss_determinants(mesh) <= 0).any()
+
+    quality = element_quality(mesh)
+
+    assert quality["scaled_jacobian"][0] < 0
+    assert quality["frobenius_aspect"][0] == np.inf
+    # Corner metrics alone see the regular tetrahedron.
+    assert quality["edge_ratio"][0] == pytest.approx(1.0)
+    assert quality["min_dihedral_angle"][0] == pytest.approx(np.degrees(np.arccos(1 / 3)))
+    # Bent less, it stays valid but measures lower at its Gauss points than at its corners.
+    nodes[4] = straight_tetrahedron_10(REGULAR_TETRAHEDRON)[4] + [0.0, 0.2, 0.0]
+    assert 0 < element_quality(mesh)["scaled_jacobian"][0] < 0.95
+
+
+def test_edge_ratio_and_dihedral_angle_of_tetrahedra():
+    regular = element_quality(single(REGULAR_TETRAHEDRON, "Tetrahedron 4", 4))
+    assert regular["edge_ratio"][0] == pytest.approx(1.0)
+    assert regular["min_dihedral_angle"][0] == pytest.approx(np.degrees(np.arccos(1 / 3)))
+
+    # A sliver: four nearly coplanar corners of a square, its edges about equal, so only the dihedral angle sees it.
+    sliver = element_quality(single([[0, 0, 0], [1, 0, 0], [1, 1, 0.05], [0, 1, 0.05]], "Tetrahedron 4", 4))
+    assert sliver["edge_ratio"][0] < 1.5
+    assert sliver["min_dihedral_angle"][0] < 5
+
+    # The right-angled corner tetrahedron: edges 1 and sqrt(2), three right dihedral angles and three of arccos(1 / sqrt(3)).
+    corner = element_quality(single([[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]], "Tetrahedron 4", 4))
+    assert corner["edge_ratio"][0] == pytest.approx(np.sqrt(2))
+    assert corner["min_dihedral_angle"][0] == pytest.approx(np.degrees(np.arccos(1 / np.sqrt(3))))
+
+    # Mirrored, it measures the same; its scaled Jacobian tells it is inverted.
+    inverted = element_quality(single(REGULAR_TETRAHEDRON, "Tetrahedron 4", 4, [0, 2, 1, 3]))
+    assert inverted["min_dihedral_angle"][0] == pytest.approx(regular["min_dihedral_angle"][0])
+
+
+def test_edge_ratio_applies_to_every_shape_and_the_dihedral_angle_to_tetrahedra_alone():
+    box = element_quality(single(UNIT_CUBE * [3.0, 1.0, 1.0], "Hexahedron 8", 5))
+    assert box["edge_ratio"][0] == pytest.approx(3.0)
+    assert "min_dihedral_angle" not in box
+    assert element_quality(single([[0, 0, 0], [2, 0, 0], [0, 1, 0]], "Triangle 3", 2))["edge_ratio"][0] == pytest.approx(np.sqrt(5))
+    assert element_quality(single(UNIT_CUBE[:4] * [1.0, 0.5, 1.0], "Quadrilateral 4", 3))["edge_ratio"][0] == pytest.approx(2.0)
+
+    # A mesh of both takes the dihedral angle for its tetrahedra, NaN for its hexahedra.
+    nodes = np.vstack([UNIT_CUBE, REGULAR_TETRAHEDRON + [2.0, 0.0, 0.0]])
+    mixed = Mesh(nodes, {"Hexahedron 8": np.arange(8)[None], "Tetrahedron 4": np.arange(8, 12)[None]}, {"Hexahedron 8": 5, "Tetrahedron 4": 4})
+    quality = element_quality(mixed)
+    assert np.isnan(quality["min_dihedral_angle"][0])
+    assert quality["min_dihedral_angle"][1] == pytest.approx(np.degrees(np.arccos(1 / 3)))
+    assert np.allclose(quality["edge_ratio"], 1.0)
+
+
+def test_element_quality_of_collapsed_edges_is_infinite_edge_ratio():
+    collapsed = REGULAR_TETRAHEDRON.copy()
+    collapsed[1] = collapsed[0]
+    assert element_quality(single(collapsed, "Tetrahedron 4", 4))["edge_ratio"][0] == np.inf
 
 
 def test_element_quality_numbers_faces_after_elements():
