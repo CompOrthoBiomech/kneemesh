@@ -18,6 +18,11 @@ Up to three strategies run in turn on the hexahedra's corner nodes:
    their squared normalized out-of-plane volume, flattens warped faces on the
    surface, which corner measures cannot see.
 
+High-order hexahedra are also measured at the points of the Gauss rules
+simulations integrate them with, where their curved edges can invert an
+element whose corners are valid. Their Jacobians there are barriers in
+optimization and targets in untangling, alongside the corners.
+
 Boundary nodes are classified from the mesh's own boundary quadrilaterals.
 Where adjacent boundary faces meet at more than a feature angle, their shared
 edges are feature edges. Surface nodes slide in their tangent plane and may
@@ -31,6 +36,7 @@ Tangential travel is also limited, so the tangent plane stays a good model of
 the surface. High-order nodes follow the corners of their element.
 """
 
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
 
 import gmsh
@@ -65,6 +71,8 @@ _UNTANGLE_TARGET = 0.2
 # Smallest corner scaled Jacobian untangling stops at. Stopping as soon as none is inverted could leave a corner
 # at 1e-11, where 1 / SJ is so steep that optimization's first step backtracks below _MIN_STEP and stalls.
 _UNTANGLE_MARGIN = 0.01
+# Scaled Jacobian at a Gauss point of a high-order hexahedron below which optimization's barrier on it acts.
+_GAUSS_BARRIER = 0.2
 
 
 @dataclass(frozen=True)
@@ -72,9 +80,10 @@ class MeshQuality:
     """Scaled Jacobian, Frobenius aspect ratio, and surface warp statistics of a hexahedral mesh.
 
     Attributes:
-        minimum: Smallest element scaled Jacobian. Negative means an inverted element.
+        minimum: Smallest element scaled Jacobian (see scaled_jacobians). Negative means an inverted element.
         mean: Mean element scaled Jacobian.
-        inverted: Number of elements with a corner Jacobian determinant at or below zero.
+        inverted: Number of elements with a Jacobian determinant at or below zero at a corner, or at a Gauss point
+            of a high-order element.
         max_aspect: Largest element Frobenius aspect ratio, infinite if any element is inverted.
         mean_aspect: Mean element Frobenius aspect ratio, infinite if any element is inverted.
         max_warp: Largest warp of a boundary quadrilateral, in degrees (see surface_warps).
@@ -88,6 +97,87 @@ class MeshQuality:
     mean_aspect: float
     max_warp: float
     warp_99: float
+
+
+@dataclass(frozen=True, eq=False)
+class _GaussSamples:
+    """Jacobians of one type of high-order hexahedra at Gauss points, as affine functions of their corners.
+
+    High-order nodes follow their element's corners trilinearly, so at any
+    point the Jacobian is the trilinear map's, from the corners, plus a
+    constant: the original high-order nodes' offsets from their trilinear
+    positions, through their own shape functions' gradients.
+    """
+
+    elements: np.ndarray  # (K,) rows of the hexahedra's corners
+    gradients: np.ndarray  # (G, 8, 3) trilinear shape functions' gradients at each Gauss point, by corner and local axis
+    offsets: np.ndarray  # (K, G, 3, 3) constant part of each Jacobian, one local axis's tangent per row
+
+    def tangents(self, nodes: np.ndarray, corners: np.ndarray) -> np.ndarray:
+        """Return the Jacobians at the Gauss points, (K, G, 3, 3), with rows dx/du, dx/dv, dx/dw as a corner's edges."""
+        # A batched product with the (3G, 8) gradients is several times faster than einsum.
+        products = self._matrix() @ nodes[corners[self.elements]]
+        return products.reshape(self.offsets.shape) + self.offsets
+
+    def scatter(self, gradient: np.ndarray, corners: np.ndarray, size: int) -> np.ndarray:
+        """Return the gradient by node, (size, 3), of a function with the given gradient by Jacobian, (K, G, 3, 3)."""
+        values = (self._matrix().T @ gradient.reshape(len(gradient), -1, 3)).reshape(-1, 3)
+        indices = corners[self.elements].ravel()
+        return np.column_stack([np.bincount(indices, weights=values[:, axis], minlength=size) for axis in range(3)])
+
+    def _matrix(self) -> np.ndarray:
+        """The gradients as a (3G, 8) matrix, row g * 3 + i for Gauss point g and local axis i."""
+        return np.ascontiguousarray(np.swapaxes(self.gradients, 1, 2).reshape(-1, 8))
+
+
+def _gauss_samples(mesh: Mesh) -> list[_GaussSamples]:
+    """Return the Gauss point Jacobians of each type of high-order hexahedra in a mesh of hexahedra.
+
+    An element of order p is sampled at the points of the reduced and full
+    Gauss rules, p and p + 1 points along each axis, as simulations
+    integrate it. Linear hexahedra have none.
+    """
+    samples: list[_GaussSamples] = []
+    if all(connectivity.shape[1] == 8 for connectivity in mesh.elements.values()):
+        return samples
+    start = 0
+    with gmsh_session():
+        for name, connectivity in mesh.elements.items():
+            rows = np.arange(start, start + len(connectivity))
+            start += len(connectivity)
+            if connectivity.shape[1] == 8:
+                continue
+            element_type = mesh.element_types[name]
+            properties = gmsh.model.mesh.getElementProperties(element_type)
+            order, local = int(properties[2]), np.reshape(properties[4], (-1, 3))
+            rules = (f"Gauss{2 * order - 1}", f"Gauss{2 * order + 1}")
+            points = np.vstack([np.reshape(gmsh.model.mesh.getIntegrationPoints(element_type, rule)[0], (-1, 3)) for rule in rules])
+            _, basis, _ = gmsh.model.mesh.getBasisFunctions(element_type, points.ravel(), "GradLagrange")
+            basis = np.reshape(basis, (len(points), connectivity.shape[1], 3))
+            # Trilinear shape functions (1 + u u_c)(1 + v v_c)(1 + w w_c) / 8 differentiated along each axis.
+            factors = 1 + points[:, None, :] * local[None, :8, :]
+            gradients = np.stack([local[None, :8, axis] * np.prod(np.delete(factors, axis, axis=-1), axis=-1) / 8 for axis in range(3)], axis=-1)
+            nodes = mesh.nodes[connectivity]
+            full = np.einsum("gni,knx->kgix", basis, nodes)
+            trilinear = np.einsum("gci,kcx->kgix", gradients, nodes[:, :8])
+            samples.append(_GaussSamples(rows, gradients, full - trilinear))
+    return samples
+
+
+def _element_scaled_jacobians(nodes: np.ndarray, corners: np.ndarray, samples: Sequence[_GaussSamples] = ()) -> np.ndarray:
+    """Return each hexahedron's smallest scaled Jacobian over its corners and Gauss points, (M,)."""
+    quality = _corner_scaled_jacobians(nodes, corners).min(axis=1)
+    for sample in samples:
+        quality[sample.elements] = np.minimum(quality[sample.elements], _scaled_jacobians_of(sample.tangents(nodes, corners)).min(axis=1))
+    return quality
+
+
+def _any_inverted(nodes: np.ndarray, corners: np.ndarray, samples: Sequence[_GaussSamples] = ()) -> np.ndarray:
+    """Return which hexahedra have a Jacobian determinant at or below zero at a corner or Gauss point, (M,)."""
+    inverted = (np.linalg.det(_corner_edges(nodes, corners)) <= 0).any(axis=1)
+    for sample in samples:
+        inverted[sample.elements] |= (np.linalg.det(sample.tangents(nodes, corners)) <= 0).any(axis=1)
+    return inverted
 
 
 @dataclass(frozen=True, eq=False)
@@ -154,17 +244,20 @@ class _Constraints:
 
 
 def scaled_jacobians(mesh: Mesh) -> np.ndarray:
-    """Return each hexahedron's scaled Jacobian, the smallest over its eight corners.
+    """Return each hexahedron's scaled Jacobian, the smallest over its eight corners and, if high-order, its Gauss points.
 
     A corner's scaled Jacobian is the determinant of its three edge vectors
     divided by the product of their lengths: 1 for a right angle corner, 0
-    for a flat one, and negative for an inverted one. High-order elements are
-    measured on their corner nodes.
+    for a flat one, and negative for an inverted one. A high-order element
+    is also measured at the points of its reduced and full Gauss rules, p and
+    p + 1 along each axis for order p, with its Jacobian's tangents along the
+    local axes in place of edges: curved edges can invert it there though
+    its corners are valid.
 
     Raises:
         ValueError: If the mesh has elements other than hexahedra.
     """
-    return _corner_scaled_jacobians(mesh.nodes, _hexahedron_corners(mesh)).min(axis=1)
+    return _element_scaled_jacobians(mesh.nodes, _hexahedron_corners(mesh), _gauss_samples(mesh))
 
 
 def frobenius_aspects(mesh: Mesh) -> np.ndarray:
@@ -174,12 +267,15 @@ def frobenius_aspects(mesh: Mesh) -> np.ndarray:
     matrix E of its three edge vectors, as Verdict's maximum aspect Frobenius
     measures it: 1 for a cube's corner, and larger as the corner's edges
     differ in length or leave right angles. It is infinite for a degenerate
-    or inverted corner. High-order elements are measured on their corner nodes.
+    or inverted corner. High-order elements are measured on their corner
+    nodes, and are infinite if inverted at a Gauss point (see scaled_jacobians).
 
     Raises:
         ValueError: If the mesh has elements other than hexahedra.
     """
-    return _corner_aspects(_corner_edges(mesh.nodes, _hexahedron_corners(mesh))).max(axis=1)
+    corners = _hexahedron_corners(mesh)
+    aspects = _corner_aspects(_corner_edges(mesh.nodes, corners)).max(axis=1)
+    return np.where(_any_inverted(mesh.nodes, corners, _gauss_samples(mesh)), np.inf, aspects)
 
 
 def surface_warps(mesh: Mesh) -> np.ndarray:
@@ -218,15 +314,15 @@ def mesh_quality(mesh: Mesh) -> MeshQuality:
         ValueError: If the mesh has elements other than hexahedra.
     """
     corners = _hexahedron_corners(mesh)
-    edges = _corner_edges(mesh.nodes, corners)
-    determinants = np.linalg.det(edges)
-    quality = _corner_scaled_jacobians(mesh.nodes, corners).min(axis=1)
-    aspects = _corner_aspects(edges).max(axis=1)
+    samples = _gauss_samples(mesh)
+    quality = _element_scaled_jacobians(mesh.nodes, corners, samples)
+    inverted = _any_inverted(mesh.nodes, corners, samples)
+    aspects = np.where(inverted, np.inf, _corner_aspects(_corner_edges(mesh.nodes, corners)).max(axis=1))
     warps = surface_warps(mesh)
     return MeshQuality(
         float(quality.min()),
         float(quality.mean()),
-        int(np.count_nonzero((determinants <= 0).any(axis=1))),
+        int(np.count_nonzero(inverted)),
         float(aspects.max()),
         float(aspects.mean()),
         float(warps.max(initial=0.0)),
@@ -256,7 +352,9 @@ def element_quality(mesh: Mesh) -> dict[str, np.ndarray]:
     Each array holds one value per element and face, in their numbering
     (Mesh.elements, then Mesh.faces), NaN where the metric does not apply.
     Higher-order elements are measured on their corner nodes, as if they
-    were first order.
+    were first order, except that a high-order hexahedron's scaled Jacobian
+    also takes its Gauss points (see scaled_jacobians), and its aspect ratio
+    is infinite if it is inverted at one.
 
     - scaled_jacobian, of volume elements, or of a surface mesh's elements:
       the smallest over its corners of the corner's Jacobian determinant over
@@ -294,9 +392,10 @@ def element_quality(mesh: Mesh) -> dict[str, np.ndarray]:
         if kind == "face":
             continue
         if shape == "Hexahedron":
-            edges = _corner_edges(mesh.nodes, corners)
-            quality[SCALED_JACOBIAN][span] = _corner_scaled_jacobians(mesh.nodes, corners).min(axis=1)
-            quality[FROBENIUS_ASPECT][span] = _corner_aspects(edges).max(axis=1)
+            samples = _gauss_samples(Mesh(mesh.nodes, {name: rows}, {name: mesh.element_types[name]}))
+            aspects = _corner_aspects(_corner_edges(mesh.nodes, corners)).max(axis=1)
+            quality[SCALED_JACOBIAN][span] = _element_scaled_jacobians(mesh.nodes, corners, samples)
+            quality[FROBENIUS_ASPECT][span] = np.where(_any_inverted(mesh.nodes, corners, samples), np.inf, aspects)
         elif shape == "Tetrahedron":
             quality[SCALED_JACOBIAN][span], quality[FROBENIUS_ASPECT][span] = _tetrahedron_quality(mesh.nodes[corners])
         elif shape == "Triangle":
@@ -378,6 +477,13 @@ def optimize_hexahedral_mesh(
     0.2 until all reach 0.01, and optimization is skipped with a warning if
     any stays inverted.
 
+    High-order hexahedra are also measured at their Gauss points (see
+    scaled_jacobians), where their curved edges can invert them though their
+    corners are valid: smoothing keeps their scaled Jacobians there from
+    falling, untangling raises them as it does the corners', and
+    optimization adds (1 / SJ - 1 / 0.2)^2 for each below 0.2, a barrier that
+    leaves elements well shaped there alone.
+
     Boundary allowances scale with each node's local size, the mean length
     of the element edges at the node. Feature edges are boundary edges where
     the faces on either side meet at more than feature_angle; nodes where
@@ -429,19 +535,20 @@ def optimize_hexahedral_mesh(
         raise ValueError(f"aspect_weight and warp_weight must not be negative, got {aspect_weight} and {warp_weight}")
 
     corners = _hexahedron_corners(mesh)
+    samples = _gauss_samples(mesh)
     before = mesh_quality(mesh)
     constraints = _constraints(mesh.nodes, corners, surface_deviation, surface_travel, feature_angle, preserve_volume, mesh.straight_lines)
     positions = constraints.place_lines(mesh.nodes)
     if laplacian_iterations:
-        positions = _smart_laplacian(positions, corners, constraints, laplacian_iterations)
+        positions = _smart_laplacian(positions, corners, constraints, laplacian_iterations, samples)
     if optimization_iterations:
-        if _corner_scaled_jacobians(positions, corners).min() < _UNTANGLE_MARGIN:
-            positions = _untangle(positions, corners, constraints, optimization_iterations)
-        if (np.linalg.det(_corner_edges(positions, corners)) <= 0).any():
+        if _element_scaled_jacobians(positions, corners, samples).min() < _UNTANGLE_MARGIN:
+            positions = _untangle(positions, corners, constraints, optimization_iterations, samples)
+        if _any_inverted(positions, corners, samples).any():
             logger.warning("Skipping optimization because untangling left inverted elements")
         else:
             faces = _boundary_faces(corners) if warp_weight else None
-            positions = _optimize(positions, corners, constraints, optimization_iterations, aspect_weight, faces, warp_weight)
+            positions = _optimize(positions, corners, constraints, optimization_iterations, aspect_weight, faces, warp_weight, samples)
 
     result = replace(mesh, nodes=_move_high_order_nodes(mesh, corners, positions))
     after = mesh_quality(result)
@@ -473,9 +580,38 @@ def _corner_edges(nodes: np.ndarray, corners: np.ndarray) -> np.ndarray:
 
 
 def _corner_scaled_jacobians(nodes: np.ndarray, corners: np.ndarray) -> np.ndarray:
-    edges = _corner_edges(nodes, corners)
+    return _scaled_jacobians_of(_corner_edges(nodes, corners))
+
+
+def _scaled_jacobians_of(edges: np.ndarray) -> np.ndarray:
+    """Return the scaled Jacobian of each (..., 3, 3) matrix of edge or tangent rows."""
     lengths = np.linalg.norm(edges, axis=-1).prod(axis=-1)
     return np.linalg.det(edges) / np.maximum(lengths, np.finfo(float).tiny)
+
+
+def _jacobian_terms(edges: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Return the cofactor rows, determinants, and squared row lengths of (..., 3, 3) matrices of edge rows."""
+    # For rows r0, r1, r2, the rows of E^-T are (r1 x r2, r2 x r0, r0 x r1) / det E.
+    cofactors = np.cross(np.roll(edges, -1, axis=-2), np.roll(edges, -2, axis=-2))
+    determinants = np.einsum("...i,...i->...", edges[..., 0, :], cofactors[..., 0, :])
+    return cofactors, determinants, np.einsum("...i,...i->...", edges, edges)
+
+
+def _gauss_barrier(tangents: np.ndarray) -> tuple[float, np.ndarray]:
+    """Return the sum of (1 / SJ - 1 / _GAUSS_BARRIER)^2 over Gauss points below _GAUSS_BARRIER, and its gradient by tangent.
+
+    The sum is infinite, with a zero gradient, if any determinant is at or
+    below zero. With d log SJ / dE as in _objective,
+    d f / dE = -2 (1 / SJ - 1 / b) (1 / SJ) d log SJ / dE, which is 0 at
+    SJ = b, so the barrier and its gradient are continuous there.
+    """
+    cofactors, determinants, squared = _jacobian_terms(tangents)
+    if not (determinants > 0).all():
+        return np.inf, np.zeros_like(tangents)
+    inverse_quality = np.sqrt(squared).prod(axis=-1) / determinants
+    excess = np.maximum(inverse_quality - 1 / _GAUSS_BARRIER, 0.0)
+    log_gradient = cofactors / determinants[..., None, None] - tangents / squared[..., None]
+    return float(np.sum(excess**2)), -2 * (excess * inverse_quality)[..., None, None] * log_gradient
 
 
 def _corner_aspects(edges: np.ndarray) -> np.ndarray:
@@ -487,11 +623,17 @@ def _corner_aspects(edges: np.ndarray) -> np.ndarray:
 
 
 def _objective(
-    nodes: np.ndarray, corners: np.ndarray, aspect_weight: float = 0.0, faces: np.ndarray | None = None, warp_weight: float = 0.0
+    nodes: np.ndarray,
+    corners: np.ndarray,
+    aspect_weight: float = 0.0,
+    faces: np.ndarray | None = None,
+    warp_weight: float = 0.0,
+    samples: Sequence[_GaussSamples] = (),
 ) -> tuple[float, np.ndarray]:
     """Return the sum of 1 / SJ plus aspect_weight times the sum of F^2 over all corners, and its gradient.
 
-    The sum is infinite, with a zero gradient, if any corner is degenerate or inverted.
+    The Gauss points of high-order elements add their barrier (_gauss_barrier).
+    The sum is infinite, with a zero gradient, if any corner or Gauss point is degenerate or inverted.
 
     log SJ = log det E - sum log |e_k| for the matrix E whose rows are the
     edge vectors e_k, so d log SJ / dE = E^-T - e_k / |e_k|^2 row by row, and
@@ -500,12 +642,12 @@ def _objective(
     and d F^2 = 2 F^2 d log F.
     """
     edges = _corner_edges(nodes, corners)
-    # For rows r0, r1, r2, the rows of E^-T are (r1 x r2, r2 x r0, r0 x r1) / det E.
-    cofactors = np.cross(np.roll(edges, -1, axis=-2), np.roll(edges, -2, axis=-2))
-    determinants = np.einsum("...i,...i->...", edges[..., 0, :], cofactors[..., 0, :])
+    cofactors, determinants, squared = _jacobian_terms(edges)
     if not (determinants > 0).all():
         return np.inf, np.zeros_like(nodes)
-    squared = np.einsum("...i,...i->...", edges, edges)
+    barriers = [_gauss_barrier(sample.tangents(nodes, corners)) for sample in samples]
+    if not all(np.isfinite(barrier) for barrier, _ in barriers):
+        return np.inf, np.zeros_like(nodes)
     inverse_quality = np.sqrt(squared).prod(axis=-1) / determinants
     inverse_transpose = cofactors / determinants[..., None, None]
     edge_gradient = -inverse_quality[..., None, None] * (inverse_transpose - edges / squared[..., None])
@@ -521,6 +663,9 @@ def _objective(
     indices = np.concatenate((corners[:, _CORNER_NEIGHBORS].ravel(), corners.ravel()))
     values = np.concatenate((edge_gradient.reshape(-1, 3), -edge_gradient.sum(axis=2).reshape(-1, 3)))
     gradient = np.column_stack([np.bincount(indices, weights=values[:, axis], minlength=len(nodes)) for axis in range(3)])
+    for sample, (barrier, tangent_gradient) in zip(samples, barriers, strict=True):
+        energy += barrier
+        gradient += sample.scatter(tangent_gradient, corners, len(nodes))
     if warp_weight and faces is not None:
         warp_energy, warp_gradient = _warp_objective(nodes, faces)
         energy += warp_weight * warp_energy
@@ -567,17 +712,18 @@ def _optimize(
     aspect_weight: float,
     faces: np.ndarray | None = None,
     warp_weight: float = 0.0,
+    samples: Sequence[_GaussSamples] = (),
 ) -> np.ndarray:
     """Minimize the objective by projected gradient descent with backtracking."""
     # Scaling each node's step by its local size squared makes the step dimensionless.
     scale = _local_sizes(constraints.origin, corners)[:, None] ** 2
-    energy, gradient = _objective(positions, corners, aspect_weight, faces, warp_weight)
+    energy, gradient = _objective(positions, corners, aspect_weight, faces, warp_weight, samples)
     step = _INITIAL_STEP
     for iteration in range(iterations):
         direction = scale * constraints.line_gradient(gradient)
         while step >= _MIN_STEP:
             trial = constraints.project(positions - step * direction)
-            trial_energy, trial_gradient = _objective(trial, corners, aspect_weight, faces, warp_weight)
+            trial_energy, trial_gradient = _objective(trial, corners, aspect_weight, faces, warp_weight, samples)
             if trial_energy < energy:
                 break
             step /= 2
@@ -593,45 +739,54 @@ def _optimize(
     return positions
 
 
-def _untangling_objective(nodes: np.ndarray, corners: np.ndarray) -> tuple[float, np.ndarray]:
-    """Return the sum of max(0, _UNTANGLE_TARGET - SJ)^2 over all corners, and its gradient.
+def _untangling_objective(nodes: np.ndarray, corners: np.ndarray, samples: Sequence[_GaussSamples] = ()) -> tuple[float, np.ndarray]:
+    """Return the sum of max(0, _UNTANGLE_TARGET - SJ)^2 over all corners and Gauss points, and its gradient.
 
     SJ = det E / prod |e_k|, so dSJ / de_k = cof_k / prod |e_k| - SJ e_k / |e_k|^2
     for the cofactor rows cof_k of E. Unlike 1 / SJ, it is finite and smooth
     through det E = 0, so it can pull inverted corners back.
     """
-    edges = _corner_edges(nodes, corners)
-    cofactors = np.cross(np.roll(edges, -1, axis=-2), np.roll(edges, -2, axis=-2))
-    determinants = np.einsum("...i,...i->...", edges[..., 0, :], cofactors[..., 0, :])
-    squared = np.maximum(np.einsum("...i,...i->...", edges, edges), np.finfo(float).tiny)
+    energy, edge_gradient = _untangling_terms(_corner_edges(nodes, corners))
+    indices = np.concatenate((corners[:, _CORNER_NEIGHBORS].ravel(), corners.ravel()))
+    values = np.concatenate((edge_gradient.reshape(-1, 3), -edge_gradient.sum(axis=2).reshape(-1, 3)))
+    gradient = np.column_stack([np.bincount(indices, weights=values[:, axis], minlength=len(nodes)) for axis in range(3)])
+    for sample in samples:
+        sample_energy, tangent_gradient = _untangling_terms(sample.tangents(nodes, corners))
+        energy += sample_energy
+        gradient += sample.scatter(tangent_gradient, corners, len(nodes))
+    return energy, gradient
+
+
+def _untangling_terms(edges: np.ndarray) -> tuple[float, np.ndarray]:
+    """Return the sum of max(0, _UNTANGLE_TARGET - SJ)^2 over (..., 3, 3) matrices of edge rows, and its gradient by edge."""
+    cofactors, determinants, squared = _jacobian_terms(edges)
+    squared = np.maximum(squared, np.finfo(float).tiny)
     product = np.sqrt(squared).prod(axis=-1)
     quality = determinants / product
     shortfall = np.maximum(_UNTANGLE_TARGET - quality, 0.0)
     quality_gradient = cofactors / product[..., None, None] - quality[..., None, None] * edges / squared[..., None]
-    edge_gradient = -2 * shortfall[..., None, None] * quality_gradient
-    indices = np.concatenate((corners[:, _CORNER_NEIGHBORS].ravel(), corners.ravel()))
-    values = np.concatenate((edge_gradient.reshape(-1, 3), -edge_gradient.sum(axis=2).reshape(-1, 3)))
-    gradient = np.column_stack([np.bincount(indices, weights=values[:, axis], minlength=len(nodes)) for axis in range(3)])
-    return float(np.sum(shortfall**2)), gradient
+    return float(np.sum(shortfall**2)), -2 * shortfall[..., None, None] * quality_gradient
 
 
-def _untangle(positions: np.ndarray, corners: np.ndarray, constraints: _Constraints, iterations: int) -> np.ndarray:
-    """Raise every corner's scaled Jacobian toward _UNTANGLE_TARGET by projected gradient descent, stopping once all reach _UNTANGLE_MARGIN.
+def _untangle(
+    positions: np.ndarray, corners: np.ndarray, constraints: _Constraints, iterations: int, samples: Sequence[_GaussSamples] = ()
+) -> np.ndarray:
+    """Raise every corner's and Gauss point's scaled Jacobian toward _UNTANGLE_TARGET by projected gradient descent, stopping once all reach _UNTANGLE_MARGIN.
 
-    Only corners below the target contribute, so the rest of the mesh moves
-    only as far as the poor corners' nodes pull it.
+    Only corners and Gauss points below the target contribute, so the rest
+    of the mesh moves only as far as the poor ones' nodes pull it.
     """
     scale = _local_sizes(constraints.origin, corners)[:, None] ** 2
-    energy, gradient = _untangling_objective(positions, corners)
+    energy, gradient = _untangling_objective(positions, corners, samples)
     step = _INITIAL_STEP
     for iteration in range(iterations):
-        if _corner_scaled_jacobians(positions, corners).min() >= _UNTANGLE_MARGIN:
+        if _element_scaled_jacobians(positions, corners, samples).min() >= _UNTANGLE_MARGIN:
             logger.debug("Untangled after {} steps", iteration)
             break
         direction = scale * constraints.line_gradient(gradient)
         while step >= _MIN_STEP:
             trial = constraints.project(positions - step * direction)
-            trial_energy, trial_gradient = _untangling_objective(trial, corners)
+            trial_energy, trial_gradient = _untangling_objective(trial, corners, samples)
             if trial_energy < energy:
                 break
             step /= 2
@@ -643,8 +798,12 @@ def _untangle(positions: np.ndarray, corners: np.ndarray, constraints: _Constrai
     return positions
 
 
-def _smart_laplacian(positions: np.ndarray, corners: np.ndarray, constraints: _Constraints, iterations: int) -> np.ndarray:
+def _smart_laplacian(
+    positions: np.ndarray, corners: np.ndarray, constraints: _Constraints, iterations: int, samples: Sequence[_GaussSamples] = ()
+) -> np.ndarray:
     """Move nodes toward their neighbors' average, keeping only moves that do not lower nearby element quality.
+
+    An element's quality is its smallest scaled Jacobian over its corners and Gauss points.
 
     Interior nodes average all edge neighbors, surface nodes their neighbors
     along the boundary, and edge nodes their neighbors along feature edges.
@@ -654,7 +813,7 @@ def _smart_laplacian(positions: np.ndarray, corners: np.ndarray, constraints: _C
     movable = (constraints.kind != _FIXED) & (counts > 0)
     elements = np.repeat(np.arange(len(corners)), 8)
     for _ in range(iterations):
-        quality = _corner_scaled_jacobians(positions, corners).min(axis=1)
+        quality = _element_scaled_jacobians(positions, corners, samples)
         average = adjacency @ positions / np.maximum(counts, 1)[:, None]
         trial = positions.copy()
         trial[movable] = average[movable]
@@ -662,7 +821,7 @@ def _smart_laplacian(positions: np.ndarray, corners: np.ndarray, constraints: _C
         moved = movable.copy()
         # Undo moves around any element that got worse until none does; each round undoes at least one move.
         while True:
-            trial_quality = _corner_scaled_jacobians(trial, corners).min(axis=1)
+            trial_quality = _element_scaled_jacobians(trial, corners, samples)
             worse = elements[(trial_quality < quality - 1e-12)[elements]]
             undo = np.zeros(len(positions), dtype=bool)
             undo[corners[np.unique(worse)].ravel()] = True

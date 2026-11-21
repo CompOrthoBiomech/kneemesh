@@ -2,6 +2,7 @@ import gmsh
 import numpy as np
 import pytest
 
+from kneemesh import tet_meshing
 from kneemesh.brep import gmsh_session
 from kneemesh.disk import write_brep
 from kneemesh.geo.meniscus import centerline, contours_to_brep, slice_isocontour
@@ -85,6 +86,30 @@ def test_tetrahedral_mesh_second_order_has_10_node_tetrahedra(meniscus_solid):
 
     assert list(mesh.elements) == ["Tetrahedron 10"]
     assert mesh.elements["Tetrahedron 10"].shape[1] == 10
+
+
+def gauss_determinants(mesh):
+    """Jacobian determinants of every second-order tetrahedron at the points of gmsh's Gauss rules of orders 2 and 4."""
+    connectivity = mesh.elements["Tetrahedron 10"]
+    determinants = []
+    with gmsh_session():
+        for rule in ("Gauss2", "Gauss4"):
+            points, _ = gmsh.model.mesh.getIntegrationPoints(11, rule)
+            _, gradients, _ = gmsh.model.mesh.getBasisFunctions(11, points, "GradLagrange")
+            gradients = np.reshape(gradients, (len(points) // 3, 10, 3))
+            determinants.append(np.linalg.det(np.einsum("gni,enx->egix", gradients, mesh.nodes[connectivity])))
+    return np.concatenate(determinants, axis=1)
+
+
+def test_second_order_tetrahedra_of_the_real_meniscus_are_valid_at_gauss_points(real_label, monkeypatch):
+    surface = smooth_isocontour(extract_isocontour(signed_distance_field(real_label)))
+    solid = contours_to_brep(slice_isocontour(surface, centerline(real_label), spacing=5.0), cap="planar")
+
+    assert (gauss_determinants(tetrahedral_mesh(solid, element_order=2)) > 0).all()
+
+    # Without gmsh's high-order optimization, middle nodes curved onto the surface invert thin tetrahedra beside it.
+    monkeypatch.setattr(tet_meshing, "_HIGH_ORDER_OPTIMIZE", 0)
+    assert (gauss_determinants(tetrahedral_mesh(solid, element_order=2)) <= 0).any(axis=1).sum() > 0
 
 
 def test_algorithms_carry_gmsh_option_numbers():

@@ -76,6 +76,9 @@ DEFAULT_MIN_SIZE_FRACTION = 1 / 20
 DEFAULT_MAX_SIZE_FRACTION = 1 / 4
 """Default largest element size as a fraction of the shortest side of the shape's oriented bounding box."""
 
+# gmsh's high-order optimization of curved elements: elastic smoothing, then optimization of the Jacobian ratio.
+_HIGH_ORDER_OPTIMIZE = 2
+
 _CURVE_SAMPLES = 100
 _SURFACE_SAMPLES = 30
 
@@ -166,7 +169,13 @@ def tetrahedral_mesh(
             surface curvature would hold this many. 0 disables curvature sizing.
         algorithm_2d: Algorithm for the boundary triangles.
         algorithm_3d: Algorithm for the tetrahedra.
-        element_order: Polynomial order of the elements. 2 gives 10-node tetrahedra.
+        element_order: Polynomial order of the elements. 2 gives 10-node
+            tetrahedra. High-order nodes on the boundary lie on the curved
+            surface, which can invert thin elements beside it, so gmsh's
+            high-order optimization (Mesh.HighOrderOptimize 2, elastic
+            smoothing then optimization) untangles them: without it the real
+            lateral meniscus's 10-node tetrahedra had 28 of 1444 with a
+            Jacobian determinant at or below zero at a Gauss point.
         second_order_incomplete: Omit interior nodes from high-order elements.
             Second-order tetrahedra have none, so this only changes orders 3
             and up, such as 16-node instead of 20-node third-order tetrahedra.
@@ -197,6 +206,7 @@ def tetrahedral_mesh(
         "Mesh.Algorithm3D": Algorithm3D(algorithm_3d).number,
         "Mesh.ElementOrder": element_order,
         "Mesh.SecondOrderIncomplete": second_order_incomplete,
+        "Mesh.HighOrderOptimize": _HIGH_ORDER_OPTIMIZE if element_order > 1 else 0,
     }
 
     with gmsh_session():

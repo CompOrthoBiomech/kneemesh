@@ -116,7 +116,7 @@ kneemesh-mesh --config examples/knee_mesh_tet4.json --assembled-mesh knee.vtkhdf
 
 ### Element quality
 
-`.vtu` and `.vtkhdf` meshes also hold each element's quality as cell arrays, measured on its corner nodes, so high-order elements count as first-order ones, by {py:func}`~kneemesh.mesh_optimization.element_quality`. The log reports each structure's worst and mean values as it is meshed.
+`.vtu` and `.vtkhdf` meshes also hold each element's quality as cell arrays, measured on its corner nodes, so high-order elements count as first-order ones, by {py:func}`~kneemesh.mesh_optimization.element_quality`. The exception is a high-order hexahedron's scaled Jacobian, which also takes the points of the Gauss rules a simulation integrates it with, where curved edges can invert an element whose corners are valid; hexahedral optimization keeps those points valid too. Second-order tetrahedra are curved by gmsh's high-order optimization (`Mesh.HighOrderOptimize` 2), which untangles the thin ones beside the surface. The log reports each structure's worst and mean values as it is meshed.
 
 | Array | Of | Measure |
 |---|---|---|

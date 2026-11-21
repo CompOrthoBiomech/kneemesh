@@ -1,13 +1,20 @@
+from dataclasses import replace
+
+import gmsh
 import numpy as np
 import pytest
 from loguru import logger
 
+from kneemesh.brep import gmsh_session
 from kneemesh.geo.meniscus import centerline, contours_to_hex_blocks, slice_isocontour
 from kneemesh.mesh.meniscus import hexahedral_mesh
 from kneemesh.mesh_optimization import (
     _constraints,
+    _corner_scaled_jacobians,
+    _gauss_samples,
     _hexahedron_corners,
     _local_sizes,
+    _move_high_order_nodes,
     _objective,
     _untangling_objective,
     _warp_objective,
@@ -72,14 +79,45 @@ def on_cube_faces(nodes):
 
 
 @pytest.fixture(scope="module")
-def real_hex_meshes(real_label, real_medial_label):
-    """Hexahedral meshes of the real lateral and medial menisci."""
-    meshes = []
+def real_hex_blocks(real_label, real_medial_label):
+    """Butterfly blocks of the real lateral and medial menisci."""
+    blocks = []
     for label in (real_label, real_medial_label):
         surface = smooth_isocontour(extract_isocontour(signed_distance_field(label)))
-        slices = slice_isocontour(surface, centerline(label), spacing=5.0, points_per_slice=10)
-        meshes.append(hexahedral_mesh(contours_to_hex_blocks(slices), transverse_size=1.5, circumferential_size=4.0))
-    return meshes
+        blocks.append(contours_to_hex_blocks(slice_isocontour(surface, centerline(label), spacing=5.0, points_per_slice=10)))
+    return blocks
+
+
+@pytest.fixture(scope="module")
+def real_hex_meshes(real_hex_blocks):
+    """Hexahedral meshes of the real lateral and medial menisci."""
+    return [hexahedral_mesh(blocks, transverse_size=1.5, circumferential_size=4.0) for blocks in real_hex_blocks]
+
+
+def gauss_determinants(mesh):
+    """Jacobian determinants of every element at the points of Gauss rules of order 2 * p - 1 and 2 * p + 1, from gmsh's basis functions."""
+    determinants = []
+    with gmsh_session():
+        for name, connectivity in mesh.elements.items():
+            element_type = mesh.element_types[name]
+            order = gmsh.model.mesh.getElementProperties(element_type)[2]
+            for rule in (f"Gauss{2 * order - 1}", f"Gauss{2 * order + 1}"):
+                points, _ = gmsh.model.mesh.getIntegrationPoints(element_type, rule)
+                _, gradients, _ = gmsh.model.mesh.getBasisFunctions(element_type, points, "GradLagrange")
+                gradients = np.reshape(gradients, (len(points) // 3, connectivity.shape[1], 3))
+                determinants.append(np.linalg.det(np.einsum("gni,enx->egix", gradients, mesh.nodes[connectivity])))
+    return np.concatenate(determinants, axis=1)
+
+
+def quadratic_hexahedra(mesh, name="Hexahedron 20", gmsh_type=17):
+    """A linear hexahedral mesh's elements with straight-sided second-order nodes, each element's its own."""
+    corners = mesh.elements["Hexahedron 8"]
+    with gmsh_session():
+        local = np.reshape(gmsh.model.mesh.getElementProperties(gmsh_type)[4], (-1, 3))
+    weights = np.prod(1 + local[8:, None, :] * local[None, :8, :], axis=-1) / 8
+    extra = np.einsum("nc,ecx->enx", weights, mesh.nodes[corners]).reshape(-1, 3)
+    numbers = len(mesh.nodes) + np.arange(len(extra)).reshape(len(corners), -1)
+    return Mesh(np.vstack([mesh.nodes, extra]), {name: np.hstack([corners, numbers])}, {name: gmsh_type})
 
 
 @pytest.fixture(scope="module")
@@ -379,16 +417,103 @@ def test_high_order_nodes_follow_their_corners(meniscus_hex_blocks, incomplete):
 
     optimized = optimize_hexahedral_mesh(quadratic)
 
-    # Optimization moves only the corners, as it does in the linear mesh with the same corners.
-    expected = mesh_quality(optimize_hexahedral_mesh(linear))
-    assert mesh_quality(optimized).minimum == pytest.approx(expected.minimum, abs=1e-6)
-    assert mesh_quality(optimized).mean == pytest.approx(expected.mean, abs=1e-6)
+    # Only the corners move, as in the linear mesh with the same corners, though the Gauss points' barrier moves them differently.
+    linear_corners = _hexahedron_corners(linear)
+    assert np.allclose(quadratic.nodes[connectivity[:, :8]], linear.nodes[linear_corners])
+    assert not np.allclose(optimized.nodes[connectivity[:, :8]], quadratic.nodes[connectivity[:, :8]])
 
     # Node 8 lies on the edge from corner 0 to corner 1, and keeps its offset from that edge's midpoint.
     def offsets(nodes):
         return nodes[connectivity[:, 8]] - (nodes[connectivity[:, 0]] + nodes[connectivity[:, 1]]) / 2
 
     assert np.allclose(offsets(optimized.nodes), offsets(quadratic.nodes))
+
+
+def test_high_order_hexahedra_are_measured_at_their_gauss_points():
+    straight = quadratic_hexahedra(hexahedra(UNIT_CUBE, [range(8)]))
+    assert scaled_jacobians(straight) == pytest.approx([1.0])
+    assert mesh_quality(straight).inverted == 0
+
+    # Node 8 is the middle of the edge from corner 0 to corner 1; pushed far inward, it folds the element near that edge.
+    bent = replace(straight, nodes=straight.nodes.copy())
+    bent.nodes[8] += [0.0, 1.5, 0.0]
+    corners = _hexahedron_corners(bent)
+    assert _corner_scaled_jacobians(bent.nodes, corners).min() == pytest.approx(1.0)
+    assert (gauss_determinants(bent) <= 0).any()
+    assert scaled_jacobians(bent)[0] < 0
+    assert mesh_quality(bent).inverted == 1
+    assert frobenius_aspects(bent)[0] == np.inf
+    quality = element_quality(bent)
+    assert quality["scaled_jacobian"][0] < 0
+    assert quality["frobenius_aspect"][0] == np.inf
+
+    # Bent less, it stays valid but measures lower at its Gauss points than at its corners.
+    bent.nodes[8] = straight.nodes[8] + [0.0, 0.3, 0.0]
+    assert 0 < scaled_jacobians(bent)[0] < 0.95
+
+
+@pytest.mark.parametrize(("name", "gmsh_type"), [("Hexahedron 20", 17), ("Hexahedron 27", 12)])
+def test_gauss_point_jacobians_follow_moved_corners_as_gmsh_computes_them(name, gmsh_type):
+    mesh = quadratic_hexahedra(cube_grid(2), name, gmsh_type)
+    rng = np.random.default_rng(1)
+    mesh.nodes[27:] += rng.uniform(-0.03, 0.03, mesh.nodes[27:].shape)
+    corners = _hexahedron_corners(mesh)
+    (samples,) = _gauss_samples(mesh)
+    moved = mesh.nodes.copy()
+    moved[:27] += rng.uniform(-0.05, 0.05, (27, 3))
+
+    expected = gauss_determinants(replace(mesh, nodes=_move_high_order_nodes(mesh, corners, moved)))
+
+    assert np.allclose(np.linalg.det(samples.tangents(moved, corners)), expected, rtol=1e-10, atol=1e-12)
+
+
+def bent_quadratic_grid():
+    """A perturbed 3^3 grid of 20-node hexahedra whose second-order nodes are moved randomly, putting one Gauss point at a scaled Jacobian of 0.15."""
+    mesh = quadratic_hexahedra(cube_grid(3, perturbation=0.15))
+    mesh.nodes[64:] += np.random.default_rng(2).uniform(-0.05, 0.05, mesh.nodes[64:].shape)
+    return mesh
+
+
+def test_objective_gradient_with_gauss_points_matches_finite_differences():
+    mesh = bent_quadratic_grid()
+    corners = _hexahedron_corners(mesh)
+    samples = _gauss_samples(mesh)
+    assert 0 < scaled_jacobians(mesh).min() < 0.2
+    direction = np.zeros_like(mesh.nodes)
+    direction[:64] = np.random.default_rng(3).normal(size=(64, 3))
+    step = 1e-6
+
+    def objective(nodes):
+        return _objective(nodes, corners, 0.3, None, 0.0, samples)
+
+    def untangling(nodes):
+        return _untangling_objective(nodes, corners, samples)
+
+    assert objective(mesh.nodes)[0] > _objective(mesh.nodes, corners, 0.3)[0]
+    for function in (objective, untangling):
+        difference = (function(mesh.nodes + step * direction)[0] - function(mesh.nodes - step * direction)[0]) / (2 * step)
+        assert np.sum(function(mesh.nodes)[1] * direction) == pytest.approx(difference, rel=1e-6)
+
+
+def test_objective_is_infinite_when_a_gauss_point_is_inverted():
+    mesh = quadratic_hexahedra(hexahedra(UNIT_CUBE, [range(8)]))
+    mesh.nodes[8] += [0.0, 1.5, 0.0]
+    corners = _hexahedron_corners(mesh)
+
+    assert np.isfinite(_objective(mesh.nodes, corners)[0])
+    assert _objective(mesh.nodes, corners, samples=_gauss_samples(mesh))[0] == np.inf
+
+
+@pytest.mark.parametrize("incomplete", [False, True])
+def test_optimization_leaves_no_real_meniscus_hexahedron_inverted_at_a_gauss_point(real_hex_blocks, incomplete):
+    # Measured on corners alone, optimization left 39 of the real lateral meniscus's 855 20-node hexahedra inverted at
+    # Gauss points, though none started so.
+    mesh = hexahedral_mesh(real_hex_blocks[0], 1.5, 4.0, element_order=2, second_order_incomplete=incomplete)
+
+    optimized = optimize_hexahedral_mesh(mesh)
+
+    assert (gauss_determinants(optimized) > 0).all()
+    assert mesh_quality(optimized).inverted == 0
 
 
 def test_optimization_rejects_tetrahedra(meniscus_tetrahedra):
