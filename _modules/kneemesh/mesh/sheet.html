@@ -1,0 +1,852 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../../../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../../genindex.html"><link rel="search" title="Search" href="../../../search.html">
+
+    <!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
+        <title>kneemesh.mesh.sheet - kneemesh</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/autodoc_pydantic.css" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../../../index.html"><div class="brand">kneemesh</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon no-toc" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../../../index.html">
+  
+  <span class="sidebar-brand-text">kneemesh</span>
+  
+</a><form class="sidebar-search-container" method="get" action="../../../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../usage.html">Usage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../gui.html">GUI</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../pipeline.html">Pipeline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../configuration.html">Configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api.html">API reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../validation.html">Validation</a></li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon no-toc" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <h1>Source code for kneemesh.mesh.sheet</h1><div class="highlight"><pre>
+<span></span><span class="sd">"""Hexahedral meshing of cartilage sheets: a quadrilateral mesh of one side, extruded through the thickness.</span>
+
+<span class="sd">A sheet's solid (geo.sheet.sheet_to_brep) has two sides that share one</span>
+<span class="sd">parameterization and walls ruled straight between them. One side is meshed</span>
+<span class="sd">with quadrilaterals, and each node's column runs straight to the other side:</span>
+<span class="sd">from interior nodes to the other side's point at the same parameters, and</span>
+<span class="sd">from nodes on a rim along the wall's straight line through them. The columns</span>
+<span class="sd">are divided into layers, so the elements stack through the thickness.</span>
+
+<span class="sd">The quadrilaterals come from gmsh, by default from its quasi-structured</span>
+<span class="sd">algorithm, which aligns a cross field (a 4-RoSy field) with the boundary,</span>
+<span class="sd">places the field's singularities where the shape needs them, and meshes</span>
+<span class="sd">along it, leaving few irregular nodes. The regions those few nodes' straight</span>
+<span class="sd">lines of edges bound are a partition of the sheet into four-sided blocks,</span>
+<span class="sd">which sheet_partition_brep can build.</span>
+
+<span class="sd">Both meshes of a sheet have the sets "articular_side" and "bone_side"</span>
+<span class="sd">besides "surface" (mesh_sets): the faces on the side away from the bone,</span>
+<span class="sd">the side above, and on the side against it.</span>
+<span class="sd">"""</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Literal</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">gmsh</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">loguru</span><span class="w"> </span><span class="kn">import</span> <span class="n">logger</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">kneemesh.brep</span><span class="w"> </span><span class="kn">import</span> <span class="n">BRep</span><span class="p">,</span> <span class="n">add_swept_surface</span><span class="p">,</span> <span class="n">clamped_interpolation</span><span class="p">,</span> <span class="n">export_brep</span><span class="p">,</span> <span class="n">gmsh_session</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">kneemesh.mesh_sets</span><span class="w"> </span><span class="kn">import</span> <span class="n">boundary_faces</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">kneemesh.tet_meshing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Mesh</span><span class="p">,</span> <span class="n">gmsh_options</span><span class="p">,</span> <span class="n">import_solid</span><span class="p">,</span> <span class="n">require_element_order</span>
+
+<span class="nb">type</span> <span class="n">QuadAlgorithm</span> <span class="o">=</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"quasi_structured"</span><span class="p">,</span> <span class="s2">"frontal_delaunay"</span><span class="p">]</span>
+<span class="sd">"""gmsh's algorithm for the side's quadrilaterals: quasi-structured along a cross field, or Frontal-Delaunay for quads with full-quad recombination."""</span>
+
+<span class="n">_GMSH_ALGORITHMS</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">QuadAlgorithm</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"quasi_structured"</span><span class="p">:</span> <span class="mi">11</span><span class="p">,</span> <span class="s2">"frontal_delaunay"</span><span class="p">:</span> <span class="mi">8</span><span class="p">}</span>
+<span class="c1"># gmsh's recombination for each algorithm: the quasi-structured one recombines on its own, and full-quad</span>
+<span class="c1"># recombination would subdivide its mesh, halving the size. For Frontal-Delaunay, "simple full-quad" left</span>
+<span class="c1"># triangles least often and made the best quadrilaterals.</span>
+<span class="n">_RECOMBINATIONS</span> <span class="o">=</span> <span class="p">{</span><span class="mi">11</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">8</span><span class="p">:</span> <span class="mi">2</span><span class="p">}</span>
+<span class="n">_BLOSSOM</span> <span class="o">=</span> <span class="mi">1</span>
+<span class="c1"># Relative changes of the element size tried in turn when a mesh keeps triangles.</span>
+<span class="n">_SIZE_RETRIES</span> <span class="o">=</span> <span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.02</span><span class="p">,</span> <span class="o">-</span><span class="mf">0.02</span><span class="p">,</span> <span class="mf">0.04</span><span class="p">,</span> <span class="o">-</span><span class="mf">0.04</span><span class="p">,</span> <span class="mf">0.06</span><span class="p">,</span> <span class="o">-</span><span class="mf">0.06</span><span class="p">)</span>
+<span class="c1"># Laplacian smoothing sweeps of the Frontal-Delaunay quadrilaterals.</span>
+<span class="n">_SMOOTHING_SWEEPS</span> <span class="o">=</span> <span class="mi">5</span>
+<span class="n">_HEXAHEDRON_TYPES</span> <span class="o">=</span> <span class="p">{(</span><span class="mi">1</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span> <span class="mi">5</span><span class="p">,</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span> <span class="mi">12</span><span class="p">,</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="kc">True</span><span class="p">):</span> <span class="mi">17</span><span class="p">}</span>
+<span class="n">_QUADRANGLE_TYPES</span> <span class="o">=</span> <span class="p">{</span><span class="mi">1</span><span class="p">:</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">2</span><span class="p">:</span> <span class="mi">10</span><span class="p">}</span>
+<span class="n">_SPLINE_ORDER</span> <span class="o">=</span> <span class="mi">3</span>
+<span class="n">ARTICULAR_SIDE</span> <span class="o">=</span> <span class="s2">"articular_side"</span>
+<span class="sd">"""Name of a sheet mesh's set of the faces on its articular side, away from the bone, and of their nodes."""</span>
+<span class="n">BONE_SIDE</span> <span class="o">=</span> <span class="s2">"bone_side"</span>
+<span class="sd">"""Name of a sheet mesh's set of the faces on its side against the bone, and of their nodes."""</span>
+
+
+<span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">_Side</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""The quadrilaterals of one side and the far end of each node's column."""</span>
+
+    <span class="n">near</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>  <span class="c1"># (N, 3) node positions on the meshed side</span>
+    <span class="n">far</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>  <span class="c1"># (N, 3) the far end of each node's column, on the other side</span>
+    <span class="n">quadrangles</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>  <span class="c1"># (Q, 4 or 9) node indices in gmsh's ordering</span>
+    <span class="n">rim</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>  <span class="c1"># (R,) indices of the corner nodes on the side's rims</span>
+
+
+<div class="viewcode-block" id="hexahedral_mesh">
+<a class="viewcode-back" href="../../../api.html#kneemesh.mesh.sheet.hexahedral_mesh">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">hexahedral_mesh</span><span class="p">(</span>
+    <span class="n">brep</span><span class="p">:</span> <span class="n">BRep</span><span class="p">,</span>
+    <span class="n">element_size</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+    <span class="n">elements_through</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">3</span><span class="p">,</span>
+    <span class="n">element_order</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
+    <span class="n">second_order_incomplete</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">quad_algorithm</span><span class="p">:</span> <span class="n">QuadAlgorithm</span> <span class="o">=</span> <span class="s2">"quasi_structured"</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Mesh</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Mesh a cartilage sheet's solid with hexahedra about element_size across and elements_through thick.</span>
+
+<span class="sd">    The larger side is meshed with quadrilaterals by quad_algorithm. If gmsh</span>
+<span class="sd">    leaves triangles, which Frontal-Delaunay recombination occasionally does,</span>
+<span class="sd">    the element size is changed by 2, 4, then 6% each way in turn, and as a</span>
+<span class="sd">    last resort a mesh at twice the size is subdivided, each triangle into</span>
+<span class="sd">    three quadrilaterals and each quadrilateral into four. Each node's column</span>
+<span class="sd">    runs straight to the other side, and the columns through the walls are</span>
+<span class="sd">    the mesh's straight_lines, so optimization keeps the walls straight.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        brep: A sheet's solid, such as geo.sheet.sheet_to_brep gives.</span>
+<span class="sd">        element_size: Target length of the elements' edges along the sheet.</span>
+<span class="sd">        elements_through: Elements through the thickness.</span>
+<span class="sd">        element_order: Polynomial order of the elements. 2 gives 27-node hexahedra.</span>
+<span class="sd">        second_order_incomplete: Omit face and interior nodes from high-order</span>
+<span class="sd">            elements, giving 20-node instead of 27-node second-order hexahedra.</span>
+<span class="sd">        quad_algorithm: gmsh's algorithm for the side's quadrilaterals.</span>
+
+<span class="sd">    Raises:</span>
+<span class="sd">        ValueError: If element_size is not positive, elements_through is below</span>
+<span class="sd">            1, element_order is out of range, brep is not a sheet's solid, or</span>
+<span class="sd">            no quadrilateral mesh could be made.</span>
+<span class="sd">    """</span>
+    <span class="k">if</span> <span class="n">element_size</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"element_size must be positive, got </span><span class="si">{</span><span class="n">element_size</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">elements_through</span> <span class="o">&lt;</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"elements_through must be at least 1, got </span><span class="si">{</span><span class="n">elements_through</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+    <span class="n">require_element_order</span><span class="p">(</span><span class="n">element_order</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">element_order</span> <span class="o">&gt;</span> <span class="mi">2</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Sheet hexahedra are linear or quadratic, got element_order </span><span class="si">{</span><span class="n">element_order</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+
+    <span class="k">with</span> <span class="n">gmsh_session</span><span class="p">():</span>
+        <span class="n">import_solid</span><span class="p">(</span><span class="n">brep</span><span class="p">)</span>
+        <span class="n">top</span><span class="p">,</span> <span class="n">bottom</span> <span class="o">=</span> <span class="n">_sheet_sides</span><span class="p">()</span>
+        <span class="n">top_is_articular</span> <span class="o">=</span> <span class="n">_articular_side</span><span class="p">(</span><span class="n">top</span><span class="p">,</span> <span class="n">bottom</span><span class="p">)</span> <span class="o">==</span> <span class="n">top</span>
+        <span class="n">side</span> <span class="o">=</span> <span class="n">_quadrangulate</span><span class="p">(</span><span class="n">top</span><span class="p">,</span> <span class="n">bottom</span><span class="p">,</span> <span class="n">element_size</span><span class="p">,</span> <span class="n">element_order</span><span class="p">,</span> <span class="n">quad_algorithm</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">_extrude</span><span class="p">(</span><span class="n">side</span><span class="p">,</span> <span class="n">elements_through</span><span class="p">,</span> <span class="n">element_order</span><span class="p">,</span> <span class="n">second_order_incomplete</span><span class="p">,</span> <span class="n">top_is_articular</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="sheet_face_groups">
+<a class="viewcode-back" href="../../../api.html#kneemesh.mesh.sheet.sheet_face_groups">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">sheet_face_groups</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]]:</span>
+<span class="w">    </span><span class="sd">"""Name the current model's sheet sides, for tet_meshing.tetrahedral_mesh's face_groups: articular_side and bone_side.</span>
+
+<span class="sd">    Raises:</span>
+<span class="sd">        ValueError: If the model is not a sheet's solid.</span>
+<span class="sd">    """</span>
+    <span class="n">top</span><span class="p">,</span> <span class="n">bottom</span> <span class="o">=</span> <span class="n">_sheet_sides</span><span class="p">()</span>
+    <span class="n">articular</span> <span class="o">=</span> <span class="n">_articular_side</span><span class="p">(</span><span class="n">top</span><span class="p">,</span> <span class="n">bottom</span><span class="p">)</span>
+    <span class="k">return</span> <span class="p">{</span><span class="n">ARTICULAR_SIDE</span><span class="p">:</span> <span class="p">[</span><span class="n">articular</span><span class="p">],</span> <span class="n">BONE_SIDE</span><span class="p">:</span> <span class="p">[</span><span class="n">bottom</span> <span class="k">if</span> <span class="n">articular</span> <span class="o">==</span> <span class="n">top</span> <span class="k">else</span> <span class="n">top</span><span class="p">]}</span></div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_articular_side</span><span class="p">(</span><span class="n">top</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">bottom</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Return which of a sheet's two sides is the articular one.</span>
+
+<span class="sd">    Both sides share their parameterization, whose normal, the cross product</span>
+<span class="sd">    of the derivatives along s and t, points from the bone toward the</span>
+<span class="sd">    articular side (geo.sheet.SheetFrame). A solid's faces are oriented so</span>
+<span class="sd">    their normals point out of it, so the articular side's normal agrees</span>
+<span class="sd">    with its parameterization's and the bone side's opposes it.</span>
+
+<span class="sd">    Raises:</span>
+<span class="sd">        ValueError: If both sides' normals agree with their parameterizations, or neither's does.</span>
+<span class="sd">    """</span>
+    <span class="n">agrees</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">face</span> <span class="ow">in</span> <span class="p">(</span><span class="n">top</span><span class="p">,</span> <span class="n">bottom</span><span class="p">):</span>
+        <span class="n">_</span><span class="p">,</span> <span class="n">parameters</span> <span class="o">=</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">getClosestPoint</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="n">face</span><span class="p">,</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">occ</span><span class="o">.</span><span class="n">getCenterOfMass</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="n">face</span><span class="p">))</span>
+        <span class="n">along_s</span><span class="p">,</span> <span class="n">along_t</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">getDerivative</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="n">face</span><span class="p">,</span> <span class="n">parameters</span><span class="p">),</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
+        <span class="n">agrees</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">getNormal</span><span class="p">(</span><span class="n">face</span><span class="p">,</span> <span class="n">parameters</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">cross</span><span class="p">(</span><span class="n">along_s</span><span class="p">,</span> <span class="n">along_t</span><span class="p">)))</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">agrees</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="n">agrees</span><span class="p">[</span><span class="mi">1</span><span class="p">]:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"Cannot tell the sheet's articular side from its bone side; its sides need one parameterization"</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">top</span> <span class="k">if</span> <span class="n">agrees</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">else</span> <span class="n">bottom</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_sheet_sides</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""Return the current model's two sides, the larger first, after checking that it is a sheet's solid.</span>
+
+<span class="sd">    Raises:</span>
+<span class="sd">        ValueError: If the model is not one volume whose two largest faces each</span>
+<span class="sd">            border only walls that join them.</span>
+<span class="sd">    """</span>
+    <span class="n">error</span> <span class="o">=</span> <span class="s2">"Hexahedral meshing needs a cartilage sheet's solid, such as sheet_to_brep gives"</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">getEntities</span><span class="p">(</span><span class="mi">3</span><span class="p">))</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">error</span><span class="si">}</span><span class="s2">; got </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">getEntities</span><span class="p">(</span><span class="mi">3</span><span class="p">))</span><span class="si">}</span><span class="s2"> volumes"</span><span class="p">)</span>
+    <span class="n">faces</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">((</span><span class="n">tag</span> <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">tag</span> <span class="ow">in</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">getEntities</span><span class="p">(</span><span class="mi">2</span><span class="p">)),</span> <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">face</span><span class="p">:</span> <span class="o">-</span><span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">occ</span><span class="o">.</span><span class="n">getMass</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="n">face</span><span class="p">))</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">faces</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">3</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">error</span><span class="si">}</span><span class="s2">; got </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">faces</span><span class="p">)</span><span class="si">}</span><span class="s2"> faces"</span><span class="p">)</span>
+    <span class="n">top</span><span class="p">,</span> <span class="n">bottom</span> <span class="o">=</span> <span class="n">faces</span><span class="p">[:</span><span class="mi">2</span><span class="p">]</span>
+    <span class="k">for</span> <span class="n">rim</span> <span class="ow">in</span> <span class="n">_rims</span><span class="p">(</span><span class="n">top</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">any</span><span class="p">(</span><span class="n">bottom</span> <span class="ow">in</span> <span class="n">_faces_of</span><span class="p">(</span><span class="n">curve</span><span class="p">)</span> <span class="k">for</span> <span class="n">wall</span> <span class="ow">in</span> <span class="n">_faces_of</span><span class="p">(</span><span class="n">rim</span><span class="p">)</span> <span class="k">if</span> <span class="n">wall</span> <span class="o">!=</span> <span class="n">top</span> <span class="k">for</span> <span class="n">curve</span> <span class="ow">in</span> <span class="n">_rims</span><span class="p">(</span><span class="n">wall</span><span class="p">)):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">error</span><span class="si">}</span><span class="s2">; a wall from one side's rim does not reach the other side"</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">top</span><span class="p">,</span> <span class="n">bottom</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_rims</span><span class="p">(</span><span class="n">face</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]:</span>
+    <span class="k">return</span> <span class="nb">sorted</span><span class="p">({</span><span class="nb">abs</span><span class="p">(</span><span class="n">tag</span><span class="p">)</span> <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">tag</span> <span class="ow">in</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">getBoundary</span><span class="p">([(</span><span class="mi">2</span><span class="p">,</span> <span class="n">face</span><span class="p">)],</span> <span class="n">combined</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">oriented</span><span class="o">=</span><span class="kc">False</span><span class="p">)})</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_faces_of</span><span class="p">(</span><span class="n">curve</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]:</span>
+    <span class="k">return</span> <span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">face</span><span class="p">)</span> <span class="k">for</span> <span class="n">face</span> <span class="ow">in</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">getAdjacencies</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">curve</span><span class="p">)[</span><span class="mi">0</span><span class="p">]]</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_quadrangulate</span><span class="p">(</span><span class="n">top</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">bottom</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">size</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">order</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">algorithm</span><span class="p">:</span> <span class="n">QuadAlgorithm</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">_Side</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Mesh the top side with quadrilaterals and find each node's column to the bottom side."""</span>
+    <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">setVisibility</span><span class="p">(</span><span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">getEntities</span><span class="p">(),</span> <span class="kc">False</span><span class="p">)</span>
+    <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">setVisibility</span><span class="p">([(</span><span class="mi">2</span><span class="p">,</span> <span class="n">top</span><span class="p">)],</span> <span class="kc">True</span><span class="p">,</span> <span class="n">recursive</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="k">with</span> <span class="n">gmsh_options</span><span class="p">({</span><span class="s2">"Mesh.MeshOnlyVisible"</span><span class="p">:</span> <span class="mi">1</span><span class="p">}):</span>
+        <span class="n">quadrangulate</span><span class="p">([</span><span class="n">top</span><span class="p">],</span> <span class="n">size</span><span class="p">,</span> <span class="n">algorithm</span><span class="p">,</span> <span class="s2">"the sheet's side"</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">order</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+        <span class="k">with</span> <span class="n">gmsh_options</span><span class="p">({</span><span class="s2">"Mesh.SecondOrderIncomplete"</span><span class="p">:</span> <span class="mi">0</span><span class="p">}):</span>
+            <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">mesh</span><span class="o">.</span><span class="n">setOrder</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">_columns</span><span class="p">(</span><span class="n">top</span><span class="p">,</span> <span class="n">bottom</span><span class="p">,</span> <span class="n">order</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="quadrangulate">
+<a class="viewcode-back" href="../../../api.html#kneemesh.mesh.sheet.quadrangulate">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">quadrangulate</span><span class="p">(</span><span class="n">surfaces</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">size</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">algorithm</span><span class="p">:</span> <span class="n">QuadAlgorithm</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"the surface"</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Mesh the current model's surfaces with quadrilaterals only, about size across.</span>
+
+<span class="sd">    If gmsh leaves triangles on any of surfaces, which Frontal-Delaunay</span>
+<span class="sd">    recombination occasionally does, the size is changed by 2, 4, then 6%</span>
+<span class="sd">    each way in turn, and as a last resort a mesh at twice the size is</span>
+<span class="sd">    subdivided, each triangle into three quadrilaterals and each</span>
+<span class="sd">    quadrilateral into four. Also used for the bones' surfaces (mesh.bone).</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        surfaces: Tags of the surfaces that must hold quadrilaterals only.</span>
+<span class="sd">        size: Target length of the edges.</span>
+<span class="sd">        algorithm: gmsh's algorithm for the quadrilaterals.</span>
+<span class="sd">        name: What the surfaces are, for messages.</span>
+
+<span class="sd">    Raises:</span>
+<span class="sd">        ValueError: If no mesh of quadrilaterals only could be made.</span>
+<span class="sd">    """</span>
+    <span class="n">base</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"Mesh.RecombineAll"</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span> <span class="s2">"Mesh.MeshSizeFromCurvature"</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span> <span class="s2">"Mesh.MeshSizeExtendFromBoundary"</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span> <span class="s2">"Mesh.MeshSizeFromPoints"</span><span class="p">:</span> <span class="mi">0</span><span class="p">}</span>
+    <span class="n">attempts</span> <span class="o">=</span> <span class="p">[(</span><span class="n">_GMSH_ALGORITHMS</span><span class="p">[</span><span class="n">algorithm</span><span class="p">],</span> <span class="n">size</span> <span class="o">*</span> <span class="p">(</span><span class="mi">1</span> <span class="o">+</span> <span class="n">change</span><span class="p">),</span> <span class="kc">False</span><span class="p">)</span> <span class="k">for</span> <span class="n">change</span> <span class="ow">in</span> <span class="n">_SIZE_RETRIES</span><span class="p">]</span>
+    <span class="n">attempts</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">_GMSH_ALGORITHMS</span><span class="p">[</span><span class="s2">"frontal_delaunay"</span><span class="p">],</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">size</span><span class="p">,</span> <span class="kc">True</span><span class="p">))</span>
+    <span class="k">for</span> <span class="n">number</span><span class="p">,</span> <span class="n">attempt_size</span><span class="p">,</span> <span class="n">subdivide</span> <span class="ow">in</span> <span class="n">attempts</span><span class="p">:</span>
+        <span class="c1"># Subdividing a blossom-recombined mesh, as in gmsh's own full-quad recombination, makes quadrilaterals only.</span>
+        <span class="n">options</span> <span class="o">=</span> <span class="n">base</span> <span class="o">|</span> <span class="p">{</span><span class="s2">"Mesh.Algorithm"</span><span class="p">:</span> <span class="n">number</span><span class="p">,</span> <span class="s2">"Mesh.RecombinationAlgorithm"</span><span class="p">:</span> <span class="n">_BLOSSOM</span> <span class="k">if</span> <span class="n">subdivide</span> <span class="k">else</span> <span class="n">_RECOMBINATIONS</span><span class="p">[</span><span class="n">number</span><span class="p">]}</span>
+        <span class="n">options</span> <span class="o">|=</span> <span class="p">{</span><span class="s2">"Mesh.MeshSizeMin"</span><span class="p">:</span> <span class="n">attempt_size</span><span class="p">,</span> <span class="s2">"Mesh.MeshSizeMax"</span><span class="p">:</span> <span class="n">attempt_size</span><span class="p">}</span>
+        <span class="n">options</span><span class="p">[</span><span class="s2">"Mesh.SubdivisionAlgorithm"</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span> <span class="k">if</span> <span class="n">subdivide</span> <span class="k">else</span> <span class="mi">0</span>
+        <span class="k">with</span> <span class="n">gmsh_options</span><span class="p">(</span><span class="n">options</span><span class="p">):</span>
+            <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">mesh</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+            <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">mesh</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">number</span> <span class="o">==</span> <span class="n">_GMSH_ALGORITHMS</span><span class="p">[</span><span class="s2">"frontal_delaunay"</span><span class="p">]:</span>
+                <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">mesh</span><span class="o">.</span><span class="n">optimize</span><span class="p">(</span><span class="s2">"Laplace2D"</span><span class="p">,</span> <span class="n">niter</span><span class="o">=</span><span class="n">_SMOOTHING_SWEEPS</span><span class="p">)</span>
+        <span class="n">triangles</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span>
+            <span class="nb">len</span><span class="p">(</span><span class="n">tags</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">surface</span> <span class="ow">in</span> <span class="n">surfaces</span>
+            <span class="k">for</span> <span class="n">element_type</span><span class="p">,</span> <span class="n">tags</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="o">*</span><span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">mesh</span><span class="o">.</span><span class="n">getElements</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="n">surface</span><span class="p">)[:</span><span class="mi">2</span><span class="p">],</span> <span class="n">strict</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">element_type</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">_QUADRANGLE_TYPES</span><span class="o">.</span><span class="n">values</span><span class="p">()</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">triangles</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">attempt_size</span> <span class="o">!=</span> <span class="n">size</span> <span class="ow">or</span> <span class="n">number</span> <span class="o">!=</span> <span class="n">_GMSH_ALGORITHMS</span><span class="p">[</span><span class="n">algorithm</span><span class="p">]:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">"Meshed </span><span class="si">{}</span><span class="s2"> with quadrilaterals only at size </span><span class="si">{:.4g}{}</span><span class="s2">"</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">attempt_size</span><span class="p">,</span> <span class="s2">", subdivided"</span> <span class="k">if</span> <span class="n">subdivide</span> <span class="k">else</span> <span class="s2">""</span><span class="p">)</span>
+            <span class="k">return</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">"gmsh left </span><span class="si">{}</span><span class="s2"> triangles at size </span><span class="si">{:.4g}</span><span class="s2">"</span><span class="p">,</span> <span class="n">triangles</span><span class="p">,</span> <span class="n">attempt_size</span><span class="p">)</span>
+    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"gmsh could not mesh </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2"> with quadrilaterals only"</span><span class="p">)</span></div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_columns</span><span class="p">(</span><span class="n">top</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">bottom</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">order</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">_Side</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Return the top side's mesh with each node's column end on the bottom side.</span>
+
+<span class="sd">    Interior nodes pair with the bottom side's point at the same parameters.</span>
+<span class="sd">    A rim node's column is the straight line of the wall through it, from</span>
+<span class="sd">    the rim's parameter mapped onto the wall, so columns stay on the walls.</span>
+<span class="sd">    """</span>
+    <span class="n">quadrangle_type</span> <span class="o">=</span> <span class="n">_QUADRANGLE_TYPES</span><span class="p">[</span><span class="n">order</span><span class="p">]</span>
+    <span class="n">element_tags</span><span class="p">,</span> <span class="n">element_nodes</span> <span class="o">=</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">mesh</span><span class="o">.</span><span class="n">getElementsByType</span><span class="p">(</span><span class="n">quadrangle_type</span><span class="p">,</span> <span class="n">top</span><span class="p">)</span>
+    <span class="n">tags</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">element_nodes</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">element_tags</span><span class="p">),</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+    <span class="n">unique</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">unique</span><span class="p">(</span><span class="n">tags</span><span class="p">)</span>
+    <span class="n">index</span> <span class="o">=</span> <span class="p">{</span><span class="nb">int</span><span class="p">(</span><span class="n">tag</span><span class="p">):</span> <span class="n">position</span> <span class="k">for</span> <span class="n">position</span><span class="p">,</span> <span class="n">tag</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">unique</span><span class="p">)}</span>
+    <span class="n">near</span><span class="p">,</span> <span class="n">far</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">unique</span><span class="p">),</span> <span class="mi">3</span><span class="p">)),</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">unique</span><span class="p">),</span> <span class="mi">3</span><span class="p">))</span>
+
+    <span class="n">node_tags</span><span class="p">,</span> <span class="n">coordinates</span><span class="p">,</span> <span class="n">parameters</span> <span class="o">=</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">mesh</span><span class="o">.</span><span class="n">getNodes</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="n">top</span><span class="p">,</span> <span class="n">includeBoundary</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">returnParametricCoord</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">rows</span> <span class="o">=</span> <span class="p">[</span><span class="n">index</span><span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">tag</span><span class="p">)]</span> <span class="k">for</span> <span class="n">tag</span> <span class="ow">in</span> <span class="n">node_tags</span><span class="p">]</span>
+    <span class="n">near</span><span class="p">[</span><span class="n">rows</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">coordinates</span><span class="p">,</span> <span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
+    <span class="n">far</span><span class="p">[</span><span class="n">rows</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">getValue</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="n">bottom</span><span class="p">,</span> <span class="n">parameters</span><span class="p">),</span> <span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
+
+    <span class="n">rim_nodes</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">rim</span> <span class="ow">in</span> <span class="n">_rims</span><span class="p">(</span><span class="n">top</span><span class="p">):</span>
+        <span class="n">wall</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span><span class="n">face</span> <span class="k">for</span> <span class="n">face</span> <span class="ow">in</span> <span class="n">_faces_of</span><span class="p">(</span><span class="n">rim</span><span class="p">)</span> <span class="k">if</span> <span class="n">face</span> <span class="o">!=</span> <span class="n">top</span><span class="p">)</span>
+        <span class="n">node_tags</span><span class="p">,</span> <span class="n">coordinates</span><span class="p">,</span> <span class="n">parameters</span> <span class="o">=</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">mesh</span><span class="o">.</span><span class="n">getNodes</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">rim</span><span class="p">,</span> <span class="n">includeBoundary</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">returnParametricCoord</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">on_wall</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">reparametrizeOnSurface</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">rim</span><span class="p">,</span> <span class="n">parameters</span><span class="p">,</span> <span class="n">wall</span><span class="p">),</span> <span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span>
+        <span class="n">low</span><span class="p">,</span> <span class="n">high</span> <span class="o">=</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">getParametrizationBounds</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="n">wall</span><span class="p">)</span>
+        <span class="n">ends</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">on_wall</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="n">low</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span> <span class="o">&lt;</span> <span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">on_wall</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="n">high</span><span class="p">[</span><span class="mi">1</span><span class="p">]),</span> <span class="n">high</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">low</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+        <span class="n">rows</span> <span class="o">=</span> <span class="p">[</span><span class="n">index</span><span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">tag</span><span class="p">)]</span> <span class="k">for</span> <span class="n">tag</span> <span class="ow">in</span> <span class="n">node_tags</span><span class="p">]</span>
+        <span class="n">near</span><span class="p">[</span><span class="n">rows</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">coordinates</span><span class="p">,</span> <span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
+        <span class="n">far</span><span class="p">[</span><span class="n">rows</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">getValue</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="n">wall</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">column_stack</span><span class="p">((</span><span class="n">on_wall</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">ends</span><span class="p">))</span><span class="o">.</span><span class="n">ravel</span><span class="p">()</span><span class="o">.</span><span class="n">tolist</span><span class="p">()),</span> <span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
+        <span class="n">rim_nodes</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">rows</span><span class="p">)</span>
+    <span class="n">quadrangles</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">vectorize</span><span class="p">(</span><span class="n">index</span><span class="o">.</span><span class="fm">__getitem__</span><span class="p">)(</span><span class="n">tags</span><span class="p">)</span>
+    <span class="n">corners</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">unique</span><span class="p">(</span><span class="n">quadrangles</span><span class="p">[:,</span> <span class="p">:</span><span class="mi">4</span><span class="p">])</span>
+    <span class="n">rim</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">intersect1d</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">unique</span><span class="p">(</span><span class="n">rim_nodes</span><span class="p">),</span> <span class="n">corners</span><span class="p">)</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">"Meshed the sheet's side with </span><span class="si">{}</span><span class="s2"> quadrilaterals and </span><span class="si">{}</span><span class="s2"> nodes, </span><span class="si">{}</span><span class="s2"> on its rims"</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">quadrangles</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">unique</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">rim</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">_Side</span><span class="p">(</span><span class="n">near</span><span class="p">,</span> <span class="n">far</span><span class="p">,</span> <span class="n">quadrangles</span><span class="p">,</span> <span class="n">rim</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_extrude</span><span class="p">(</span><span class="n">side</span><span class="p">:</span> <span class="n">_Side</span><span class="p">,</span> <span class="n">through</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">order</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">incomplete</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span> <span class="n">top_is_articular</span><span class="p">:</span> <span class="nb">bool</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Mesh</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Stack hexahedra through the thickness on a side's quadrilaterals, along their nodes' columns.</span>
+
+<span class="sd">    The meshed side is the top; top_is_articular says whether it is the articular side, naming the sides' sets.</span>
+<span class="sd">    """</span>
+    <span class="n">fractions</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="n">through</span> <span class="o">*</span> <span class="n">order</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)[:,</span> <span class="n">np</span><span class="o">.</span><span class="n">newaxis</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">newaxis</span><span class="p">]</span>
+    <span class="n">mesh</span><span class="p">,</span> <span class="n">layer</span> <span class="o">=</span> <span class="n">stack_layers</span><span class="p">((</span><span class="mi">1</span> <span class="o">-</span> <span class="n">fractions</span><span class="p">)</span> <span class="o">*</span> <span class="n">side</span><span class="o">.</span><span class="n">near</span> <span class="o">+</span> <span class="n">fractions</span> <span class="o">*</span> <span class="n">side</span><span class="o">.</span><span class="n">far</span><span class="p">,</span> <span class="n">side</span><span class="o">.</span><span class="n">quadrangles</span><span class="p">,</span> <span class="n">order</span><span class="p">,</span> <span class="n">incomplete</span><span class="p">,</span> <span class="n">side</span><span class="o">.</span><span class="n">rim</span><span class="p">)</span>
+    <span class="c1"># The faces wholly in the first layer lie on the top side, those in the last on the bottom.</span>
+    <span class="n">faces</span> <span class="o">=</span> <span class="n">boundary_faces</span><span class="p">(</span><span class="n">mesh</span><span class="o">.</span><span class="n">elements</span><span class="p">)</span>
+    <span class="n">on_top</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">np</span><span class="o">.</span><span class="n">all</span><span class="p">(</span><span class="n">layer</span><span class="p">[</span><span class="n">connectivity</span><span class="p">]</span> <span class="o">==</span> <span class="mi">0</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span> <span class="k">for</span> <span class="n">connectivity</span> <span class="ow">in</span> <span class="n">faces</span><span class="o">.</span><span class="n">values</span><span class="p">()])</span>
+    <span class="n">on_bottom</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">np</span><span class="o">.</span><span class="n">all</span><span class="p">(</span><span class="n">layer</span><span class="p">[</span><span class="n">connectivity</span><span class="p">]</span> <span class="o">==</span> <span class="n">through</span> <span class="o">*</span> <span class="n">order</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span> <span class="k">for</span> <span class="n">connectivity</span> <span class="ow">in</span> <span class="n">faces</span><span class="o">.</span><span class="n">values</span><span class="p">()])</span>
+    <span class="n">mesh</span> <span class="o">=</span> <span class="n">mesh</span><span class="o">.</span><span class="n">with_face_sets</span><span class="p">(</span>
+        <span class="p">{</span><span class="n">ARTICULAR_SIDE</span><span class="p">:</span> <span class="n">on_top</span><span class="p">,</span> <span class="n">BONE_SIDE</span><span class="p">:</span> <span class="n">on_bottom</span><span class="p">}</span> <span class="k">if</span> <span class="n">top_is_articular</span> <span class="k">else</span> <span class="p">{</span><span class="n">ARTICULAR_SIDE</span><span class="p">:</span> <span class="n">on_bottom</span><span class="p">,</span> <span class="n">BONE_SIDE</span><span class="p">:</span> <span class="n">on_top</span><span class="p">},</span> <span class="n">faces</span>
+    <span class="p">)</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">"Extruded </span><span class="si">{}</span><span class="s2"> hexahedra through </span><span class="si">{}</span><span class="s2"> layers"</span><span class="p">,</span> <span class="nb">sum</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">rows</span><span class="p">)</span> <span class="k">for</span> <span class="n">rows</span> <span class="ow">in</span> <span class="n">mesh</span><span class="o">.</span><span class="n">elements</span><span class="o">.</span><span class="n">values</span><span class="p">()),</span> <span class="n">through</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">mesh</span>
+
+
+<div class="viewcode-block" id="stack_layers">
+<a class="viewcode-back" href="../../../api.html#kneemesh.mesh.sheet.stack_layers">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">stack_layers</span><span class="p">(</span>
+    <span class="n">layers</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">quadrangles</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">order</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">incomplete</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span> <span class="n">columns</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Mesh</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""Stack hexahedra on quadrilaterals through layers of their nodes' positions, without faces or sets.</span>
+
+<span class="sd">    Each hexahedron spans order + 1 consecutive layers, its nodes matched</span>
+<span class="sd">    to the quadrilateral's nodes at the same reference (u, v). The</span>
+<span class="sd">    quadrilaterals' orientation does not matter: if the hexahedra would come</span>
+<span class="sd">    out inverted, the layers are stacked in reverse.</span>
+
+<span class="sd">    Also used for the meniscus's swept hexahedra (mesh.meniscus).</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        layers: (L, N, 3) positions of the quadrilaterals' N nodes in each</span>
+<span class="sd">            layer, L = elements * order + 1, the middle layers of quadratic</span>
+<span class="sd">            elements included.</span>
+<span class="sd">        quadrangles: (Q, 4 or 9) indices of each quadrilateral's nodes, in gmsh's ordering.</span>
+<span class="sd">        order: Polynomial order of the quadrilaterals and hexahedra, 1 or 2.</span>
+<span class="sd">        incomplete: Make 20-node instead of 27-node hexahedra at order 2.</span>
+<span class="sd">        columns: Indices of corner nodes whose columns through the layers</span>
+<span class="sd">            stay straight, which become the mesh's straight_lines.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        The mesh, and the index of each of its nodes' layer in layers.</span>
+<span class="sd">    """</span>
+    <span class="n">layer_count</span><span class="p">,</span> <span class="n">count</span> <span class="o">=</span> <span class="n">layers</span><span class="o">.</span><span class="n">shape</span><span class="p">[:</span><span class="mi">2</span><span class="p">]</span>
+    <span class="n">through</span> <span class="o">=</span> <span class="p">(</span><span class="n">layer_count</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">//</span> <span class="n">order</span>
+    <span class="n">hexahedron_type</span> <span class="o">=</span> <span class="n">_HEXAHEDRON_TYPES</span><span class="p">[</span><span class="n">order</span><span class="p">,</span> <span class="n">incomplete</span> <span class="ow">and</span> <span class="n">order</span> <span class="o">==</span> <span class="mi">2</span><span class="p">]</span>
+    <span class="n">quadrangle_type</span> <span class="o">=</span> <span class="n">_QUADRANGLE_TYPES</span><span class="p">[</span><span class="n">order</span><span class="p">]</span>
+    <span class="k">with</span> <span class="n">gmsh_session</span><span class="p">():</span>
+        <span class="n">name</span> <span class="o">=</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">mesh</span><span class="o">.</span><span class="n">getElementProperties</span><span class="p">(</span><span class="n">hexahedron_type</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">hexahedron_local</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">mesh</span><span class="o">.</span><span class="n">getElementProperties</span><span class="p">(</span><span class="n">hexahedron_type</span><span class="p">)[</span><span class="mi">4</span><span class="p">],</span> <span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
+        <span class="n">quadrangle_local</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">mesh</span><span class="o">.</span><span class="n">getElementProperties</span><span class="p">(</span><span class="n">quadrangle_type</span><span class="p">)[</span><span class="mi">4</span><span class="p">],</span> <span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span>
+    <span class="c1"># Each hexahedron node is a quadrilateral node at the same (u, v), w steps of order up its element's first layer.</span>
+    <span class="n">matches</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">all</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">isclose</span><span class="p">(</span><span class="n">hexahedron_local</span><span class="p">[:,</span> <span class="n">np</span><span class="o">.</span><span class="n">newaxis</span><span class="p">,</span> <span class="p">:</span><span class="mi">2</span><span class="p">],</span> <span class="n">quadrangle_local</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">newaxis</span><span class="p">]),</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+    <span class="n">which</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">argmax</span><span class="p">(</span><span class="n">matches</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+    <span class="n">rise</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">rint</span><span class="p">((</span><span class="n">hexahedron_local</span><span class="p">[:,</span> <span class="mi">2</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">/</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">order</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">)</span>
+    <span class="n">elements</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">vstack</span><span class="p">([(</span><span class="n">layer</span> <span class="o">*</span> <span class="n">order</span> <span class="o">+</span> <span class="n">rise</span><span class="p">)</span> <span class="o">*</span> <span class="n">count</span> <span class="o">+</span> <span class="n">quadrangles</span><span class="p">[:,</span> <span class="n">which</span><span class="p">]</span> <span class="k">for</span> <span class="n">layer</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">through</span><span class="p">)])</span>
+
+    <span class="n">order_of_layers</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">layer_count</span><span class="p">)</span>
+    <span class="n">nodes</span> <span class="o">=</span> <span class="n">layers</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+    <span class="n">corners</span> <span class="o">=</span> <span class="n">nodes</span><span class="p">[</span><span class="n">elements</span><span class="p">[:,</span> <span class="p">:</span><span class="mi">8</span><span class="p">]]</span>
+    <span class="n">determinants</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">einsum</span><span class="p">(</span><span class="s2">"ij,ij-&gt;i"</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">cross</span><span class="p">(</span><span class="n">corners</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="n">corners</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">corners</span><span class="p">[:,</span> <span class="mi">3</span><span class="p">]</span> <span class="o">-</span> <span class="n">corners</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]),</span> <span class="n">corners</span><span class="p">[:,</span> <span class="mi">4</span><span class="p">]</span> <span class="o">-</span> <span class="n">corners</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">])</span>
+    <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">median</span><span class="p">(</span><span class="n">determinants</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">order_of_layers</span> <span class="o">=</span> <span class="n">order_of_layers</span><span class="p">[::</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+        <span class="n">nodes</span> <span class="o">=</span> <span class="n">layers</span><span class="p">[</span><span class="n">order_of_layers</span><span class="p">]</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+    <span class="n">lines</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">columns</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">columns</span><span class="p">):</span>
+        <span class="n">lines</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">stack</span><span class="p">([</span><span class="n">columns</span> <span class="o">+</span> <span class="n">layer</span> <span class="o">*</span> <span class="n">count</span> <span class="k">for</span> <span class="n">layer</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">layer_count</span><span class="p">,</span> <span class="n">order</span><span class="p">)],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+    <span class="n">used</span><span class="p">,</span> <span class="n">elements</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">unique</span><span class="p">(</span><span class="n">elements</span><span class="p">,</span> <span class="n">return_inverse</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">remap</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">full</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">nodes</span><span class="p">),</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">)</span>
+    <span class="n">remap</span><span class="p">[</span><span class="n">used</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">used</span><span class="p">))</span>
+    <span class="n">mesh</span> <span class="o">=</span> <span class="n">Mesh</span><span class="p">(</span><span class="n">nodes</span><span class="p">[</span><span class="n">used</span><span class="p">],</span> <span class="p">{</span><span class="n">name</span><span class="p">:</span> <span class="n">elements</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">hexahedron_local</span><span class="p">))},</span> <span class="p">{</span><span class="n">name</span><span class="p">:</span> <span class="n">hexahedron_type</span><span class="p">},</span> <span class="n">remap</span><span class="p">[</span><span class="n">lines</span><span class="p">])</span>
+    <span class="k">return</span> <span class="n">mesh</span><span class="p">,</span> <span class="n">order_of_layers</span><span class="p">[</span><span class="n">used</span> <span class="o">//</span> <span class="n">count</span><span class="p">]</span></div>
+
+
+
+<div class="viewcode-block" id="sheet_partition_brep">
+<a class="viewcode-back" href="../../../api.html#kneemesh.mesh.sheet.sheet_partition_brep">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">sheet_partition_brep</span><span class="p">(</span><span class="n">brep</span><span class="p">:</span> <span class="n">BRep</span><span class="p">,</span> <span class="n">element_size</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">quad_algorithm</span><span class="p">:</span> <span class="n">QuadAlgorithm</span> <span class="o">=</span> <span class="s2">"quasi_structured"</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">BRep</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Build the partition of a sheet's solid into blocks that its hexahedral mesh's irregular nodes define, one volume per block.</span>
+
+<span class="sd">    The side is meshed as hexahedral_mesh meshes it. The straight lines of</span>
+<span class="sd">    edges through the quadrilaterals' irregular nodes, interior nodes with</span>
+<span class="sd">    other than four quadrilaterals and rim nodes with other than two, run</span>
+<span class="sd">    until they reach a rim or another irregular node. They divide the</span>
+<span class="sd">    quadrilaterals into four-sided patches of regular grids, the mesh's base</span>
+<span class="sd">    complex. Each patch becomes a block: a patch on each side through its</span>
+<span class="sd">    nodes' columns' ends, and ruled walls along its columns. The blocks are</span>
+<span class="sd">    fragmented so neighbors share faces, as for transfinite meshing.</span>
+
+<span class="sd">    The quasi-structured algorithm leaves few irregular nodes and so few</span>
+<span class="sd">    blocks: 10 on the real lateral tibial cartilage and 32 on the femoral at</span>
+<span class="sd">    2 mm. Frontal-Delaunay quadrilaterals leave many, and most of their</span>
+<span class="sd">    blocks would be single elements.</span>
+
+<span class="sd">    Raises:</span>
+<span class="sd">        ValueError: If brep is not a sheet's solid, a patch is not a regular</span>
+<span class="sd">            grid, as around a hole no line crosses, or fragmenting the blocks fails.</span>
+<span class="sd">    """</span>
+    <span class="k">with</span> <span class="n">gmsh_session</span><span class="p">():</span>
+        <span class="n">import_solid</span><span class="p">(</span><span class="n">brep</span><span class="p">)</span>
+        <span class="n">top</span><span class="p">,</span> <span class="n">bottom</span> <span class="o">=</span> <span class="n">_sheet_sides</span><span class="p">()</span>
+        <span class="n">side</span> <span class="o">=</span> <span class="n">_quadrangulate</span><span class="p">(</span><span class="n">top</span><span class="p">,</span> <span class="n">bottom</span><span class="p">,</span> <span class="n">element_size</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">quad_algorithm</span><span class="p">)</span>
+    <span class="n">grids</span> <span class="o">=</span> <span class="p">[</span><span class="n">_right_handed</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span> <span class="n">side</span><span class="p">)</span> <span class="k">for</span> <span class="n">grid</span> <span class="ow">in</span> <span class="n">_base_complex</span><span class="p">(</span><span class="n">side</span><span class="o">.</span><span class="n">quadrangles</span><span class="p">,</span> <span class="n">side</span><span class="o">.</span><span class="n">rim</span><span class="p">)]</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">"The side's base complex has </span><span class="si">{}</span><span class="s2"> patches"</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">grids</span><span class="p">))</span>
+    <span class="n">blocks</span> <span class="o">=</span> <span class="p">[(</span><span class="n">side</span><span class="o">.</span><span class="n">near</span><span class="p">[</span><span class="n">grid</span><span class="p">],</span> <span class="n">side</span><span class="o">.</span><span class="n">far</span><span class="p">[</span><span class="n">grid</span><span class="p">])</span> <span class="k">for</span> <span class="n">grid</span> <span class="ow">in</span> <span class="n">grids</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">_blocks_to_brep</span><span class="p">(</span><span class="n">blocks</span><span class="p">,</span> <span class="n">grids</span><span class="p">,</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">median</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">side</span><span class="o">.</span><span class="n">far</span> <span class="o">-</span> <span class="n">side</span><span class="o">.</span><span class="n">near</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">))))</span></div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_right_handed</span><span class="p">(</span><span class="n">grid</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">side</span><span class="p">:</span> <span class="n">_Side</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Return a patch's grid, transposed if needed so its rows, columns, and columns toward the far side form a right-handed frame.</span>
+
+<span class="sd">    Open Cascade makes a block with the other handedness a volume of negative size, which fragmenting then mishandles.</span>
+<span class="sd">    """</span>
+    <span class="n">corner</span> <span class="o">=</span> <span class="n">side</span><span class="o">.</span><span class="n">near</span><span class="p">[</span><span class="n">grid</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]]</span>
+    <span class="n">frame</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">side</span><span class="o">.</span><span class="n">near</span><span class="p">[</span><span class="n">grid</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">]]</span> <span class="o">-</span> <span class="n">corner</span><span class="p">,</span> <span class="n">side</span><span class="o">.</span><span class="n">near</span><span class="p">[</span><span class="n">grid</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">]]</span> <span class="o">-</span> <span class="n">corner</span><span class="p">,</span> <span class="n">side</span><span class="o">.</span><span class="n">far</span><span class="p">[</span><span class="n">grid</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]]</span> <span class="o">-</span> <span class="n">corner</span><span class="p">])</span>
+    <span class="k">return</span> <span class="n">grid</span> <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">det</span><span class="p">(</span><span class="n">frame</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="n">grid</span><span class="o">.</span><span class="n">T</span>
+
+
+<span class="c1"># Fuzzy tolerances of fragmenting blocks, tried in turn, as fractions of the sheet's median thickness.</span>
+<span class="n">_FRAGMENT_TOLERANCES</span> <span class="o">=</span> <span class="p">(</span><span class="mf">1e-3</span><span class="p">,</span> <span class="mf">3e-2</span><span class="p">,</span> <span class="mf">1e-1</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_base_complex</span><span class="p">(</span><span class="n">quadrangles</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">rim</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""Return the patches of a quadrilateral mesh's base complex as (rows, columns) grids of node indices.</span>
+
+<span class="sd">    Raises:</span>
+<span class="sd">        ValueError: If a patch is not a regular grid.</span>
+<span class="sd">    """</span>
+    <span class="n">boundary</span> <span class="o">=</span> <span class="p">{</span><span class="nb">int</span><span class="p">(</span><span class="n">node</span><span class="p">)</span> <span class="k">for</span> <span class="n">node</span> <span class="ow">in</span> <span class="n">rim</span><span class="p">}</span>
+    <span class="n">edge_quads</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">frozenset</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">number</span><span class="p">,</span> <span class="n">quad</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">quadrangles</span><span class="p">[:,</span> <span class="p">:</span><span class="mi">4</span><span class="p">]</span><span class="o">.</span><span class="n">tolist</span><span class="p">()):</span>
+        <span class="k">for</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">quad</span><span class="p">,</span> <span class="n">quad</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span> <span class="o">+</span> <span class="n">quad</span><span class="p">[:</span><span class="mi">1</span><span class="p">],</span> <span class="n">strict</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+            <span class="n">edge_quads</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="nb">frozenset</span><span class="p">((</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)),</span> <span class="p">[])</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">number</span><span class="p">)</span>
+    <span class="n">neighbors</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">set</span><span class="p">[</span><span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">edge</span> <span class="ow">in</span> <span class="n">edge_quads</span><span class="p">:</span>
+        <span class="n">a</span><span class="p">,</span> <span class="n">b</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">edge</span><span class="p">)</span>
+        <span class="n">neighbors</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="nb">set</span><span class="p">())</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">b</span><span class="p">)</span>
+        <span class="n">neighbors</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="nb">set</span><span class="p">())</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+    <span class="c1"># A regular interior node has four edges, and a regular rim node three.</span>
+    <span class="n">irregular</span> <span class="o">=</span> <span class="p">[</span><span class="n">node</span> <span class="k">for</span> <span class="n">node</span><span class="p">,</span> <span class="n">around</span> <span class="ow">in</span> <span class="n">neighbors</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">around</span><span class="p">)</span> <span class="o">!=</span> <span class="p">(</span><span class="mi">3</span> <span class="k">if</span> <span class="n">node</span> <span class="ow">in</span> <span class="n">boundary</span> <span class="k">else</span> <span class="mi">4</span><span class="p">)]</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">onward</span><span class="p">(</span><span class="n">previous</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""The edge leaving a regular interior node straight on: the one sharing no quadrilateral with the edge arriving."""</span>
+        <span class="k">if</span> <span class="n">node</span> <span class="ow">in</span> <span class="n">boundary</span> <span class="ow">or</span> <span class="nb">len</span><span class="p">(</span><span class="n">neighbors</span><span class="p">[</span><span class="n">node</span><span class="p">])</span> <span class="o">!=</span> <span class="mi">4</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="n">arriving</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">edge_quads</span><span class="p">[</span><span class="nb">frozenset</span><span class="p">((</span><span class="n">previous</span><span class="p">,</span> <span class="n">node</span><span class="p">))])</span>
+        <span class="k">return</span> <span class="nb">next</span><span class="p">(</span><span class="n">other</span> <span class="k">for</span> <span class="n">other</span> <span class="ow">in</span> <span class="n">neighbors</span><span class="p">[</span><span class="n">node</span><span class="p">]</span> <span class="k">if</span> <span class="n">other</span> <span class="o">!=</span> <span class="n">previous</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">arriving</span> <span class="o">&amp;</span> <span class="nb">set</span><span class="p">(</span><span class="n">edge_quads</span><span class="p">[</span><span class="nb">frozenset</span><span class="p">((</span><span class="n">node</span><span class="p">,</span> <span class="n">other</span><span class="p">))]))</span>
+
+    <span class="n">separatrices</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">frozenset</span><span class="p">[</span><span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+    <span class="k">for</span> <span class="n">start</span> <span class="ow">in</span> <span class="n">irregular</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">first</span> <span class="ow">in</span> <span class="n">neighbors</span><span class="p">[</span><span class="n">start</span><span class="p">]:</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">edge_quads</span><span class="p">[</span><span class="nb">frozenset</span><span class="p">((</span><span class="n">start</span><span class="p">,</span> <span class="n">first</span><span class="p">))])</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="n">previous</span><span class="p">,</span> <span class="n">node</span> <span class="o">=</span> <span class="n">start</span><span class="p">,</span> <span class="n">first</span>
+            <span class="n">separatrices</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="nb">frozenset</span><span class="p">((</span><span class="n">previous</span><span class="p">,</span> <span class="n">node</span><span class="p">)))</span>
+            <span class="k">while</span> <span class="p">(</span><span class="n">following</span> <span class="o">:=</span> <span class="n">onward</span><span class="p">(</span><span class="n">previous</span><span class="p">,</span> <span class="n">node</span><span class="p">))</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">previous</span><span class="p">,</span> <span class="n">node</span> <span class="o">=</span> <span class="n">node</span><span class="p">,</span> <span class="n">following</span>
+                <span class="n">separatrices</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="nb">frozenset</span><span class="p">((</span><span class="n">previous</span><span class="p">,</span> <span class="n">node</span><span class="p">)))</span>
+
+    <span class="n">patch</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">full</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">quadrangles</span><span class="p">),</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+    <span class="n">grids</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">seed</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">quadrangles</span><span class="p">)):</span>
+        <span class="k">if</span> <span class="n">patch</span><span class="p">[</span><span class="n">seed</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">continue</span>
+        <span class="n">members</span><span class="p">,</span> <span class="n">stack</span> <span class="o">=</span> <span class="p">[</span><span class="n">seed</span><span class="p">],</span> <span class="p">[</span><span class="n">seed</span><span class="p">]</span>
+        <span class="n">patch</span><span class="p">[</span><span class="n">seed</span><span class="p">]</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">grids</span><span class="p">)</span>
+        <span class="k">while</span> <span class="n">stack</span><span class="p">:</span>
+            <span class="n">quad</span> <span class="o">=</span> <span class="n">quadrangles</span><span class="p">[</span><span class="n">stack</span><span class="o">.</span><span class="n">pop</span><span class="p">(),</span> <span class="p">:</span><span class="mi">4</span><span class="p">]</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
+            <span class="k">for</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">quad</span><span class="p">,</span> <span class="n">quad</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span> <span class="o">+</span> <span class="n">quad</span><span class="p">[:</span><span class="mi">1</span><span class="p">],</span> <span class="n">strict</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+                <span class="n">edge</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">((</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">))</span>
+                <span class="k">if</span> <span class="n">edge</span> <span class="ow">in</span> <span class="n">separatrices</span><span class="p">:</span>
+                    <span class="k">continue</span>
+                <span class="k">for</span> <span class="n">other</span> <span class="ow">in</span> <span class="n">edge_quads</span><span class="p">[</span><span class="n">edge</span><span class="p">]:</span>
+                    <span class="k">if</span> <span class="n">patch</span><span class="p">[</span><span class="n">other</span><span class="p">]</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">:</span>
+                        <span class="n">patch</span><span class="p">[</span><span class="n">other</span><span class="p">]</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">grids</span><span class="p">)</span>
+                        <span class="n">members</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">other</span><span class="p">)</span>
+                        <span class="n">stack</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">other</span><span class="p">)</span>
+        <span class="n">grids</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">_patch_grid</span><span class="p">(</span><span class="n">quadrangles</span><span class="p">[</span><span class="n">members</span><span class="p">,</span> <span class="p">:</span><span class="mi">4</span><span class="p">]))</span>
+    <span class="k">return</span> <span class="n">grids</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_patch_grid</span><span class="p">(</span><span class="n">quads</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Return the (rows, columns) grid of node indices of a patch of quadrilaterals forming a regular grid.</span>
+
+<span class="sd">    Grid coordinates spread from the first quadrilateral across shared edges:</span>
+<span class="sd">    the node beyond each end of a shared edge lies as far past it as the</span>
+<span class="sd">    node before it.</span>
+
+<span class="sd">    Raises:</span>
+<span class="sd">        ValueError: If the quadrilaterals do not form one regular grid.</span>
+<span class="sd">    """</span>
+    <span class="n">error</span> <span class="o">=</span> <span class="s2">"The base complex has a patch that is not a regular grid of quadrilaterals"</span>
+    <span class="n">first</span> <span class="o">=</span> <span class="n">quads</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
+    <span class="n">coordinates</span> <span class="o">=</span> <span class="p">{</span><span class="n">first</span><span class="p">[</span><span class="mi">0</span><span class="p">]:</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span> <span class="n">first</span><span class="p">[</span><span class="mi">1</span><span class="p">]:</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span> <span class="n">first</span><span class="p">[</span><span class="mi">2</span><span class="p">]:</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">first</span><span class="p">[</span><span class="mi">3</span><span class="p">]:</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">)}</span>
+    <span class="n">edge_quads</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">frozenset</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">number</span><span class="p">,</span> <span class="n">quad</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">quads</span><span class="o">.</span><span class="n">tolist</span><span class="p">()):</span>
+        <span class="k">for</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">quad</span><span class="p">,</span> <span class="n">quad</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span> <span class="o">+</span> <span class="n">quad</span><span class="p">[:</span><span class="mi">1</span><span class="p">],</span> <span class="n">strict</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+            <span class="n">edge_quads</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="nb">frozenset</span><span class="p">((</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)),</span> <span class="p">[])</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">number</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">beside</span><span class="p">(</span><span class="n">quad</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">node</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">other</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""The node of quad joined to node by an edge, other than other."""</span>
+        <span class="n">position</span> <span class="o">=</span> <span class="n">quad</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
+        <span class="k">return</span> <span class="nb">next</span><span class="p">(</span><span class="n">candidate</span> <span class="k">for</span> <span class="n">candidate</span> <span class="ow">in</span> <span class="p">(</span><span class="n">quad</span><span class="p">[</span><span class="n">position</span> <span class="o">-</span> <span class="mi">1</span><span class="p">],</span> <span class="n">quad</span><span class="p">[(</span><span class="n">position</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">%</span> <span class="mi">4</span><span class="p">])</span> <span class="k">if</span> <span class="n">candidate</span> <span class="o">!=</span> <span class="n">other</span><span class="p">)</span>
+
+    <span class="n">done</span><span class="p">,</span> <span class="n">stack</span> <span class="o">=</span> <span class="p">{</span><span class="mi">0</span><span class="p">},</span> <span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="k">while</span> <span class="n">stack</span><span class="p">:</span>
+        <span class="n">quad</span> <span class="o">=</span> <span class="n">quads</span><span class="p">[</span><span class="n">stack</span><span class="o">.</span><span class="n">pop</span><span class="p">()]</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">quad</span><span class="p">,</span> <span class="n">quad</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span> <span class="o">+</span> <span class="n">quad</span><span class="p">[:</span><span class="mi">1</span><span class="p">],</span> <span class="n">strict</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">number</span> <span class="ow">in</span> <span class="n">edge_quads</span><span class="p">[</span><span class="nb">frozenset</span><span class="p">((</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">))]:</span>
+                <span class="k">if</span> <span class="n">number</span> <span class="ow">in</span> <span class="n">done</span><span class="p">:</span>
+                    <span class="k">continue</span>
+                <span class="n">neighbor</span> <span class="o">=</span> <span class="n">quads</span><span class="p">[</span><span class="n">number</span><span class="p">]</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
+                <span class="k">for</span> <span class="n">node</span><span class="p">,</span> <span class="n">other</span> <span class="ow">in</span> <span class="p">((</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">),</span> <span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="n">a</span><span class="p">)):</span>
+                    <span class="n">inside</span><span class="p">,</span> <span class="n">outside</span> <span class="o">=</span> <span class="n">beside</span><span class="p">(</span><span class="n">quad</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="n">other</span><span class="p">),</span> <span class="n">beside</span><span class="p">(</span><span class="n">neighbor</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="n">other</span><span class="p">)</span>
+                    <span class="n">expected</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">coordinates</span><span class="p">[</span><span class="n">node</span><span class="p">])</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">coordinates</span><span class="p">[</span><span class="n">inside</span><span class="p">]))</span>
+                    <span class="k">if</span> <span class="n">coordinates</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">outside</span><span class="p">,</span> <span class="n">expected</span><span class="p">)</span> <span class="o">!=</span> <span class="n">expected</span><span class="p">:</span>
+                        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="n">error</span><span class="p">)</span>
+                <span class="n">done</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">number</span><span class="p">)</span>
+                <span class="n">stack</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">number</span><span class="p">)</span>
+    <span class="n">positions</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">coordinates</span><span class="o">.</span><span class="n">values</span><span class="p">()))</span>
+    <span class="n">positions</span> <span class="o">-=</span> <span class="n">positions</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+    <span class="n">rows</span><span class="p">,</span> <span class="n">columns</span> <span class="o">=</span> <span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">extent</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span> <span class="k">for</span> <span class="n">extent</span> <span class="ow">in</span> <span class="n">positions</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">))</span>
+    <span class="n">grid</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">full</span><span class="p">((</span><span class="n">rows</span><span class="p">,</span> <span class="n">columns</span><span class="p">),</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">)</span>
+    <span class="n">grid</span><span class="p">[</span><span class="n">positions</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">positions</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">]]</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">coordinates</span><span class="p">)</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">grid</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">any</span><span class="p">()</span> <span class="ow">or</span> <span class="nb">len</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">coordinates</span><span class="o">.</span><span class="n">values</span><span class="p">()))</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">coordinates</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span><span class="n">rows</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">columns</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">quads</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="n">error</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">grid</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_blocks_to_brep</span><span class="p">(</span><span class="n">blocks</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]],</span> <span class="n">grids</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">],</span> <span class="n">thickness</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">BRep</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Build one six-sided volume per block, from its (rows, columns, 3) points on each side, fragmented so neighbors share faces.</span>
+
+<span class="sd">    Each block's sides are B-spline patches through its points, and a ruled</span>
+<span class="sd">    wall stands on each of its grid's sides, built once for sides that</span>
+<span class="sd">    neighboring blocks share; grids give the node indices that identify them.</span>
+<span class="sd">    Fragmenting is fuzzy, because where the sheet is thin the sides meet the</span>
+<span class="sd">    walls nearly tangentially, and exact fragmenting left slivers where three</span>
+<span class="sd">    blocks meet on the real femoral cartilage's rim, while neighboring</span>
+<span class="sd">    patches there can also overlap by about 0.05 mm. Each of</span>
+<span class="sd">    _FRAGMENT_TOLERANCES, as fractions of the thickness, is tried in turn</span>
+<span class="sd">    until every block comes out as one volume of six four-sided faces.</span>
+
+<span class="sd">    Raises:</span>
+<span class="sd">        ValueError: If at every tolerance fragmenting splits blocks or leaves one without six four-sided faces.</span>
+<span class="sd">    """</span>
+    <span class="n">problem</span> <span class="o">=</span> <span class="s2">""</span>
+    <span class="k">for</span> <span class="n">tolerance</span> <span class="ow">in</span> <span class="n">_FRAGMENT_TOLERANCES</span><span class="p">:</span>
+        <span class="k">with</span> <span class="n">gmsh_session</span><span class="p">():</span>
+            <span class="n">problem</span> <span class="o">=</span> <span class="n">_fragment_blocks</span><span class="p">(</span><span class="n">blocks</span><span class="p">,</span> <span class="n">grids</span><span class="p">,</span> <span class="n">tolerance</span> <span class="o">*</span> <span class="n">thickness</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">problem</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">export_brep</span><span class="p">()</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">"Fragmenting the blocks at tolerance </span><span class="si">{:.3g}</span><span class="s2"> of the thickness failed: </span><span class="si">{}</span><span class="s2">"</span><span class="p">,</span> <span class="n">tolerance</span><span class="p">,</span> <span class="n">problem</span><span class="p">)</span>
+    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="n">problem</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_fragment_blocks</span><span class="p">(</span><span class="n">blocks</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]],</span> <span class="n">grids</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">],</span> <span class="n">tolerance</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Add the blocks to the current gmsh model and fragment them with a fuzzy tolerance, returning what is wrong with the result, or "" if nothing."""</span>
+    <span class="n">walls</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span> <span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="n">volumes</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="p">(</span><span class="n">near</span><span class="p">,</span> <span class="n">far</span><span class="p">),</span> <span class="n">grid</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">blocks</span><span class="p">,</span> <span class="n">grids</span><span class="p">,</span> <span class="n">strict</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+        <span class="n">faces</span> <span class="o">=</span> <span class="p">[</span><span class="n">_add_patch</span><span class="p">(</span><span class="n">near</span><span class="p">),</span> <span class="n">_add_patch</span><span class="p">(</span><span class="n">far</span><span class="p">)]</span>
+        <span class="k">for</span> <span class="n">select</span> <span class="ow">in</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">s_</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">np</span><span class="o">.</span><span class="n">s_</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="n">np</span><span class="o">.</span><span class="n">s_</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">np</span><span class="o">.</span><span class="n">s_</span><span class="p">[:,</span> <span class="o">-</span><span class="mi">1</span><span class="p">]):</span>
+            <span class="n">nodes</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">grid</span><span class="p">[</span><span class="n">select</span><span class="p">]</span><span class="o">.</span><span class="n">tolist</span><span class="p">())</span>
+            <span class="n">key</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">nodes</span><span class="p">,</span> <span class="n">nodes</span><span class="p">[::</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+            <span class="k">if</span> <span class="n">key</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">walls</span><span class="p">:</span>
+                <span class="n">walls</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">_add_wall</span><span class="p">(</span><span class="n">near</span><span class="p">[</span><span class="n">select</span><span class="p">],</span> <span class="n">far</span><span class="p">[</span><span class="n">select</span><span class="p">])</span>
+            <span class="n">faces</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">walls</span><span class="p">[</span><span class="n">key</span><span class="p">])</span>
+        <span class="n">volumes</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="mi">3</span><span class="p">,</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">occ</span><span class="o">.</span><span class="n">addVolume</span><span class="p">([</span><span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">occ</span><span class="o">.</span><span class="n">addSurfaceLoop</span><span class="p">(</span><span class="n">faces</span><span class="p">,</span> <span class="n">sewing</span><span class="o">=</span><span class="kc">True</span><span class="p">)])))</span>
+    <span class="c1"># Sewing copies the shared walls into each block. They are identical</span>
+    <span class="c1"># surfaces, so fragmenting merges them back into one each.</span>
+    <span class="k">with</span> <span class="n">gmsh_options</span><span class="p">({</span><span class="s2">"Geometry.ToleranceBoolean"</span><span class="p">:</span> <span class="n">tolerance</span><span class="p">}):</span>
+        <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">occ</span><span class="o">.</span><span class="n">fragment</span><span class="p">(</span><span class="n">volumes</span><span class="p">[:</span><span class="mi">1</span><span class="p">],</span> <span class="n">volumes</span><span class="p">[</span><span class="mi">1</span><span class="p">:])</span>
+    <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">occ</span><span class="o">.</span><span class="n">synchronize</span><span class="p">()</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">getEntities</span><span class="p">(</span><span class="mi">3</span><span class="p">))</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">blocks</span><span class="p">):</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">"The </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">blocks</span><span class="p">)</span><span class="si">}</span><span class="s2"> blocks overlap; fragmenting them gave </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">getEntities</span><span class="p">(</span><span class="mi">3</span><span class="p">))</span><span class="si">}</span><span class="s2"> volumes"</span>
+    <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">volume</span> <span class="ow">in</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">getEntities</span><span class="p">(</span><span class="mi">3</span><span class="p">):</span>
+        <span class="n">faces</span> <span class="o">=</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">getBoundary</span><span class="p">([(</span><span class="mi">3</span><span class="p">,</span> <span class="n">volume</span><span class="p">)],</span> <span class="n">oriented</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+        <span class="n">sides</span> <span class="o">=</span> <span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">getBoundary</span><span class="p">([</span><span class="n">face</span><span class="p">],</span> <span class="n">combined</span><span class="o">=</span><span class="kc">False</span><span class="p">))</span> <span class="k">for</span> <span class="n">face</span> <span class="ow">in</span> <span class="n">faces</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">sides</span> <span class="o">!=</span> <span class="p">[</span><span class="mi">4</span><span class="p">]</span> <span class="o">*</span> <span class="mi">6</span><span class="p">:</span>
+            <span class="k">return</span> <span class="sa">f</span><span class="s2">"Fragmenting the blocks left a volume with </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">faces</span><span class="p">)</span><span class="si">}</span><span class="s2"> faces of </span><span class="si">{</span><span class="n">sides</span><span class="si">}</span><span class="s2"> sides instead of six four-sided faces"</span>
+    <span class="k">return</span> <span class="s2">""</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_add_patch</span><span class="p">(</span><span class="n">points</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Add a B-spline surface through a (rows, columns, 3) grid of points, returning its tag.</span>
+
+<span class="sd">    Rows and columns are interpolated at uniform parameters, so a patch's</span>
+<span class="sd">    edge depends only on that edge's points and matches its neighbor's and</span>
+<span class="sd">    its wall's exactly.</span>
+<span class="sd">    """</span>
+    <span class="n">degree</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">_SPLINE_ORDER</span><span class="p">,</span> <span class="n">points</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span> <span class="n">points</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="n">parameters</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="n">points</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+    <span class="n">rows</span> <span class="o">=</span> <span class="p">[</span><span class="n">clamped_interpolation</span><span class="p">(</span><span class="n">parameters</span><span class="p">,</span> <span class="n">row</span><span class="p">,</span> <span class="nb">min</span><span class="p">(</span><span class="n">_SPLINE_ORDER</span><span class="p">,</span> <span class="n">points</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="mi">1</span><span class="p">))</span> <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">points</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">add_swept_surface</span><span class="p">(</span><span class="n">rows</span><span class="p">,</span> <span class="nb">min</span><span class="p">(</span><span class="n">_SPLINE_ORDER</span><span class="p">,</span> <span class="n">points</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="mi">1</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="n">points</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span> <span class="n">degree</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_add_wall</span><span class="p">(</span><span class="n">near</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">far</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Add a ruled surface of straight lines between two (K, 3) rows of points, returning its tag."""</span>
+    <span class="n">degree</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">_SPLINE_ORDER</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">near</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="n">parameters</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">near</span><span class="p">))</span>
+    <span class="n">rows</span> <span class="o">=</span> <span class="p">[</span><span class="n">clamped_interpolation</span><span class="p">(</span><span class="n">parameters</span><span class="p">,</span> <span class="n">points</span><span class="p">,</span> <span class="n">degree</span><span class="p">)</span> <span class="k">for</span> <span class="n">points</span> <span class="ow">in</span> <span class="p">(</span><span class="n">near</span><span class="p">,</span> <span class="n">far</span><span class="p">)]</span>
+    <span class="k">return</span> <span class="n">add_swept_surface</span><span class="p">(</span><span class="n">rows</span><span class="p">,</span> <span class="n">degree</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">]),</span> <span class="mi">1</span><span class="p">)</span>
+</pre></div>
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          
+          
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026, Scott Sibole
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer no-toc">
+      
+      
+      
+    </aside>
+  </div>
+</div><script src="../../../_static/documentation_options.js?v=6ffd866b"></script>
+    <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/scripts/furo.js?v=46bd48cc"></script>
+    </body>
+</html>
