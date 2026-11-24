@@ -103,6 +103,19 @@ STRUCTURE_SECTIONS: dict[Structure, str] = {
 }
 """The section of the B-rep and mesh configurations whose settings each structure takes, unless it has its own (OWN_SECTION_STRUCTURES)."""
 
+CARTILAGE_STRUCTURES: tuple[Structure, ...] = ("patellar_cartilage", "femoral_cartilage", "lateral_tibial_cartilage", "medial_tibial_cartilage")
+"""The cartilages, which overclosure removal never moves for a meniscus or bone, only for each other."""
+
+DEFAULT_OVERCLOSURE_PRIORITY: tuple[Structure, ...] = (
+    *CARTILAGE_STRUCTURES,
+    "lateral_meniscus",
+    "medial_meniscus",
+    "femur",
+    "tibia",
+    "patella",
+)
+"""Default order in which overclosure removal keeps structures in place: cartilage, then the menisci, then the bones."""
+
 OWN_SECTION_STRUCTURES: tuple[Structure, ...] = (
     "lateral_meniscus",
     "medial_meniscus",
@@ -122,6 +135,7 @@ OptionalFloat = Annotated[float | None, BeforeValidator(_none_from_text)]
 OptionalPath = Annotated[Path | None, BeforeValidator(_none_from_text)]
 LabelValues = Annotated[dict[Structure, int] | None, BeforeValidator(_json_from_text)]
 StructurePaths = Annotated[dict[Structure, Path] | None, BeforeValidator(_json_from_text)]
+StructureList = Annotated[list[Structure], BeforeValidator(_json_from_text)]
 StructureElementTypes = Annotated[dict[Structure, ElementType] | None, BeforeValidator(_json_from_text)]
 
 
@@ -570,6 +584,35 @@ class FemoralCartilageMesh(CartilageMesh):
         return self.max_size if self.max_size is not None else self.element_size
 
 
+class OverclosureBrep(BaseConfig):
+    """Settings for removing overclosure: moving built structures apart where their geometry overlaps.
+
+    After every structure is built, each is moved out of the structures that
+    rank above it in priority. Cartilage is thin, so it ranks above every
+    meniscus and bone and never moves for them. Where two cartilages overlap,
+    both articular sides are lowered toward their bones, each by its share
+    of the two local thicknesses, whatever their order. A meniscus moves its
+    contour points out within their slice planes and is lofted again, keeping
+    its caps and hexahedral blocks; a bone moves its surface's vertices.
+    """
+
+    enabled: bool = Field(default=False, description="Move overlapping structures apart after building them all")
+    clearance: float = Field(default=0.0, ge=0, description="Gap left between structures moved apart, in physical units. 0 leaves them touching")
+    priority: StructureList = Field(
+        default_factory=lambda: list(DEFAULT_OVERCLOSURE_PRIORITY),
+        description="Every structure, from the one kept in place first to the one moved first, as JSON such as "
+        + '["femoral_cartilage", ..., "patella"]. Each is moved out of those before it. Cartilage must come before every other structure',
+    )
+
+    @model_validator(mode="after")
+    def _check_priority(self) -> Self:
+        if sorted(self.priority) != sorted(STRUCTURES):
+            raise ValueError(f"priority must name every structure once: {list(STRUCTURES)}; got {self.priority}")
+        if max(self.priority.index(cartilage) for cartilage in CARTILAGE_STRUCTURES) >= len(CARTILAGE_STRUCTURES):
+            raise ValueError(f"Cartilage is never moved for a meniscus or bone, so it must come first in priority; got {self.priority}")
+        return self
+
+
 class LabelMapBrep(_StructureSections):
     """Settings for building a B-rep of every structure in a segmented LabelMap.
 
@@ -615,6 +658,9 @@ class LabelMapBrep(_StructureSections):
     femur: BoneBrep = Field(default_factory=BoneBrep, description="Settings for the femur, whose output is a surface")
     tibia: BoneBrep = Field(default_factory=BoneBrep, description="Settings for the tibia, whose output is a surface")
     patella: BoneBrep = Field(default_factory=BoneBrep, description="Settings for the patella, whose output is a surface")
+    overclosure: OverclosureBrep = Field(
+        default_factory=OverclosureBrep, description="Settings for moving overlapping structures apart after they are all built"
+    )
 
     @model_validator(mode="after")
     def _check_sources(self) -> Self:

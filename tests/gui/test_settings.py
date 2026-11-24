@@ -105,3 +105,32 @@ def test_structure_sections_and_sharing():
     assert settings.sharing_structures("patellar_cartilage", ["medial_tibial_cartilage"]) == ["lateral_tibial_cartilage"]
     assert settings.sharing_structures("patellar_cartilage", ["patellar_cartilage"]) == []
     assert "geo__patellar_cartilage__side_cosine" in {spec.key for spec in settings.all_fields("geometry")}
+
+
+def test_overclosure_has_forms_on_the_settings_page_only():
+    assert settings.OVERCLOSURE_SECTION in settings.section_names("geometry")
+    assert settings.OVERCLOSURE_SECTION not in settings.structure_section_names("geometry")
+    specs = {spec.name: spec for spec in settings.section_fields("geometry", settings.OVERCLOSURE_SECTION)}
+    assert (specs["enabled"].widget, specs["clearance"].widget, specs["priority"].widget) == ("switch", "number", "order")
+    assert sorted(specs["priority"].items) == sorted(STRUCTURES)
+
+
+def test_overclosure_priority_round_trips_through_the_state():
+    priority = [*LabelMapBrep().overclosure.priority]
+    priority[4], priority[5] = priority[5], priority[4]
+    config = LabelMapBrep.model_validate({"overclosure": {"priority": priority, "clearance": 0.1}})
+
+    state = settings.state_values("geometry", config)
+
+    assert state["geo__overclosure__priority"] == priority
+    assert LabelMapBrep.model_validate(settings.config_values("geometry", state)).overclosure == config.overclosure
+
+
+def test_overclosure_priority_errors_are_reported_on_its_form():
+    state = settings.state_values("geometry")
+    state["geo__overclosure__priority"] = ["lateral_meniscus", *[name for name in state["geo__overclosure__priority"] if name != "lateral_meniscus"]]
+
+    with pytest.raises(ValidationError) as error:
+        LabelMapBrep.model_validate(settings.config_values("geometry", state))
+
+    assert "must come first" in settings.validation_errors("geometry", error.value)[settings.section_key("geometry", "overclosure")]

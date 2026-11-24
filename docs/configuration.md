@@ -72,3 +72,12 @@ The `femur`, `tibia`, and `patella` sections each hold one bone's settings. A bo
 .. autopydantic_model:: kneemesh.config.BoneMesh
    :noindex:
 ```
+
+## Overclosure
+
+The `overclosure` section of {py:class}`~kneemesh.config.LabelMapBrep` moves structures apart where their geometry overlaps, once every structure is built. It is off by default. The GUI's **Resolve overclosures** runs it on the structures with geometry at any time.
+
+```{eval-rst}
+.. autopydantic_model:: kneemesh.config.OverclosureBrep
+   :noindex:
+```

@@ -19,6 +19,7 @@ from kneemesh.config import (
     MeniscusMesh,
 )
 from kneemesh.disk import read_brep, read_segmentation, read_surface, write_brep, write_label_map
+from kneemesh.overclosure import Obstacle, surface_obstacle
 from kneemesh.pipeline import (
     _BREP_BUILDERS,
     _MESHERS,
@@ -520,6 +521,24 @@ def test_pipeline_builds_and_meshes_cartilage_against_its_bone(in_tmp_path, cart
     # The bone is built as a surface too.
     assert not list(in_tmp_path.glob("tibia*.brep"))
     assert (in_tmp_path / "tibia.stl").stat().st_size > 0
+
+
+def test_brep_pipeline_moves_the_bone_out_of_its_cartilage(in_tmp_path, cartilage_segmentation, capsys):
+    write_label_map(cartilage_segmentation.image, in_tmp_path / "knee.nii")
+    argv = ["--label-map", "knee.nii", "--labels", json.dumps(cartilage_segmentation.labels), "--cartilage.hex-blocks", "true"]
+
+    assert brep_main([*argv, "--output-directory", "plain"]) == 0
+    assert brep_main([*argv, "--output-directory", "moved", "--overclosure.enabled", "true", "--overclosure.clearance", "0.05"]) == 0
+
+    stderr = capsys.readouterr().err
+    assert "Moving overlapping structures apart with clearance 0.05" in stderr
+    cartilage = surface_obstacle(read_brep(in_tmp_path / "moved" / "lateral_tibial_cartilage.brep"))
+    plain, moved = (Obstacle(read_surface(in_tmp_path / directory / "tibia.stl")) for directory in ("plain", "moved"))
+    # Cartilage is never moved for its bone.
+    assert read_brep(in_tmp_path / "moved" / "lateral_tibial_cartilage.brep") == read_brep(in_tmp_path / "plain" / "lateral_tibial_cartilage.brep")
+    assert cartilage.depth(plain.points) > 0.01
+    signed, _ = cartilage.distances(moved.points, reach=1.0)
+    assert signed.min() > 0.05 - 0.01
 
 
 def test_pipeline_builds_and_meshes_femoral_cartilage_against_the_femur(in_tmp_path, femoral_segmentation, capsys):

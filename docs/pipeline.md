@@ -33,6 +33,21 @@ For the femur, tibia, and patella, {py:func}`kneemesh.pipeline.run_brep` writes 
 
 {py:func}`kneemesh.mesh.bone.surface_mesh` and {py:func}`kneemesh.mesh.bone.tetrahedral_mesh` load the surface into gmsh, which splits it into patches it can map to a plane and builds those maps, then mesh it with triangles or quadrilaterals, or the solid it encloses with tetrahedra graded from the cortical shell inward.
 
+## Overclosure
+
+Each structure is built from its own label, and smoothing, thickening, and fitting let neighbors overlap a little. On the example knee the medial meniscus reached 0.45 mm into its tibial cartilage, the menisci 0.1 mm into the femoral cartilage, the cartilages 0.13-0.15 mm into their bones, and the femoral cartilage 0.06-0.11 mm into the tibial and patellar cartilage. With `overclosure.enabled`, {py:func}`kneemesh.pipeline.run_brep` builds every structure, then {py:func}`~kneemesh.overclosure.resolve_overclosure` moves them apart, leaving `overclosure.clearance` between them, before writing any:
+
+1. Cartilage is thin, so it never moves for a meniscus or bone. Where two cartilages overlap, both articular sides are lowered toward their bones by the overlap's depth, $d$, each by its share of the two local thicknesses:
+
+   $$
+   \delta_a = \frac{t_a}{t_a + t_b}\,(d + c), \qquad \delta_b = \frac{t_b}{t_a + t_b}\,(d + c),
+   $$
+
+   with $c$ the clearance. {py:func}`~kneemesh.geo.sheet.lower_articular` lowers each sheet and {py:func}`~kneemesh.geo.sheet.sheet_to_brep` rebuilds it, in rounds until neither reaches into the other.
+2. Every other structure, in `overclosure.priority` order, is moved out of every structure ranked above it. A meniscus's contour points move within their slice planes and are lofted again as they were built ({py:func}`~kneemesh.overclosure.push_meniscus_out`), so its planar caps, clipped cut, and hexahedral blocks are kept. A bone's surface vertices move ({py:func}`~kneemesh.overclosure.push_surface_out`).
+
+Overlaps are measured on each B-rep's outer boundary triangulated at 0.5 mm ({py:func}`~kneemesh.overclosure.brep_boundary`), both ways: a structure's points inside the other, and the other's points inside it, which catch overlap between a loft's contours or a bone's vertices. A point measured between them moves the contour points or vertices around it that face it. On the example knee every overlap ended within 0.006 mm, and the hexahedral meshes' minimum scaled Jacobians changed by at most 0.033.
+
 ## Distance field smoothing
 
 By default, the Gaussian's central 95% spans three voxel edges along each axis. A Gaussian's central 95% is $\pm 1.96\,\sigma$, so on an axis with voxel spacing $h$

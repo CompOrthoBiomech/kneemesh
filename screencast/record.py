@@ -92,7 +92,10 @@ class Recorder:
     async def start(self, page: Page) -> None:
         self.cdp = await page.context.new_cdp_session(page)
         self.cdp.on("Page.screencastFrame", self._frame)
-        await self.cdp.send("Page.startScreencast", {"format": "jpeg", "quality": 92, "maxWidth": round(WIDTH * DEVICE_SCALE), "maxHeight": round(HEIGHT * DEVICE_SCALE)})
+        await self.cdp.send(
+            "Page.startScreencast",
+            {"format": "jpeg", "quality": 92, "maxWidth": round(WIDTH * DEVICE_SCALE), "maxHeight": round(HEIGHT * DEVICE_SCALE)},
+        )
 
     def _frame(self, params: dict) -> None:
         path = self.directory / f"frame_{len(self.frames):06d}.jpg"
@@ -121,8 +124,29 @@ class Recorder:
                 f.write(f"file '{path}'\nduration {max(duration, 0.001):.4f}\n")
             f.write(f"file '{frames[-1][1]}'\n")
         subprocess.run(
-            ["ffmpeg", "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", str(listing),
-             "-vf", f"fps=30,scale={round(WIDTH * DEVICE_SCALE)}:{round(HEIGHT * DEVICE_SCALE)}:flags=lanczos,format=yuv420p", "-c:v", "libx264", "-crf", "18", "-preset", "slow", "-movflags", "+faststart", str(output)],
+            [
+                "ffmpeg",
+                "-y",
+                "-loglevel",
+                "error",
+                "-f",
+                "concat",
+                "-safe",
+                "0",
+                "-i",
+                str(listing),
+                "-vf",
+                f"fps=30,scale={round(WIDTH * DEVICE_SCALE)}:{round(HEIGHT * DEVICE_SCALE)}:flags=lanczos,format=yuv420p",
+                "-c:v",
+                "libx264",
+                "-crf",
+                "18",
+                "-preset",
+                "slow",
+                "-movflags",
+                "+faststart",
+                str(output),
+            ],
             check=True,
         )
 
@@ -241,11 +265,15 @@ class Demo:
         return self.page.locator(".v-list-item:has(button i.mdi-target, button i.mdi-target-account)").filter(has=exact).first
 
     def structure_group(self, title: str) -> Locator:
-        return self.page.locator(".v-list-group").filter(
-            has=self.page.locator(":scope > .v-list-item:has(button i.mdi-target, button i.mdi-target-account)").filter(
-                has=self.page.locator(".v-list-item-title", has_text=re.compile(f"^{re.escape(title)}$"))
+        return (
+            self.page.locator(".v-list-group")
+            .filter(
+                has=self.page.locator(":scope > .v-list-item:has(button i.mdi-target, button i.mdi-target-account)").filter(
+                    has=self.page.locator(".v-list-item-title", has_text=re.compile(f"^{re.escape(title)}$"))
+                )
             )
-        ).first
+            .first
+        )
 
     async def toggle_eye(self, title: str) -> None:
         await self.click(self.structure_row(title).locator("button").nth(1), 0.5)
@@ -373,7 +401,9 @@ async def run(demo: Demo) -> None:
     await demo.dialog_item("knee_brep_hex.json")
     await demo.dialog_open()
     await demo.wait_idle("Extracting surfaces of the assembled segmentation's nine values")
-    await demo.caption("Each structure's Geometry page edits its settings: the menisci build butterfly blocks for hexahedra.", "3 · Geometry settings")
+    await demo.caption(
+        "Each structure's Geometry page edits its settings: the menisci build butterfly blocks for hexahedra.", "3 · Geometry settings"
+    )
     await demo.open_child("Lateral Meniscus", "Geometry")
     await demo.pause(3.0)
     await demo.caption(

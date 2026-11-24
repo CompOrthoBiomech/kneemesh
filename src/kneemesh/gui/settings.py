@@ -22,13 +22,16 @@ from pydantic.fields import FieldInfo
 from kneemesh.config import OWN_SECTION_STRUCTURES, STRUCTURE_SECTIONS, STRUCTURES, BaseConfig, BrepMesh, LabelMapBrep, Structure
 
 type Kind = Literal["geometry", "mesh"]
-type Widget = Literal["switch", "select", "number", "text"]
+type Widget = Literal["switch", "select", "number", "text", "order"]
 
 MODELS: dict[Kind, type[BaseConfig]] = {"geometry": LabelMapBrep, "mesh": BrepMesh}
 PREFIXES: dict[Kind, str] = {"geometry": "geo", "mesh": "mesh"}
 
 OUTPUT_DIRECTORY_KEY = "output_directory"
 """The state key of the output directory, which the B-rep and mesh configurations share."""
+
+OVERCLOSURE_SECTION = "overclosure"
+"""The geometry section that belongs to no structure, shown on the Settings page rather than a structure's."""
 
 # Fields the GUI fills in itself, from the label tree, the structures' own pages, or the shared output directory.
 _MANAGED: dict[Kind, frozenset[str]] = {
@@ -58,8 +61,8 @@ class FieldSpec:
         section: The section holding the field, or None for a top-level field.
         label: The widget's label.
         description: The field's description, shown as a tooltip.
-        widget: The widget to edit it with.
-        items: The choices of a select.
+        widget: The widget to edit it with: an order is a list of all its items, rearranged.
+        items: The choices of a select, or the items of an order.
         optional: Whether the field takes None, shown as an empty field.
         integer: Whether a number field takes integers.
         minimum: The smallest value allowed, or None.
@@ -93,7 +96,12 @@ def section_key(kind: Kind, section: str) -> str:
 
 def section_names(kind: Kind) -> list[str]:
     """The sections of kind's model, such as meniscus and femur."""
-    return [name for name, field in MODELS[kind].model_fields.items() if _section_model(field.annotation) is not None]
+    return [name for name, field in MODELS[kind].model_fields.items() if _section_model(field.annotation) is not None and name not in _MANAGED[kind]]
+
+
+def structure_section_names(kind: Kind) -> list[str]:
+    """The sections of kind's model that hold structures' settings, shown on the structures' pages: all but overclosure."""
+    return [name for name in section_names(kind) if name != OVERCLOSURE_SECTION]
 
 
 def section_fields(kind: Kind, section: str) -> list[FieldSpec]:
@@ -205,10 +213,13 @@ def _spec(kind: Kind, section: str | None, name: str, field: FieldInfo) -> Field
             bound = constraint.le if isinstance(constraint, Le) else constraint.lt
             maximum = float(bound) if isinstance(bound, int | float) else None
     key, label, description = state_key(kind, section, name), humanize(name), field.description or ""
+    items = _choices(annotation)
     if annotation is bool:
         widget: Widget = "switch"
-    elif _choices(annotation) is not None:
+    elif items is not None:
         widget = "select"
+    elif get_origin(annotation) is list and (items := _choices(get_args(annotation)[0])) is not None:
+        widget = "order"
     elif annotation is int or annotation is float:
         widget = "number"
     elif annotation is str or annotation is Path:
@@ -222,7 +233,7 @@ def _spec(kind: Kind, section: str | None, name: str, field: FieldInfo) -> Field
         label=label,
         description=description,
         widget=widget,
-        items=_choices(annotation) or (),
+        items=items or (),
         optional=optional,
         integer=annotation is int,
         minimum=minimum,

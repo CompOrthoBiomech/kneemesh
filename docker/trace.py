@@ -63,7 +63,8 @@ def run_pipelines(directory: Path) -> list[Path]:
     )
     tibia = ["--label-map", str(directory / "tibia.nii"), "--labels", '{"tibia": 1, "medial_tibial_cartilage": 2}', "--output-directory", out]
     assert brep_main([*tibia, *hex_breps]) == 0
-    assert brep_main([*tibia, "--output", "_tet.brep"]) == 0
+    # Overclosure removal moves the tibia out of its cartilage, tessellating the B-rep and measuring distances.
+    assert brep_main([*tibia, "--output", "_tet.brep", "--overclosure.enabled", "true"]) == 0
     breps = {"lateral_meniscus": f"{out}/lateral_meniscus_hex.brep", "medial_tibial_cartilage": f"{out}/medial_tibial_cartilage_hex.brep"}
     hexahedra = ["--breps", json.dumps(breps), "--output-directory", out, "--meniscus.transverse-size", "2", "--meniscus.circumferential-size", "4"]
     assert mesh_main([*hexahedra, "--element-type", "hex20", "--assembled-mesh", f"{out}/knee.vtkhdf"]) == 0

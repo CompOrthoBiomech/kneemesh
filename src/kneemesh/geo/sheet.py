@@ -11,9 +11,9 @@ tilted out of the height lines so they meet both sides closer to right angles.
 
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from itertools import pairwise
-from typing import override
+from typing import Protocol, override
 
 import gmsh
 import numpy as np
@@ -207,6 +207,26 @@ class CylinderFrame(SheetFrame):
         return self.center + np.outer(domain_points[:, 0], self.axes[0]) + heights[:, np.newaxis] * directions
 
 
+class HeightField(Protocol):
+    """Heights over a sheet's domain, such as a RectBivariateSpline."""
+
+    def ev(self, xi: np.ndarray, yi: np.ndarray) -> np.ndarray:
+        """Return the heights at domain points (xi, yi)."""
+        ...
+
+
+@dataclass(frozen=True, eq=False)
+class LoweredHeights:
+    """Heights lowered by a spline over the domain, such as an articular side moved off another cartilage (lower_articular)."""
+
+    heights: HeightField
+    lowering: RectBivariateSpline
+
+    def ev(self, xi: np.ndarray, yi: np.ndarray) -> np.ndarray:
+        """Return the heights at domain points (xi, yi), less the lowering."""
+        return self.heights.ev(xi, yi) - self.lowering.ev(xi, yi)
+
+
 @dataclass(frozen=True, eq=False)
 class CartilageSheet:
     """A cartilage sheet as heights of its two sides over a domain, within a perimeter.
@@ -233,8 +253,8 @@ class CartilageSheet:
     frame: SheetFrame
     perimeter: np.ndarray
     holes: list[np.ndarray]
-    articular: RectBivariateSpline
-    bone: RectBivariateSpline
+    articular: HeightField
+    bone: HeightField
     mean_thickness: float
     min_thickness: float
     tilt: np.ndarray
@@ -274,6 +294,42 @@ class CartilageSheet:
     def area(self) -> float:
         """The domain area inside the perimeter, less the holes."""
         return _signed_area(self.perimeter) - sum(_signed_area(hole) for hole in self.holes)
+
+    def thickness(self, domain_points: np.ndarray) -> np.ndarray:
+        """Return the thickness along the height lines at (N, 2) domain points."""
+        return self.articular.ev(domain_points[:, 0], domain_points[:, 1]) - self.bone.ev(domain_points[:, 0], domain_points[:, 1])
+
+    def covers(self, domain_points: np.ndarray, margin: float = 0.0) -> np.ndarray:
+        """Return which of (N, 2) domain points lie inside the perimeter and outside the holes, or within margin of the perimeter."""
+        inside = _contains(self.perimeter, domain_points)
+        if margin > 0:
+            inside |= _nearest_on_loop(self.perimeter, domain_points)[0] <= margin
+        for hole in self.holes:
+            inside &= ~_contains(hole, domain_points)
+        return inside
+
+
+def surface_grid(sheet: CartilageSheet) -> tuple[np.ndarray, np.ndarray]:
+    """Return the s and t coordinates of the domain grid each side's surface interpolates in sheet_to_brep.
+
+    The grid is spaced _SURFACE_SPACING apart and reaches _SURFACE_MARGIN
+    spacings beyond the perimeter.
+    """
+    low = sheet.perimeter.min(axis=0) - _SURFACE_MARGIN * _SURFACE_SPACING
+    high = sheet.perimeter.max(axis=0) + _SURFACE_MARGIN * _SURFACE_SPACING
+    s, t = (np.linspace(low[axis], high[axis], int(np.ceil((high[axis] - low[axis]) / _SURFACE_SPACING)) + 1) for axis in range(2))
+    return s, t
+
+
+def lower_articular(sheet: CartilageSheet, s: np.ndarray, t: np.ndarray, lowering: np.ndarray) -> CartilageSheet:
+    """Return a sheet whose articular side is lowered toward its bone side by (len(s), len(t)) amounts over a domain grid.
+
+    The lowering is interpolated by a bicubic spline, so it should be zero,
+    or fade to zero, where the side is to stay as it is. The bone side, the
+    perimeter, and the wall's tilt are kept.
+    """
+    spline = RectBivariateSpline(s, t, lowering, kx=_SPLINE_ORDER, ky=_SPLINE_ORDER, s=0)
+    return replace(sheet, articular=LoweredHeights(sheet.articular, spline))
 
 
 def fit_sheet(
@@ -446,9 +502,7 @@ def _add_side(sheet: CartilageSheet, side: str, loops: Sequence[np.ndarray]) -> 
     reaching _SURFACE_MARGIN spacings beyond the perimeter, with knots at the
     grid's s and t coordinates, so its parameters are the domain coordinates.
     """
-    low = sheet.perimeter.min(axis=0) - _SURFACE_MARGIN * _SURFACE_SPACING
-    high = sheet.perimeter.max(axis=0) + _SURFACE_MARGIN * _SURFACE_SPACING
-    s, t = (np.linspace(low[axis], high[axis], int(np.ceil((high[axis] - low[axis]) / _SURFACE_SPACING)) + 1) for axis in range(2))
+    s, t = surface_grid(sheet)
     points = sheet.points(np.stack(np.meshgrid(s, t, indexing="ij"), axis=-1), side)
     splines = [RectBivariateSpline(s, t, points[..., axis], kx=_SPLINE_ORDER, ky=_SPLINE_ORDER, s=0) for axis in range(3)]
     knots_s, knots_t = splines[0].get_knots()
@@ -634,7 +688,19 @@ def _nearest_on_loop(loop: np.ndarray, points: np.ndarray) -> tuple[np.ndarray, 
     return best
 
 
-def _wall_tilt(perimeter: np.ndarray, articular: RectBivariateSpline, bone: RectBivariateSpline, reach: float) -> np.ndarray:
+def _contains(loop: np.ndarray, points: np.ndarray) -> np.ndarray:
+    """Return which of (N, 2) points lie inside a closed loop of plane points, by counting the loop's crossings of a ray along +s."""
+    inside = np.zeros(len(points), dtype=bool)
+    for start, end in zip(loop, np.roll(loop, -1, axis=0), strict=True):
+        straddles = (start[1] > points[:, 1]) != (end[1] > points[:, 1])
+        if not straddles.any():
+            continue
+        crossing = start[0] + (points[straddles, 1] - start[1]) * (end[0] - start[0]) / (end[1] - start[1])
+        inside[straddles] ^= points[straddles, 0] < crossing
+    return inside
+
+
+def _wall_tilt(perimeter: np.ndarray, articular: HeightField, bone: HeightField, reach: float) -> np.ndarray:
     """Return the tilt at each perimeter point that leaves the wall at equal angles to both sides, within its limits.
 
     In the plane of the perimeter's outward normal and the heights, a wall
@@ -645,7 +711,7 @@ def _wall_tilt(perimeter: np.ndarray, articular: RectBivariateSpline, bone: Rect
     outward = _outward_normals(perimeter)
     step = 1e-3 * reach
 
-    def slope(heights: RectBivariateSpline) -> np.ndarray:
+    def slope(heights: HeightField) -> np.ndarray:
         ahead, behind = perimeter + step * outward, perimeter - step * outward
         return (heights.ev(ahead[:, 0], ahead[:, 1]) - heights.ev(behind[:, 0], behind[:, 1])) / (2 * step)
 

@@ -6,11 +6,12 @@ import pytest
 from vtkmodules.util.numpy_support import vtk_to_numpy
 
 from kneemesh.brep import BRep
-from kneemesh.disk import read_poly_data, write_brep, write_label_map
+from kneemesh.disk import read_brep, read_poly_data, read_surface, write_brep, write_label_map
 from kneemesh.gui.jobs import JobError, JobRunner
 from kneemesh.gui.labels import LabelEntry
 from kneemesh.gui.view import read_mesh_preview
 from kneemesh.gui.worker import brep_surface, run_job
+from kneemesh.overclosure import Obstacle, surface_obstacle
 
 
 class _Reports(list[object]):
@@ -124,3 +125,55 @@ def test_job_runner_cancels(tmp_path):
     with pytest.raises(JobError, match="Cancelled"):
         asyncio.run(run_and_cancel())
     assert not runner.busy
+
+
+def test_overclosure_job_moves_what_this_session_built(tmp_path, cartilage_segmentation):
+    label_path = str(tmp_path / "knee.nii")
+    write_label_map(cartilage_segmentation.image, label_path)
+    entries = [
+        LabelEntry(id=index, path=label_path, name="knee.nii", file_value=value, structure=structure, value=value, include=True)
+        for index, (structure, value) in enumerate(cartilage_segmentation.labels.items(), start=1)
+    ]
+    out, previews = tmp_path / "out", tmp_path / "previews"
+    config = {"output_directory": str(out), "cartilage": {"hex_blocks": True}, "overclosure": {"clearance": 0.05}}
+    structures = list(cartilage_segmentation.labels)
+
+    reports = _Reports()
+    geometry_job = {"kind": "geometry", "config": config, "entries": entries, "structures": structures, "interpolator": "nearest_neighbor"}
+    run_job({**geometry_job, "padding": 4, "preview_directory": str(previews)}, reports)
+    outcome = _outcome(reports)
+    assert isinstance(outcome, tuple) and outcome[0] == "done", outcome
+    # What the cartilage was built from waits in the preview directory, and nothing beside the outputs.
+    assert (previews / "lateral_tibial_cartilage_source.pkl").is_file()
+    assert sorted(path.name for path in out.iterdir()) == ["lateral_tibial_cartilage.brep", "tibia.stl"]
+
+    geometry = {"lateral_tibial_cartilage": str(out / "lateral_tibial_cartilage.brep"), "tibia": str(out / "tibia.stl")}
+    cartilage_before = read_brep(geometry["lateral_tibial_cartilage"])
+    reports = _Reports()
+    run_job({"kind": "overclosure", "config": config, "geometry": geometry, "preview_directory": str(previews)}, reports)
+
+    match _outcome(reports):
+        case ("done", {"tibia": {"preview": preview}} as result):
+            assert len(result) == 1
+            assert preview == geometry["tibia"]
+        case other:
+            pytest.fail(f"Expected a result for the tibia alone, got {other!r}")
+    assert read_brep(geometry["lateral_tibial_cartilage"]) == cartilage_before
+    signed, _ = surface_obstacle(cartilage_before).distances(Obstacle(read_surface(geometry["tibia"])).points, reach=1.0)
+    assert signed.min() > 0.05 - 0.01
+
+
+def test_overclosure_job_keeps_geometry_this_session_did_not_build(tmp_path, meniscus_solid: BRep, meniscus_domed_solid: BRep):
+    # The domed solid's caps reach past the planar one's, which lies inside it.
+    lateral, medial = tmp_path / "lateral.brep", tmp_path / "medial.brep"
+    write_brep(meniscus_solid, lateral)
+    write_brep(meniscus_domed_solid, medial)
+    geometry = {"lateral_meniscus": str(lateral), "medial_meniscus": str(medial)}
+
+    reports = _Reports()
+    run_job({"kind": "overclosure", "config": {}, "geometry": geometry, "preview_directory": str(tmp_path / "previews")}, reports)
+
+    assert _outcome(reports) == ("done", {})
+    warnings = [str(report[2]) for report in reports[:-1] if isinstance(report, tuple) and report[:2] == ("log", "WARNING")]
+    assert any("was not built in this session" in message for message in warnings)
+    assert any("cannot be moved" in message for message in warnings)

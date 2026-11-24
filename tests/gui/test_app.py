@@ -218,3 +218,11 @@ def test_exports_are_remembered_for_download(app, tmp_path):
     app._export_mesh(str(tmp_path / "mesh.json"))
     assert list(app._written) == [str((tmp_path / "mesh.json").resolve())]
     assert app.state.written_count == 1
+
+
+def test_resolving_overclosures_needs_two_structures_with_geometry(app, tmp_path):
+    app.state.output_directory = str(tmp_path)
+
+    asyncio.run(app._resolve_overclosures())
+
+    assert app.state.snackbar_text == "Build the geometry of at least two structures first"

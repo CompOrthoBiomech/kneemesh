@@ -1,9 +1,11 @@
+import json
 from pathlib import Path
 
 import pydantic
 import pytest
 
 from kneemesh.config import (
+    DEFAULT_OVERCLOSURE_PRIORITY,
     STRUCTURES,
     BaseConfig,
     BoneBrep,
@@ -17,6 +19,7 @@ from kneemesh.config import (
     LabelMapBrep,
     MeniscusBrep,
     MeniscusMesh,
+    OverclosureBrep,
 )
 
 EXAMPLES = Path(__file__).parent.parent / "examples"
@@ -407,3 +410,37 @@ def test_save_partition_follows_the_structures_of_each_section():
     # Once the hexahedral structure has its own section, only tetrahedral ones take the shared one.
     with pytest.raises(pydantic.ValidationError, match=r"\bcartilage\.save_partition"):
         BrepMesh.model_validate({"element_types": {"patellar_cartilage": "hex8"}, "patellar_cartilage": {}, "cartilage": {"save_partition": True}})
+
+
+def test_overclosure_is_off_by_default_and_ranks_cartilage_first():
+    overclosure = LabelMapBrep().overclosure
+
+    assert not overclosure.enabled
+    assert overclosure.clearance == 0.0
+    assert overclosure.priority == list(DEFAULT_OVERCLOSURE_PRIORITY)
+    assert sorted(overclosure.priority) == sorted(STRUCTURES)
+
+
+def test_overclosure_priority_reads_json_text():
+    priority = ["femoral_cartilage", "patellar_cartilage", "medial_tibial_cartilage", "lateral_tibial_cartilage"]
+    priority += ["medial_meniscus", "lateral_meniscus", "tibia", "femur", "patella"]
+
+    assert OverclosureBrep.model_validate({"priority": json.dumps(priority)}).priority == priority
+
+
+@pytest.mark.parametrize(
+    ("priority", "message"),
+    [
+        (list(DEFAULT_OVERCLOSURE_PRIORITY[:-1]), "every structure once"),
+        ([*DEFAULT_OVERCLOSURE_PRIORITY, "femur"], "every structure once"),
+        (["lateral_meniscus", *[name for name in DEFAULT_OVERCLOSURE_PRIORITY if name != "lateral_meniscus"]], "must come first"),
+    ],
+)
+def test_overclosure_priority_names_every_structure_with_cartilage_first(priority, message):
+    with pytest.raises(pydantic.ValidationError, match=message):
+        OverclosureBrep.model_validate({"priority": priority})
+
+
+def test_overclosure_rejects_negative_clearance():
+    with pytest.raises(pydantic.ValidationError):
+        OverclosureBrep.model_validate({"clearance": -0.1})

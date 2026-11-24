@@ -65,11 +65,12 @@ from kneemesh.mesh_optimization import (
     mesh_quality,
     optimize_hexahedral_mesh,
 )
+from kneemesh.overclosure import Adjustable, resolve_overclosure
 from kneemesh.segmentation import Interpolator, Segmentation, assemble_label_maps
 from kneemesh.tet_meshing import Mesh, tetrahedral_mesh
-from kneemesh.vol import extract_isocontour, signed_distance_field, smooth_isocontour
+from kneemesh.vol import ContourSlice, extract_isocontour, signed_distance_field, smooth_isocontour
 
-type _BrepBuilder = Callable[[Segmentation, Structure, LabelMapBrep], BRep | vtkPolyData]
+type _BrepBuilder = Callable[[Segmentation, Structure, LabelMapBrep], Adjustable]
 type _Mesher = Callable[[Path, BrepMesh, Structure], Mesh]
 
 
@@ -78,7 +79,8 @@ def run_brep(config: LabelMapBrep) -> dict[Structure, BRep | vtkPolyData]:
 
     Each structure's name picks its pipeline. A bone's geometry is its
     triangulated surface rather than a B-rep. Each output is written as soon
-    as it is built.
+    as it is built, or with config.overclosure.enabled, once every structure
+    is built and overlapping ones are moved apart (overclosure.resolve_overclosure).
 
     Returns:
         The B-rep of each structure, or the surface of each bone.
@@ -90,7 +92,17 @@ def run_brep(config: LabelMapBrep) -> dict[Structure, BRep | vtkPolyData]:
     if not structures:
         raise ValueError("Give a multilabel label_map with labels or single-label label_maps to read")
     segmentation = load_segmentation(config)
-    return {structure: build_structure(segmentation, structure, config) for structure in structures}
+    if not config.overclosure.enabled:
+        return {structure: build_structure(segmentation, structure, config) for structure in structures}
+    built = {structure: _BREP_BUILDERS[structure](segmentation, structure, config) for structure in structures}
+    overclosure = config.overclosure
+    logger.info("Moving overlapping structures apart with clearance {}", overclosure.clearance)
+    resolved = resolve_overclosure(built, overclosure.priority, overclosure.clearance)
+    geometries: dict[Structure, BRep | vtkPolyData] = {}
+    for structure in structures:
+        geometries[structure] = resolved[structure].geometry
+        _write_geometry(geometries[structure], config.output_path(structure))
+    return geometries
 
 
 def build_structure(segmentation: Segmentation, structure: Structure, config: LabelMapBrep) -> BRep | vtkPolyData:
@@ -102,15 +114,36 @@ def build_structure(segmentation: Segmentation, structure: Structure, config: La
     Raises:
         ValueError: If the segmentation lacks the structure or its bone, or the geometry cannot be built.
     """
-    geometry = _BREP_BUILDERS[structure](segmentation, structure, config)
-    path = config.output_path(structure)
+    return build_adjustable(segmentation, structure, config).geometry
+
+
+def build_adjustable(segmentation: Segmentation, structure: Structure, config: LabelMapBrep) -> Adjustable:
+    """Build one structure as build_structure does, writing it, and return it with what it was built from, for resolve_overclosure.
+
+    Raises:
+        ValueError: If the segmentation lacks the structure or its bone, or the geometry cannot be built.
+    """
+    built = _BREP_BUILDERS[structure](segmentation, structure, config)
+    _write_geometry(built.geometry, config.output_path(structure))
+    return built
+
+
+def meniscus_loft(config: MeniscusBrep) -> Callable[[list[ContourSlice]], BRep]:
+    """Return what lofts a meniscus's contours into its B-rep with a section's settings, as the pipeline builds it."""
+
+    def loft(slices: list[ContourSlice]) -> BRep:
+        return _loft_meniscus(slices, config)
+
+    return loft
+
+
+def _write_geometry(geometry: BRep | vtkPolyData, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     if isinstance(geometry, BRep):
         write_brep(geometry, path)
     else:
         write_surface(geometry, path)
     logger.info("Wrote {}", path)
-    return geometry
 
 
 def run_mesh(config: BrepMesh) -> dict[Structure, Mesh]:
@@ -228,8 +261,14 @@ def load_segmentation(config: LabelMapBrep) -> Segmentation:
     return Segmentation(read_label_map(config.label_map), labels)
 
 
-def _meniscus_brep(segmentation: Segmentation, structure: Structure, brep_config: LabelMapBrep) -> BRep:
+def _meniscus_brep(segmentation: Segmentation, structure: Structure, brep_config: LabelMapBrep) -> Adjustable:
     config = brep_config.section(structure, MeniscusBrep)
+    slices = _meniscus_slices(segmentation, structure, config)
+    loft = meniscus_loft(config)
+    return Adjustable(loft(slices), slices=slices, loft=loft)
+
+
+def _meniscus_slices(segmentation: Segmentation, structure: Structure, config: MeniscusBrep) -> list[ContourSlice]:
     label_map, label = segmentation.image, segmentation.value(structure)
     logger.info("Fitting the centerline of {} (label {})", structure, label)
     curve = centerline(label_map, label)
@@ -243,9 +282,12 @@ def _meniscus_brep(segmentation: Segmentation, structure: Structure, brep_config
     if config.inner_clip_height or config.resolved_inner_clip_ratio:
         clip = f"{config.inner_clip_height} mm" if config.inner_clip_height else f"{config.resolved_inner_clip_ratio} of the outer height"
         logger.info("Clipping the thin inner edge at {}", clip)
-    slices = slice_isocontour(
+    return slice_isocontour(
         surface, curve, config.spacing, config.points_per_slice, config.inner_clip_height, config.resolved_inner_clip_ratio, config.groove_ratio
     )
+
+
+def _loft_meniscus(slices: list[ContourSlice], config: MeniscusBrep) -> BRep:
     if config.hex_blocks and config.hex_design == "butterfly":
         logger.info("Building butterfly hexahedral blocks through {} slices", len(slices))
         return contours_to_hex_blocks(slices, config.spline_order)
@@ -280,16 +322,16 @@ def _log_sheet(sheet: CartilageSheet) -> None:
     )
 
 
-def _cartilage_brep(segmentation: Segmentation, structure: Structure, brep_config: LabelMapBrep) -> BRep:
+def _cartilage_brep(segmentation: Segmentation, structure: Structure, brep_config: LabelMapBrep) -> Adjustable:
     config = brep_config.section(structure, CartilageBrep)
     sides = _cartilage_sides(segmentation, structure, config)
     sheet = fit_sheet(sides, config.resolved_perimeter_radius, config.perimeter_inset, config.resolved_min_thickness, config.resolved_hole_thickness)
     _log_sheet(sheet)
     logger.info("Building the solid")
-    return sheet_to_brep(sheet)
+    return Adjustable(sheet_to_brep(sheet), sheet=sheet)
 
 
-def _femoral_cartilage_brep(segmentation: Segmentation, structure: Structure, brep_config: LabelMapBrep) -> BRep:
+def _femoral_cartilage_brep(segmentation: Segmentation, structure: Structure, brep_config: LabelMapBrep) -> Adjustable:
     config = brep_config.femoral_cartilage
     sides = _cartilage_sides(segmentation, structure, config)
     logger.info("Fitting a sheet over the cylinder the femur's side wraps")
@@ -298,10 +340,10 @@ def _femoral_cartilage_brep(segmentation: Segmentation, structure: Structure, br
     )
     _log_sheet(sheet)
     logger.info("Building the solid")
-    return sheet_to_brep(sheet)
+    return Adjustable(sheet_to_brep(sheet), sheet=sheet)
 
 
-def _bone_surface(segmentation: Segmentation, structure: Structure, brep_config: LabelMapBrep) -> vtkPolyData:
+def _bone_surface(segmentation: Segmentation, structure: Structure, brep_config: LabelMapBrep) -> Adjustable:
     config = brep_config.bone(structure)
     label = segmentation.value(structure)
     logger.info("Filling cavities of {} (label {}) and cutting off {} of each shaft", structure, label, config.shaft_cut_fraction)
@@ -313,7 +355,7 @@ def _bone_surface(segmentation: Segmentation, structure: Structure, brep_config:
     logger.info("Smoothing the surface with {} iterations and pass band {}", config.smoothing_iterations, config.smoothing_pass_band)
     surface = smooth_isocontour(surface, config.smoothing_iterations, config.smoothing_pass_band)
     logger.info("Decimating the surface to triangles of size {}", config.triangle_size)
-    return decimate_surface(surface, config.triangle_size)
+    return Adjustable(decimate_surface(surface, config.triangle_size))
 
 
 def _bone_mesh(path: Path, mesh_config: BrepMesh, structure: Structure) -> Mesh:

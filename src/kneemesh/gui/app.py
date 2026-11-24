@@ -214,6 +214,7 @@ class KneemeshApp:
             "set_own_section",
             "reset_section",
             "build",
+            "resolve_overclosures",
             "mesh",
             "cancel",
             "load_existing",
@@ -290,6 +291,12 @@ class KneemeshApp:
                 disabled=("busy",),
             )
             _icon_button("mdi-cube-outline", "Build the geometry of every included structure", click=(self.ctrl.build, "[null]"), disabled=("busy",))
+            _icon_button(
+                "mdi-vector-difference",
+                "Resolve overclosures: move the structures with geometry apart where they overlap",
+                click=self.ctrl.resolve_overclosures,
+                disabled=("busy",),
+            )
             _icon_button("mdi-cube-scan", "Mesh every structure with geometry", click=(self.ctrl.mesh, "[null]"), disabled=("busy",))
             _icon_button("mdi-stop-circle-outline", "Cancel the running job", click=self.ctrl.cancel, v_if="busy", color="error")
             v3.VDivider(vertical=True, classes="mx-2")
@@ -477,6 +484,25 @@ class KneemeshApp:
             _alert("form_errors.geo")
             for spec in settings.top_fields("geometry"):
                 _field(spec)
+            html.Div("Overclosure", classes="text-subtitle-2 mt-2")
+            html.Div(
+                "Moves structures apart where their geometry overlaps: cartilage shares overlaps with cartilage by thickness, "
+                + "and every meniscus and bone moves out of the structures before it in the priority. "
+                + "Enabled, building every structure resolves them too.",
+                classes="text-caption mb-2",
+            )
+            v3.VBtn(
+                "Resolve overclosures",
+                prepend_icon="mdi-vector-difference",
+                color="primary",
+                variant="tonal",
+                click=self.ctrl.resolve_overclosures,
+                disabled=("busy",),
+                classes="mb-2",
+            )
+            _alert(f"form_errors['{settings.section_key('geometry', settings.OVERCLOSURE_SECTION)}']")
+            for spec in settings.section_fields("geometry", settings.OVERCLOSURE_SECTION):
+                _field(spec)
             html.Div("Mesh", classes="text-subtitle-2 mt-2")
             _alert("form_errors.mesh")
             for spec in settings.top_fields("mesh"):
@@ -520,7 +546,7 @@ class KneemeshApp:
                 )
                 if kind == "mesh":
                     self._mesh_structure_fields()
-                for section in settings.section_names(kind):
+                for section in settings.structure_section_names(kind):
                     with html.Div(v_if=f"selected_section == '{section}'"):
                         _alert(f"form_errors['{settings.section_key(kind, section)}']")
                         for spec in settings.section_fields(kind, section):
@@ -865,6 +891,42 @@ class KneemeshApp:
         with self.state:
             self._refresh_scene(reset=True)
         self._notify(f"Built {', '.join(map(structure_title, result))}", "success")
+        if structure is None and config.overclosure.enabled:
+            await self._resolve_overclosures()
+
+    def resolve_overclosures(self) -> None:
+        """Move every structure with geometry apart from the others where they overlap, by the overclosure settings."""
+        asynchronous.create_task(self._resolve_overclosures())
+
+    async def _resolve_overclosures(self) -> None:
+        geometry = {name: path for name in STRUCTURES if (path := self._geometry_path(name)) and Path(path).is_file()}
+        if len(geometry) < 2:
+            self._notify("Build the geometry of at least two structures first")
+            return
+        config = self._geometry_config()
+        if config is None:
+            self._notify("Fix the geometry settings first")
+            return
+        job = {
+            "kind": "overclosure",
+            "config": config.model_dump(mode="json"),
+            "geometry": geometry,
+            "preview_directory": str(self.preview_directory),
+        }
+        result = await self._run(job, "Resolving overclosures")
+        if result is None:
+            return
+        self._wrote(*(paths["output"] for paths in result.values()))
+        for name, paths in result.items():
+            name = cast(Structure, name)
+            self.scene.set_geometry(name, await asyncio.to_thread(_read_geometry, paths["preview"]))
+            # Moved geometry leaves its mesh out of date.
+            self.scene.clear("mesh", name)
+            self._set_status(name, geometry=True, mesh=False)
+        with self.state:
+            self._refresh_scene()
+        moved = ", ".join(map(structure_title, result))
+        self._notify(f"Resolved overclosures, moving {moved}" if result else "No structures overlap", "success")
 
     def mesh(self, structure: Structure | None) -> None:
         """Mesh a structure's geometry, or that of every structure with geometry."""
@@ -1268,8 +1330,11 @@ def _icon_button(icon: str | tuple[str], tooltip: str, **kwargs: Any) -> None:
 
 @contextmanager
 def _tooltip(text: str) -> Generator[None]:
-    """A tooltip whose activator is the widget made inside the block, which must take v_bind="props"."""
-    with v3.VTooltip(text=text, location="end", max_width=420, open_delay=400), v3.Template(v_slot_activator="{ props }"):
+    """A tooltip whose activator is the widget made inside the block, which must take v_bind="props".
+
+    The text goes into a double-quoted template attribute unescaped, so its double quotes, such as a JSON example's, become entities.
+    """
+    with v3.VTooltip(text=text.replace('"', "&quot;"), location="end", max_width=420, open_delay=400), v3.Template(v_slot_activator="{ props }"):
         yield
 
 
@@ -1309,8 +1374,32 @@ def _field(spec: settings.FieldSpec) -> None:
                 persistent_placeholder=spec.optional,
                 **common,
             )
+        elif spec.widget == "order":
+            html.Div(spec.label, v_bind="props", classes="text-body-2")
         else:
             v3.VTextField(clearable=spec.optional, placeholder="none" if spec.optional else None, persistent_placeholder=spec.optional, **common)
+    if spec.widget == "order":
+        _order(spec)
+
+
+def _order(spec: settings.FieldSpec) -> None:
+    """A list of a field's items in its order, each with buttons moving it up or down, which reorder the state's list in place."""
+    key = spec.key
+
+    def swap(offset: int) -> str:
+        # A new list with the item at index and its neighbor at index + offset exchanged, so trame sees the change.
+        other = f"index + {offset}" if offset > 0 else f"index - {-offset}"
+        return f"{key} = {key}.map((item, place, all) => place === index ? all[{other}] : place === {other} ? all[index] : item)"
+
+    title = "(index + 1) + '. ' + (structure_titles[item] || item)"
+    with (
+        v3.VList(density="compact", classes="mb-1 py-0", border=True, rounded=True),
+        v3.VListItem(v_for=f"(item, index) in {key}", key="item", title=(title,)),
+        v3.Template(v_slot_append=True),
+    ):
+        v3.VBtn(icon="mdi-chevron-up", variant="text", density="compact", size="small", disabled=("index === 0",), click=swap(-1))
+        v3.VBtn(icon="mdi-chevron-down", variant="text", density="compact", size="small", disabled=(f"index === {key}.length - 1",), click=swap(1))
+    _alert(f"form_errors['{key}']")
 
 
 def main() -> None:
